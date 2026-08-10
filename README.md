@@ -220,7 +220,7 @@ src/router/
     cli.py              # the `router pipeline` command group
     corpus.py           # dataset loading: tagging, exact dedup
     evaluate.py          # holdout replay of the routing formula, lambda sweep, baselines
-    clustering/           # K-means + cluster-map.json assembly + t-SNE viz
+    clustering/           # K-means + cluster-map.json assembly
     calibration/           # task selection -> grade -> smoothed rates -> model-profiles.json
       grading/               # one grader per data source
   runtime/           # the online routing runtime — see "Runtime status" above

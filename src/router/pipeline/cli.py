@@ -27,7 +27,6 @@ from .calibration.grading import swesmith as swesmith_grading
 from .calibration.tasks import load_gradeable_tasks
 from .clustering import cluster as cluster_mod
 from .clustering import cluster_map as cluster_map_mod
-from .clustering import viz as viz_mod
 
 app = typer.Typer(help="The offline pipeline: corpus -> embed -> cluster -> calibrate -> evaluate.")
 
@@ -44,7 +43,6 @@ def main_callback(
 WORK_DIR = REPO_ROOT / ".cache"
 CORPUS_PATH = WORK_DIR / "corpus.jsonl"
 EMBEDDINGS_PATH = WORK_DIR / "embeddings.npz"
-VIZ_PATH = WORK_DIR / "visualization.json"
 CLUSTER_MAP_PATH = cluster_map_mod.ARTIFACTS_DIR / "cluster-map.json"
 PROFILES_PATH = profiles_mod.ARTIFACTS_DIR / "model-profiles.json"
 
@@ -144,31 +142,6 @@ def build_artifact(
 ) -> None:
     """Cluster at the chosen k, assemble cluster-map.json, validate, and write it."""
     _run_build_artifact(k)
-
-
-@app.command("export-viz")
-def export_viz(
-    k: int | None = typer.Option(None, help="Which k to visualize. Defaults to clustering.yaml's default_k."),
-) -> None:
-    """Project embeddings to 2D (t-SNE) with cluster labels; write visualization.json for the
-    exploration page. Diagnostic only — not part of the routing artifact contract."""
-    if not EMBEDDINGS_PATH.exists():
-        raise typer.BadParameter(f"{EMBEDDINGS_PATH} not found — run `embed` first.")
-    if not CORPUS_PATH.exists():
-        raise typer.BadParameter(f"{CORPUS_PATH} not found — run `corpus` first.")
-
-    ids, vectors = embed_mod.load_embeddings(EMBEDDINGS_PATH)
-    rows_by_id = {r.id: r for r in corpus_mod.read_corpus_jsonl(CORPUS_PATH)}
-
-    clustering_config = load_clustering_config()
-    chosen_k = k or clustering_config.default_k
-
-    result = cluster_mod.run_kmeans(vectors, chosen_k, clustering_config.seed, clustering_config.n_init)
-    typer.echo("Projecting to 2D with t-SNE (this can take a moment)...")
-    points = viz_mod.build_viz_points(ids, vectors, rows_by_id, result.labels, clustering_config.seed)
-    payload = viz_mod.build_viz_payload(points, chosen_k)
-    viz_mod.write_viz_payload(payload, VIZ_PATH)
-    typer.echo(f"Wrote {len(points)} points across {chosen_k} clusters to {VIZ_PATH}")
 
 
 @app.command("run-all")
