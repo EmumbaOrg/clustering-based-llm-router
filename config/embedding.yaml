@@ -1,0 +1,20 @@
+# Single source of truth for embedding choices used by the offline pipeline. These same values get
+# copied verbatim into the `embedding` block of artifacts/cluster-map.json, so anyone reading the
+# artifact can see exactly what produced it without cross-referencing this file.
+#
+# The runtime (src/router/runtime/) MUST use the values recorded in the artifact (not re-read this
+# file) — the artifact is what the runtime validates against.
+
+model_id: jinaai/jina-embeddings-v2-base-code
+dimensions: 768
+normalisation: l2
+distance: euclidean
+
+# Text preprocessing applied before embedding. Deliberately no case folding and no whitespace
+# collapsing — indentation and casing are signal for a code-oriented embedding model.
+input:
+  normalisation: crlf-lf+trim   # normalize CRLF to LF, then trim leading/trailing whitespace
+  truncation:
+    unit: chars
+    max: 8000                   # ~2k tokens, comfortably inside the model's 8192-token context
+    strategy: head               # keep the beginning of the text, drop the tail

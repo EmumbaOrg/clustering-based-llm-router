@@ -26,9 +26,13 @@ Requires [`uv`](https://docs.astral.sh/uv/).
 uv sync
 ```
 
+`torch` is pinned to the CPU-only wheel (see `pyproject.toml`'s `[tool.uv.sources]`) — PyPI's
+default `torch` pulls a full CUDA stack (multiple GB) that this pipeline doesn't need.
+
 ```bash
 uv run router pipeline corpus --sample 200   # dry run: caps EACH source at N rows
 uv run router pipeline corpus                # full run
+uv run router pipeline embed
 ```
 
 ## What the pipeline does
@@ -47,6 +51,10 @@ uv run router pipeline corpus                # full run
    Revisit once someone confirms the actual license terms; adding it back is additive (a new entry
    in `corpus.py`'s `SOURCE_METADATA` plus a loader for its non-parquet JSONL layout), not a
    redesign.
+
+2. **`embed`** — embeds the corpus in-process with `sentence-transformers`
+   (`jinaai/jina-embeddings-v2-base-code`, 768-dim, CPU) per the rule declared in
+   `config/embedding.yaml`. No server, no HTTP call; see `config/README.md`.
 
 ## Tests
 

@@ -9,8 +9,45 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONFIG_DIR = REPO_ROOT / "config"
+
+
+@dataclasses.dataclass(frozen=True)
+class TruncationConfig:
+    unit: str
+    max: int
+    strategy: str
+
+
+@dataclasses.dataclass(frozen=True)
+class EmbeddingInputConfig:
+    normalisation: str
+    truncation: TruncationConfig
+
+
+@dataclasses.dataclass(frozen=True)
+class EmbeddingConfig:
+    model_id: str
+    dimensions: int
+    normalisation: str
+    distance: str
+    input: EmbeddingInputConfig
+
+
+def load_embedding_config(path: Path | None = None) -> EmbeddingConfig:
+    data = yaml.safe_load((path or CONFIG_DIR / "embedding.yaml").read_text(encoding="utf-8"))
+    truncation = TruncationConfig(**data["input"]["truncation"])
+    input_config = EmbeddingInputConfig(normalisation=data["input"]["normalisation"], truncation=truncation)
+    return EmbeddingConfig(
+        model_id=data["model_id"],
+        dimensions=data["dimensions"],
+        normalisation=data["normalisation"],
+        distance=data["distance"],
+        input=input_config,
+    )
 
 
 @dataclasses.dataclass(frozen=True)
