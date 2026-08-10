@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "artifact_id": "clustermap-fixture-k3",
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "embedding": {
+    "model_id": "test-embedding-model",
+    "dimensions": 4,
+    "normalisation": "l2",
+    "distance": "euclidean",
+    "centroid_dtype": "float64",
+    "input": {
+      "normalisation": "crlf-lf+trim",
+      "truncation": { "unit": "chars", "max": 8000, "strategy": "head" }
+    }
+  },
+  "kmeans": {
+    "k": 3,
+    "seed": 42,
+    "n_init": 10,
+    "corpus_size": 60,
+    "corpus_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "sources": [
+      { "name": "fixture", "hf_id": "fixture/fixture", "split": "train", "field": "prompt", "rows": 60, "license": "MIT" }
+    ]
+  },
+  "clusters": [
+    { "id": 0, "size": 20, "centroid": [1.0, 0.0, 0.0, 0.0] },
+    { "id": 1, "size": 20, "centroid": [0.0, 1.0, 0.0, 0.0] },
+    { "id": 2, "size": 20, "centroid": [0.0, 0.0, 1.0, 0.0] }
+  ]
+}

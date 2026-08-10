@@ -18,6 +18,43 @@ that must agree between calibration/evaluation and live routing — nearest-cent
 scoring formula — is one shared module (`src/router/common/`), not two implementations kept in
 sync by hand.
 
+## Runtime status
+
+Implemented per `docs/specs/2026-08-10-python-runtime-implementation-plan.md`, which supersedes
+the runtime phases of the older `2026-08-04-cluster-routing-implementation-plan.md` (that plan's
+Phase 2 artifact contract still applies unchanged). Deliberately **stateless** — no session, no
+escalation, no budget caps; see the plan's "Explicitly out of scope" for why.
+
+```bash
+uv run router runtime validate                      # check both artifacts, no embedding, no model download
+uv run router runtime decide --prompt "..." --lambda 0.05
+```
+
+- `runtime/context.py` — `load_routing_context` loads both artifacts and hard-fails on ~13 rules
+  (schema/version/geometry, non-finite centroids, `profiles.cluster_map_id != cluster_map.artifact_id`,
+  the configured embedding model disagreeing with the artifact's, a candidate with no calibration
+  profile, a non-positive lambda, and more) before any decision is possible. A reproducibility
+  digest (`sha256` over lambda + both artifact ids + the candidate roster) is computed once here.
+- `runtime/decide.py` — `decide_from_vector` (pure: assign -> score -> select -> audit record) and
+  `decide` (adds the `common/embedding.embed_one` call). Logs a WARNING whenever the selection
+  falls back to a model's global error rate instead of the assigned cluster's.
+- `runtime/cli.py` — `router runtime validate` / `decide` (`--json` for machine-readable output on
+  `decide`).
+
+**Verified two ways:**
+1. 29 pure tests against a hand-authored k=3/dim=4 fixture pair (`tests/runtime/fixtures/`),
+   covering every hard-fail rule and the full lambda-sweep scoring behaviour with zero
+   network/model access.
+2. **Live, against real pipeline-produced artifacts** — `validate` and `decide` both run
+   successfully against a real (if tiny, k=5) `cluster-map.json`/`model-profiles.json` pair with
+   the real embedding model and real Groq-calibrated candidates. Confirmed the lambda sweep
+   actually changes the selected model on real calibration numbers, not just fixture math.
+
+One caveat this exposed: each `decide` **invocation** pays one cold encoder load (~13s) since the
+in-process cache in `common/embedding.py` doesn't survive across separate CLI processes. Nothing
+yet keeps the encoder warm *across* invocations (would need a long-lived process, e.g. a future
+HTTP service).
+
 ## Running the pipeline
 
 Requires [`uv`](https://docs.astral.sh/uv/).
@@ -186,6 +223,10 @@ src/router/
     clustering/           # K-means + cluster-map.json assembly + t-SNE viz
     calibration/           # task selection -> grade -> smoothed rates -> model-profiles.json
       grading/               # one grader per data source
+  runtime/           # the online routing runtime — see "Runtime status" above
+    cli.py              # the `router runtime` command group: validate, decide
+    context.py           # loads + hard-validates both artifacts -> RoutingContext
+    decide.py            # decide_from_vector / decide -> RoutingDecision
 config/              # human-edited YAML: embedding/clustering/calibration/model-roster config
 artifacts-schema/    # versioned JSON Schema for cluster-map.json / model-profiles.json
 artifacts/           # pipeline output (git-ignored, regenerable)
@@ -203,5 +244,7 @@ All tests are pure — no network, no model downloads, no Docker, no `pi`/`llama
 They cover preprocessing, dedup, K-means determinism/dtype, artifact assembly + schema validation
 (including the cross-field invariants the schema itself can't express — see
 `artifacts-schema/README.md`), nearest-centroid assignment, the smoothing/scoring arithmetic,
-grading outcome classification, and the logging setup. The `validate-graders` gate above is the
-actual correctness proof for grading — it needs real datasets and isn't part of `pytest`.
+grading outcome classification, the logging setup, and the runtime's hard-fail validation +
+lambda-sweep scoring against the `tests/runtime/fixtures/` artifact pair. The `validate-graders`
+gate above is the actual correctness proof for grading — it needs real datasets and isn't part of
+`pytest`.

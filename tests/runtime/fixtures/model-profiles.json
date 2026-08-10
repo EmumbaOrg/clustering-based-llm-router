@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "artifact_id": "profiles-fixture-a",
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "cluster_map_id": "clustermap-fixture-k3",
+  "cluster_count": 3,
+  "embedding": { "model_id": "test-embedding-model", "dimensions": 4 },
+  "smoothing": {
+    "method": "shrink_to_model_global",
+    "prior_weight": 5,
+    "formula": "(number_failed + prior_weight * global_raw_error_rate) / (number_of_tasks + prior_weight)"
+  },
+  "task_selection": { "gradeable_sources": ["fixture"], "tasks_per_cluster": 20, "seed": 42, "total_tasks": 180 },
+  "models": [
+    {
+      "model_id": "cheap-model",
+      "provider": "test",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "cal-fixture",
+      "global": { "number_of_tasks": 60, "number_succeeded": 12, "number_failed": 48, "raw_error_rate": 0.8, "smoothed_error_rate": 0.8 },
+      "clusters": {
+        "0": { "number_of_tasks": 20, "number_succeeded": 6, "number_failed": 14, "raw_error_rate": 0.7, "smoothed_error_rate": 0.7 },
+        "1": { "number_of_tasks": 20, "number_succeeded": 2, "number_failed": 18, "raw_error_rate": 0.9, "smoothed_error_rate": 0.9 },
+        "2": { "number_of_tasks": 20, "number_succeeded": 4, "number_failed": 16, "raw_error_rate": 0.8, "smoothed_error_rate": 0.8 }
+      }
+    },
+    {
+      "model_id": "mid-model",
+      "provider": "test",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "cal-fixture",
+      "global": { "number_of_tasks": 40, "number_succeeded": 20, "number_failed": 20, "raw_error_rate": 0.5, "smoothed_error_rate": 0.5 },
+      "clusters": {
+        "0": { "number_of_tasks": 20, "number_succeeded": 11, "number_failed": 9, "raw_error_rate": 0.45, "smoothed_error_rate": 0.45 },
+        "1": { "number_of_tasks": 20, "number_succeeded": 9, "number_failed": 11, "raw_error_rate": 0.55, "smoothed_error_rate": 0.55 }
+      }
+    },
+    {
+      "model_id": "strong-model",
+      "provider": "test",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "cal-fixture",
+      "global": { "number_of_tasks": 60, "number_succeeded": 48, "number_failed": 12, "raw_error_rate": 0.2, "smoothed_error_rate": 0.2 },
+      "clusters": {
+        "0": { "number_of_tasks": 20, "number_succeeded": 17, "number_failed": 3, "raw_error_rate": 0.15, "smoothed_error_rate": 0.15 },
+        "1": { "number_of_tasks": 20, "number_succeeded": 15, "number_failed": 5, "raw_error_rate": 0.25, "smoothed_error_rate": 0.25 },
+        "2": { "number_of_tasks": 20, "number_succeeded": 16, "number_failed": 4, "raw_error_rate": 0.2, "smoothed_error_rate": 0.2 }
+      }
+    },
+    {
+      "model_id": "reference-oracle",
+      "provider": "stub",
+      "runner": "reference",
+      "is_control": true,
+      "calibration_run_id": "cal-fixture",
+      "global": { "number_of_tasks": 60, "number_succeeded": 60, "number_failed": 0, "raw_error_rate": 0.0, "smoothed_error_rate": 0.0 },
+      "clusters": {}
+    }
+  ]
+}
