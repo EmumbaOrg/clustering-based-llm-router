@@ -1,0 +1,108 @@
+# Candidate model roster. Read by calibration (`router pipeline calibrate`) to decide which models
+# to measure, and by evaluation (and eventually the runtime) to score the routing formula's cost
+# term.
+#
+# This is the single source of truth for the candidate roster — see ../config/README.md. A
+# candidate model missing from the calibration profiles becomes a hard startup failure in the
+# runtime (see docs/specs/2026-08-04-cluster-routing-implementation-plan.md, Phase 2).
+#
+# cost_input / cost_output are $ per 1k tokens. Ordered cheapest first.
+#
+# `runner` selects how a candidate produces a solution during calibration:
+#   reference — returns the dataset's own gold solution. A grader-validation control: must score
+#               ~100%, proving the grader ACCEPTS correct code. Not a real model.
+#   null      — returns nothing. The opposite control: must score ~0%, proving the grader REJECTS
+#               incorrect code. Together with `reference` this brackets the grader, so a low score
+#               from a weak real model can be told apart from a broken grader.
+#   pi        — the real path: invoke the Pi coding agent headless against `provider`/`model_id`.
+
+models:
+  # ── Grader-validation controls (not real models; zero cost, no API, no LLM) ────────────────
+  - model_id: reference-oracle
+    provider: stub
+    runner: reference
+    cost_input: 0
+    cost_output: 0
+    context_window: 0
+    max_tokens: 0
+
+  - model_id: null-baseline
+    provider: stub
+    runner: "null"   # quoted — bare null is a YAML keyword and would parse as None
+    cost_input: 0
+    cost_output: 0
+    context_window: 0
+    max_tokens: 0
+
+  # ── Groq-hosted candidates, free tier ──────────────────────────────────────────────────────
+  # `provider: groq` must have a matching entry in your own Pi provider config (e.g.
+  # ~/.pi/agent/models.json) with a Groq API key — that setup is outside this repo. See
+  # ../README.md's "Calibrating against Groq" section for free-tier limits and rate-limiting.
+  #
+  # cost_input/cost_output are Groq's real published per-token prices (console.groq.com/docs/models,
+  # verified against groq.com pricing, Aug 2026), NOT $0 — using the free tier is how WE run
+  # calibration cheaply, it isn't the model's actual economic cost, and marking every candidate
+  # $0 would make normalise_costs collapse to all-zero and give the lambda sweep nothing to trade
+  # off. rate_limit_rpm is Groq's documented free-tier requests-per-minute cap for that model;
+  # runner.py's RateLimiter paces real calls against it (with its own safety margin) so
+  # calibration/evaluation don't 429 partway through a run.
+  - model_id: llama-3.1-8b-instant
+    provider: groq
+    runner: pi
+    cost_input: 0.00005
+    cost_output: 0.00008
+    context_window: 131072
+    max_tokens: 131072
+    rate_limit_rpm: 30
+
+  - model_id: openai/gpt-oss-120b
+    provider: groq
+    runner: pi
+    cost_input: 0.00015
+    cost_output: 0.00060
+    context_window: 131072
+    max_tokens: 65536
+    rate_limit_rpm: 30
+
+  - model_id: llama-3.3-70b-versatile
+    provider: groq
+    runner: pi
+    cost_input: 0.00059
+    cost_output: 0.00079
+    context_window: 131072
+    max_tokens: 32768
+    rate_limit_rpm: 30
+
+  # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
+  # Commented out so calibration doesn't attempt them. Uncomment as keys become available.
+  # - model_id: gpt-5-nano
+  #   provider: openai
+  #   runner: pi
+  #   cost_input: 0.00005
+  #   cost_output: 0.0004
+  #   context_window: 400000
+  #   max_tokens: 128000
+  #
+  # - model_id: gpt-5.4-nano
+  #   provider: openai
+  #   runner: pi
+  #   cost_input: 0.0002
+  #   cost_output: 0.00125
+  #   context_window: 400000
+  #   max_tokens: 128000
+  #
+  # - model_id: gpt-5.4-mini
+  #   provider: openai
+  #   runner: pi
+  #   cost_input: 0.00075
+  #   cost_output: 0.0045
+  #   context_window: 400000
+  #   max_tokens: 128000
+  #
+  # - model_id: gpt-5.5
+  #   provider: openai
+  #   runner: pi
+  #   cost_input: 0.005
+  #   cost_output: 0.03
+  #   context_window: 1050000
+  #   max_tokens: 128000

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://model-router-poc/schemas/model-profiles.schema.json",
+  "title": "ModelProfilesArtifact",
+  "description": "Versioned output of the calibration stage (pipeline-python). Written to artifacts/model-profiles.json. Supplies predicted_error[model, cluster] to the routing formula. Cross-field invariants this schema cannot express on its own (every cluster id must exist in the referenced cluster map's 0..k-1 range; number_succeeded + number_failed must equal number_of_tasks; raw/smoothed rates must be consistent with the counts) are enforced by pipeline-python's profiles.py at write time, and must be re-checked by any consumer before trusting the file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_id", "created_at", "cluster_map_id", "embedding", "smoothing", "models"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for this calibration build, e.g. 'profiles-2026-08-06-a'."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cluster_map_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Must equal the artifact_id of the cluster-map.json these profiles were calibrated against. This linkage is what makes cluster id 7 mean the same thing in both files; a mismatch means the error table is silently permuted relative to the centroids, so consumers MUST hard-fail on a mismatch rather than degrade."
+    },
+    "cluster_map_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Optional SHA-256 over the cluster-map.json bytes, for detecting a map edited in place without an artifact_id bump."
+    },
+    "cluster_count": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "The k of the referenced cluster map, copied here so coverage gaps are checkable without loading the map."
+    },
+    "embedding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_id", "dimensions"],
+      "description": "Must match the referenced cluster map's embedding block — calibration tasks are assigned to clusters using this model, so a mismatch invalidates every assignment.",
+      "properties": {
+        "model_id": { "type": "string", "minLength": 1 },
+        "dimensions": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "smoothing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "prior_weight", "formula"],
+      "description": "Descriptive metadata for auditors. The runtime reads the stored smoothed_error_rate and NEVER recomputes it — that is what makes a routing decision reproducible from this artifact alone.",
+      "properties": {
+        "method": { "const": "shrink_to_model_global" },
+        "prior_weight": { "type": "number", "minimum": 0 },
+        "formula": { "type": "string", "minLength": 1 }
+      }
+    },
+    "task_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How the calibration task pool was chosen, for reproducibility.",
+      "properties": {
+        "gradeable_sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "tasks_per_cluster": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer" },
+        "total_tasks": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One entry per calibrated candidate. Identity is model_id; duplicates are rejected at write time. Onboarding a new model appends an entry here and bumps artifact_id — the cluster map is untouched.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model_id", "runner", "calibration_run_id", "global", "clusters"],
+        "properties": {
+          "model_id": { "type": "string", "minLength": 1 },
+          "provider": { "type": "string" },
+          "runner": {
+            "type": "string",
+            "enum": ["reference", "null", "pi"],
+            "description": "How this candidate produced solutions. 'reference' and 'null' are grader-validation controls, not real models — consumers should exclude them from routing candidate sets."
+          },
+          "is_control": {
+            "type": "boolean",
+            "description": "True for grader-validation controls (reference/null). A router must never select a control as a real candidate."
+          },
+          "calibration_run_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Identifies the measurement conditions (harness version, tools, prompt). Re-running calibration after changing the agent harness must produce a new run id — the numbers only describe the model+harness combination they were measured under."
+          },
+          "global": { "$ref": "#/$defs/profileStats" },
+          "clusters": {
+            "type": "object",
+            "description": "Keyed by cluster id as a decimal string. Lookup only, never iterated by the runtime. A missing cluster key means no calibration coverage there; the runtime falls back to `global` and logs the degradation.",
+            "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
+            "additionalProperties": { "$ref": "#/$defs/profileStats" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "profileStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number_of_tasks", "number_succeeded", "number_failed", "raw_error_rate", "smoothed_error_rate"],
+      "description": "number_of_tasks counts ONLY graded pass/fail outcomes. Tasks excluded for environment reasons (missing dependency, timeout, harness error) are tallied separately in `excluded` and deliberately kept out of the denominator — a slow machine or a missing library must never be recorded as a model failure.",
+      "properties": {
+        "number_of_tasks": { "type": "integer", "minimum": 0 },
+        "number_succeeded": { "type": "integer", "minimum": 0 },
+        "number_failed": { "type": "integer", "minimum": 0 },
+        "raw_error_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "smoothed_error_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "excluded": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Outcomes kept out of the error-rate denominator. Present so a thin or environment-blocked cluster is visible rather than mistaken for a confident rate.",
+          "properties": {
+            "error_missing_dep": { "type": "integer", "minimum": 0 },
+            "error_timeout": { "type": "integer", "minimum": 0 },
+            "error_harness": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "mean_session_cost": { "type": "number", "minimum": 0 },
+        "median_session_cost": { "type": "number", "minimum": 0 },
+        "mean_input_tokens": { "type": "number", "minimum": 0 },
+        "mean_output_tokens": { "type": "number", "minimum": 0 },
+        "mean_agent_turns": { "type": "number", "minimum": 0 },
+        "mean_tool_calls": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

@@ -80,3 +80,45 @@ class ModelConfig:
     def is_control(self) -> bool:
         """Grader-validation controls, not real candidates — a router must never select one."""
         return self.runner in ("reference", "null")
+
+
+@dataclasses.dataclass(frozen=True)
+class SmoothingConfig:
+    method: str
+    prior_weight: float
+
+
+@dataclasses.dataclass(frozen=True)
+class CalibrationConfig:
+    gradeable_sources: list[str]
+    tasks_per_cluster: int
+    candidate_pool_oversample: int
+    task_timeout_seconds: int
+    smoothing: SmoothingConfig
+    holdout_fraction: float
+    seed: int
+    lambda_sweep: list[float]
+
+
+def load_calibration_config(path: Path | None = None) -> CalibrationConfig:
+    data = yaml.safe_load((path or CONFIG_DIR / "calibration.yaml").read_text(encoding="utf-8"))
+    smoothing = SmoothingConfig(**data["smoothing"])
+    return CalibrationConfig(
+        gradeable_sources=data["gradeable_sources"],
+        tasks_per_cluster=data["tasks_per_cluster"],
+        candidate_pool_oversample=data["candidate_pool_oversample"],
+        task_timeout_seconds=data["task_timeout_seconds"],
+        smoothing=smoothing,
+        holdout_fraction=data["holdout_fraction"],
+        seed=data["seed"],
+        lambda_sweep=data["lambda_sweep"],
+    )
+
+
+def load_models_config(path: Path | None = None) -> list[ModelConfig]:
+    data = yaml.safe_load((path or CONFIG_DIR / "models.yaml").read_text(encoding="utf-8"))
+    models = [ModelConfig(**entry) for entry in data["models"]]
+    ids = [m.model_id for m in models]
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"config/models.yaml has duplicate model_id values: {ids}")
+    return models
