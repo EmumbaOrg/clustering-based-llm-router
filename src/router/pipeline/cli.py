@@ -7,9 +7,12 @@ from datetime import UTC, datetime
 import typer
 
 from ..common import embedding as embed_mod
-from ..common.assign import load_cluster_map
+from ..common.assign import ClusterMap, load_cluster_map
 from ..common.config import (
     REPO_ROOT,
+    CalibrationConfig,
+    EmbeddingConfig,
+    ModelConfig,
     load_calibration_config,
     load_clustering_config,
     load_embedding_config,
@@ -20,6 +23,7 @@ from . import corpus as corpus_mod
 from . import evaluate as evaluate_mod
 from .calibration import calibrate as calibrate_mod
 from .calibration import profiles as profiles_mod
+from .calibration.calibrate import SelectedTask
 from .calibration.grading import bigcodebench as bigcodebench_grading
 from .calibration.grading import ds1000 as ds1000_grading
 from .calibration.grading import swesmith as swesmith_grading
@@ -153,6 +157,16 @@ def run_all(
     _run_build_artifact(k)
 
 
+def _load_selected_tasks() -> tuple[ClusterMap, EmbeddingConfig, CalibrationConfig, list[ModelConfig], list[SelectedTask]]:
+    cluster_map = load_cluster_map(CLUSTER_MAP_PATH)
+    embedding_config = load_embedding_config()
+    calibration_config = load_calibration_config()
+    models = load_models_config()
+    typer.echo(f"Selecting tasks across {cluster_map.centroids.shape[0]} clusters...")
+    selected = calibrate_mod.select_tasks(calibration_config, embedding_config, cluster_map)
+    return cluster_map, embedding_config, calibration_config, models, selected
+
+
 @app.command("validate-graders")
 def validate_graders(
     tasks_per_source: int = typer.Option(10, help="How many tasks per gradeable source to check."),
@@ -206,13 +220,7 @@ def calibrate() -> None:
     if not CLUSTER_MAP_PATH.exists():
         raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
 
-    cluster_map = load_cluster_map(CLUSTER_MAP_PATH)
-    embedding_config = load_embedding_config()
-    calibration_config = load_calibration_config()
-    models = load_models_config()
-
-    typer.echo(f"Selecting tasks across {cluster_map.centroids.shape[0]} clusters...")
-    selected = calibrate_mod.select_tasks(calibration_config, embedding_config, cluster_map)
+    cluster_map, embedding_config, calibration_config, models, selected = _load_selected_tasks()
     n_calibration = sum(1 for s in selected if s.split == "calibration")
     n_holdout = sum(1 for s in selected if s.split == "holdout")
     typer.echo(f"Selected {len(selected)} tasks: {n_calibration} calibration, {n_holdout} holdout")
@@ -245,14 +253,10 @@ def evaluate() -> None:
     if not CLUSTER_MAP_PATH.exists():
         raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
 
-    cluster_map = load_cluster_map(CLUSTER_MAP_PATH)
-    embedding_config = load_embedding_config()
-    calibration_config = load_calibration_config()
-    models = load_models_config()
+    _, _, calibration_config, models, selected = _load_selected_tasks()
     profiles_artifact = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
     profiles_by_model = {m["model_id"]: m for m in profiles_artifact["models"]}
 
-    selected = calibrate_mod.select_tasks(calibration_config, embedding_config, cluster_map)
     typer.echo("Running holdout tasks against every model...")
     holdout_outcomes = evaluate_mod.run_holdout_outcomes(selected, models, calibration_config)
 
