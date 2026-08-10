@@ -57,7 +57,13 @@ Calibration and evaluation, once `artifacts/cluster-map.json` exists:
 uv run router pipeline validate-graders
 
 uv run router pipeline calibrate   # writes artifacts/model-profiles.json
+uv run router pipeline evaluate    # holdout run + lambda-sweep report
 ```
+
+`evaluate` executes real model calls for every holdout task against every non-control model in
+`config/models.yaml` — for a `runner: pi` entry that means a live `pi -p` subprocess per task, so
+whatever it points at (a hosted provider, or a local `llama serve`/similar via a custom
+`~/.pi/agent/models.json` provider) must be reachable first.
 
 ### Calibrating against Groq
 
@@ -129,6 +135,12 @@ nothing to trade accuracy against.
    (including the `reference`/`null` controls) against them, and writes the smoothed per-cluster
    error rates to `model-profiles.json`.
 
+7. **`evaluate`** — re-selects the same deterministic split, runs the *held-out* tasks against
+   every model, and reports resolution rate / mean cost / model-selection distribution across
+   `config/calibration.yaml`'s `lambda_sweep`, plus always-strongest / always-cheapest / oracle
+   baselines. Routing decisions use only the calibration profiles, never anything from the holdout
+   run itself — the same constraint a live router would have.
+
 **Calibration's target is pipeline completeness, not research-grade numbers.** The tiny task
 volume this pass runs at (`tasks_per_cluster: 4`) is chosen to exercise the full pipeline cheaply
 on Groq's free tier, not to produce statistically confident error rates — see
@@ -170,6 +182,7 @@ src/router/
   pipeline/          # the offline pipeline — see "What the pipeline does" above
     cli.py              # the `router pipeline` command group
     corpus.py           # dataset loading: tagging, exact dedup
+    evaluate.py          # holdout replay of the routing formula, lambda sweep, baselines
     clustering/           # K-means + cluster-map.json assembly + t-SNE viz
     calibration/           # task selection -> grade -> smoothed rates -> model-profiles.json
       grading/               # one grader per data source

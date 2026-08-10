@@ -1,6 +1,7 @@
 """The `router pipeline` command group: `uv run router pipeline <command>`."""
 from __future__ import annotations
 
+import json
 from collections import Counter
 from datetime import UTC, datetime
 
@@ -17,6 +18,7 @@ from ..common.config import (
 )
 from ..common.logging_config import configure_logging
 from . import corpus as corpus_mod
+from . import evaluate as evaluate_mod
 from .calibration import calibrate as calibrate_mod
 from .calibration import profiles as profiles_mod
 from .calibration.grading import bigcodebench as bigcodebench_grading
@@ -264,3 +266,40 @@ def calibrate() -> None:
     profiles_mod.validate_profiles(artifact)
     path = profiles_mod.write_profiles(artifact)
     typer.echo(f"Wrote validated artifact to {path}")
+
+
+@app.command()
+def evaluate() -> None:
+    """Re-select the same (deterministic) task split, run the holdout split against every model,
+    and report the lambda-sweep resolution/cost table plus always-strongest/always-cheapest/oracle
+    baselines."""
+    if not PROFILES_PATH.exists():
+        raise typer.BadParameter(f"{PROFILES_PATH} not found — run `calibrate` first.")
+    if not CLUSTER_MAP_PATH.exists():
+        raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
+
+    cluster_map = load_cluster_map(CLUSTER_MAP_PATH)
+    embedding_config = load_embedding_config()
+    calibration_config = load_calibration_config()
+    models = load_models_config()
+    profiles_artifact = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
+    profiles_by_model = {m["model_id"]: m for m in profiles_artifact["models"]}
+
+    selected = calibrate_mod.select_tasks(calibration_config, embedding_config, cluster_map)
+    typer.echo("Running holdout tasks against every model...")
+    holdout_outcomes = evaluate_mod.run_holdout_outcomes(selected, models, calibration_config)
+
+    report = evaluate_mod.evaluate(selected, models, profiles_by_model, calibration_config, holdout_outcomes)
+    typer.echo(f"\nHoldout tasks: {report.holdout_task_count}")
+    typer.echo(
+        f"Always-strongest ({report.always_strongest.get('model_id')}): "
+        f"{report.always_strongest.get('resolution_rate', 0):.1%}"
+    )
+    typer.echo(
+        f"Always-cheapest ({report.always_cheapest.get('model_id')}): "
+        f"{report.always_cheapest.get('resolution_rate', 0):.1%}"
+    )
+    typer.echo(f"Oracle: {report.oracle_resolution_rate:.1%}")
+    typer.echo("\nlambda   resolution   mean_cost   selection")
+    for lr in report.lambda_results:
+        typer.echo(f"{lr.lambda_:<8} {lr.resolution_rate:<12.1%} {lr.mean_cost:<11.4f} {lr.selection_counts}")
