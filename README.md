@@ -26,6 +26,28 @@ Requires [`uv`](https://docs.astral.sh/uv/).
 uv sync
 ```
 
+```bash
+uv run router pipeline corpus --sample 200   # dry run: caps EACH source at N rows
+uv run router pipeline corpus                # full run
+```
+
+## What the pipeline does
+
+1. **`corpus`** — loads four benchmark/training datasets from Hugging Face, tags and dedups them into one corpus:
+
+   | Source | Rows used | License |
+   |---|---|---|
+   | SWE-smith | 20,000 sampled (of ~59,136 available) | MIT |
+   | SWE-Gym | 2,438 (all) | MIT |
+   | BigCodeBench-Instruct | 1,140 (all, `v0.1.4` split) | Apache-2.0 |
+   | DS-1000 | 1,000 (all) | CC-BY-SA-4.0 |
+
+   **Multi-SWE-RL is deliberately excluded** — a 23.8GB download with no independently-verifiable
+   row count and a license conflict between its README (CC0) and its repo metadata tag (`other`).
+   Revisit once someone confirms the actual license terms; adding it back is additive (a new entry
+   in `corpus.py`'s `SOURCE_METADATA` plus a loader for its non-parquet JSONL layout), not a
+   redesign.
+
 ## Tests
 
 ```bash
