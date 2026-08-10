@@ -1,9 +1,9 @@
 """Shared JSON Schema validation + write helpers for pipeline output artifacts (cluster-map.json,
 model-profiles.json).
 
-Both artifacts follow the same two-layer validation shape (see ../../artifacts-schema/README.md):
-standard JSON Schema structural checks, plus cross-field invariants the schema can't express on
-its own. Both layers live here rather than inside the pipeline writers — each schema's own
+Both artifacts follow the same two-layer validation shape (see ../../README.md's "Config and
+artifact schema"): standard JSON Schema structural checks, plus cross-field invariants the schema
+can't express on its own. Both layers live here rather than inside the pipeline writers — each schema's own
 `description` field says these invariants "must be re-checked by any consumer before trusting the
 file", and the runtime is a second consumer. `pipeline/clustering/cluster_map.py` and
 `pipeline/calibration/profiles.py` keep thin `validate_*` wrappers of the same names so neither

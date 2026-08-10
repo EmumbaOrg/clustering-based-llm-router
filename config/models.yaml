@@ -2,7 +2,8 @@
 # to measure, and by evaluation (and eventually the runtime) to score the routing formula's cost
 # term.
 #
-# This is the single source of truth for the candidate roster — see ../config/README.md. A
+# This is the single source of truth for the candidate roster — see ../README.md's "Config and
+# artifact schema". A
 # candidate model missing from the calibration profiles becomes a hard startup failure in the
 # runtime (see docs/specs/2026-08-04-cluster-routing-implementation-plan.md, Phase 2).
 #

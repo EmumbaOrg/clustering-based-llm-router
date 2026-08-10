@@ -1,6 +1,6 @@
 """Assembles, validates, and writes the final model-profiles.json artifact. Mirrors clustering's
 cluster_map.py structure for cluster-map.json: two-layer validation (JSON Schema + cross-field
-invariants the schema can't express — see artifacts-schema/README.md). Both layers actually live
+invariants the schema can't express — see ../../../README.md's "Config and artifact schema"). Both layers actually live
 in ../../common/artifacts.py — the runtime is a second consumer of this artifact and must run the
 exact same checks, so they can't be private to this writer. `validate_profiles` below is a thin
 wrapper kept here so call sites and tests don't need to reach into common/.

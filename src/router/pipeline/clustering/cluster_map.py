@@ -2,7 +2,7 @@
 profiles.py: same three-function shape (build_*_dict / validate_* / write_*) for the sibling
 artifact.
 
-Validation is two layers, matching artifacts-schema/README.md: standard JSON Schema structural
+Validation is two layers, matching ../../../README.md's "Config and artifact schema": standard JSON Schema structural
 checks, plus cross-field invariants the schema can't express on its own (centroid length vs
 dimensions, cluster count vs k, contiguous ascending cluster ids). Both layers actually live in
 ../../common/artifacts.py — the runtime is a second consumer of this artifact and must run the

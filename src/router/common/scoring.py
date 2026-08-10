@@ -58,7 +58,7 @@ def score_candidates(
     for model in candidates:
         profile = profiles_by_model.get(model.model_id)
         if profile is None:
-            continue  # no-profile: excluded, never defaulted (see artifacts-schema/README.md)
+            continue  # no-profile: excluded, never defaulted
         lookup = lookup_predicted_error(profile, cluster_id)
         if lookup is None:
             continue

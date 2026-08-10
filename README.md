@@ -152,7 +152,7 @@ nothing to trade accuracy against.
 
 2. **`embed`** — embeds the corpus in-process with `sentence-transformers`
    (`jinaai/jina-embeddings-v2-base-code`, 768-dim, CPU) per the rule declared in
-   `config/embedding.yaml`. No server, no HTTP call; see `config/README.md`.
+   `config/embedding.yaml`. No server, no HTTP call.
 
 3. **`cluster`** — runs K-means for every candidate `k` in `config/clustering.yaml` and reports
    diagnostics (inertia, cluster-size spread). **Choosing which `k` to promote is a human decision**,
@@ -184,6 +184,39 @@ on Groq's free tier, not to produce statistically confident error rates — see
 `config/calibration.yaml`'s comments and `runner.py`'s docstring for the `reference`/`null`/`pi`
 backend split that lets the grader itself be proven correct independent of any model's actual
 coding ability.
+
+## Config and artifact schema
+
+`config/*.yaml` is human-authored input; `artifacts-schema/*.json` is a machine-checked contract on
+the pipeline's *output*. Different formats for a reason: YAML supports the inline comments a person
+editing config wants, while the artifacts are machine-generated and machine-consumed (by the
+runtime), so they get a real JSON Schema (Draft 2020-12, validated via
+`jsonschema.Draft202012Validator`) that both sides fail loudly against instead of silently drifting.
+
+| Config file | Purpose |
+|---|---|
+| `embedding.yaml` | Embedding model, dimensionality, normalization/distance, and the text preprocessing rule — copied verbatim into `cluster-map.json`'s `embedding` block so the artifact is self-describing. |
+| `clustering.yaml` | K-means run config: candidate `k` values, the default to promote, seed, `n_init`. |
+| `models.yaml` | The candidate model roster (id, provider, cost, context window, max tokens). |
+
+`models.yaml` is the single source of truth for the candidate roster — both
+`pipeline/calibration/` and `runtime/` read the same file, and the runtime hard-fails at startup if
+a configured candidate has no calibration profile (see "Runtime status" above), so repricing or
+swapping a model here and forgetting to recalibrate is a loud failure, not silent drift.
+
+Schema validation catches structure (missing fields, wrong types, `additionalProperties: false`)
+but can't express cross-field invariants, so those are checked separately in code at write time:
+
+- `cluster-map.json` (`pipeline/clustering/cluster_map.py`): every centroid's length equals
+  `embedding.dimensions`; `clusters.length` equals `kmeans.k`; cluster ids are contiguous `0..k-1`
+  ascending; every centroid value is finite.
+- `model-profiles.json` (`pipeline/calibration/profiles.py`): `cluster_map_id` equals the
+  referenced cluster map's `artifact_id` (this is the linkage that makes cluster id 7 mean the same
+  thing in both files — a mismatch would silently permute the error table); every cluster key falls
+  within `0..cluster_count-1`; `number_succeeded + number_failed == number_of_tasks`.
+
+Any future consumer of these artifacts must re-check these invariants itself — passing schema
+validation alone doesn't guarantee them.
 
 ## Logging
 
@@ -242,8 +275,8 @@ uv run pytest
 
 All tests are pure — no network, no model downloads, no Docker, no `pi`/`llama` subprocess calls.
 They cover preprocessing, dedup, K-means determinism/dtype, artifact assembly + schema validation
-(including the cross-field invariants the schema itself can't express — see
-`artifacts-schema/README.md`), nearest-centroid assignment, the smoothing/scoring arithmetic,
+(including the cross-field invariants the schema itself can't express — see "Config and artifact
+schema" above), nearest-centroid assignment, the smoothing/scoring arithmetic,
 grading outcome classification, the logging setup, and the runtime's hard-fail validation +
 lambda-sweep scoring against the `tests/runtime/fixtures/` artifact pair. The `validate-graders`
 gate above is the actual correctness proof for grading — it needs real datasets and isn't part of
