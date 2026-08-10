@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://model-router-poc/schemas/cluster-map.schema.json",
+  "title": "ClusterMapArtifact",
+  "description": "Versioned output of the embeddings + K-means clustering pipeline (pipeline-python). Written to artifacts/cluster-map.json. Cross-field invariants this schema cannot express on its own (centroid length must equal embedding.dimensions; clusters.length must equal kmeans.k; cluster ids must be contiguous 0..k-1 in ascending array order) are enforced by pipeline-python's artifact.py at write time, and must be re-checked by any consumer before trusting the file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "artifact_id", "created_at", "embedding", "kmeans", "clusters"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for this specific artifact build, e.g. 'clustermap-2026-08-05-k24-s42'."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "embedding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_id", "dimensions", "normalisation", "distance", "centroid_dtype", "input"],
+      "properties": {
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The exact embedding model used, e.g. 'jinaai/jina-embeddings-v2-base-code'. Any consumer embedding a new query for comparison against these centroids MUST use this same model."
+        },
+        "dimensions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "normalisation": {
+          "const": "l2",
+          "description": "The only normalisation this pipeline/runtime pair implements. A different value means the artifact targets a different runtime."
+        },
+        "distance": {
+          "const": "euclidean"
+        },
+        "centroid_dtype": {
+          "const": "float64",
+          "description": "Mandatory and hard-checked. float32 centroids would disagree with a float64 runtime near cluster boundaries."
+        },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["normalisation", "truncation"],
+          "properties": {
+            "normalisation": {
+              "const": "crlf-lf+trim"
+            },
+            "truncation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["unit", "max", "strategy"],
+              "properties": {
+                "unit": { "const": "chars" },
+                "max": { "type": "integer", "minimum": 1 },
+                "strategy": { "const": "head" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "kmeans": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["k", "seed", "n_init", "corpus_size", "corpus_digest", "sources"],
+      "properties": {
+        "k": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "n_init": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "corpus_size": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total number of prompts actually embedded and clustered, after dedup."
+        },
+        "corpus_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "description": "SHA-256 over the sorted, normalized corpus content. Lets a re-run on unchanged input be verified byte-for-byte reproducible."
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Provenance of every dataset that contributed to the corpus. A source's license MAY be 'unverified' if it could not be confirmed at build time — this must never be silently omitted or asserted incorrectly.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "hf_id", "split", "field", "rows", "license"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "hf_id": { "type": "string", "minLength": 1 },
+              "split": { "type": "string", "minLength": 1 },
+              "field": { "type": "string", "minLength": 1 },
+              "rows": { "type": "integer", "minimum": 0 },
+              "license": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "clusters": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "size", "centroid"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of corpus points assigned to this cluster."
+          },
+          "label": {
+            "type": "string",
+            "description": "Optional human-readable gloss of what this cluster represents. Not used by any routing logic."
+          },
+          "centroid": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "number" },
+            "description": "Raw K-means centroid of L2-normalised vectors — NOT itself unit-norm. Must never be re-normalised by a consumer. Length must equal embedding.dimensions (checked at write time, not by this schema)."
+          }
+        }
+      }
+    }
+  }
+}

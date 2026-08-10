@@ -30,10 +30,25 @@ uv sync
 default `torch` pulls a full CUDA stack (multiple GB) that this pipeline doesn't need.
 
 ```bash
-uv run router pipeline corpus --sample 200   # dry run: caps EACH source at N rows
-uv run router pipeline corpus                # full run
+# Recommended: dry run first. --sample caps EACH source at N rows, so it still exercises every
+# loader. CPU throughput for jina-embeddings-v2-base-code on this corpus is not yet benchmarked —
+# this is how you find out before committing to the full run.
+uv run router pipeline corpus --sample 200
 uv run router pipeline embed
+uv run router pipeline cluster
+
+# Full run
+uv run router pipeline corpus            # ~24,578 rows before dedup
+uv run router pipeline embed
+uv run router pipeline cluster           # review diagnostics for k=16/24/32
+uv run router pipeline build-artifact --k 24
+
+# Or all four steps in one shot
+uv run router pipeline run-all --k 24
 ```
+
+Intermediate files (`corpus.jsonl`, `embeddings.npz`) are written to `.cache/` at the repo root —
+not `artifacts/`, since they're working files, not the final artifact.
 
 ## What the pipeline does
 
@@ -55,6 +70,36 @@ uv run router pipeline embed
 2. **`embed`** — embeds the corpus in-process with `sentence-transformers`
    (`jinaai/jina-embeddings-v2-base-code`, 768-dim, CPU) per the rule declared in
    `config/embedding.yaml`. No server, no HTTP call; see `config/README.md`.
+
+3. **`cluster`** — runs K-means for every candidate `k` in `config/clustering.yaml` and reports
+   diagnostics (inertia, cluster-size spread). **Choosing which `k` to promote is a human decision**,
+   not automated.
+
+4. **`build-artifact`** — assembles `cluster-map.json` at the chosen `k`, validates it against the
+   schema, and writes it to `artifacts/` (git-ignored — outputs are local-only for now,
+   regenerable by re-running the pipeline).
+
+## Project layout
+
+```
+src/router/
+  cli.py             # top-level `router` command: mounts pipeline/ and runtime/ as subcommands
+  common/            # shared by pipeline AND runtime — nothing here is stage- or mode-specific
+    config.py          # loads config/*.yaml
+    scoring.py          # predicted_error + lambda*normalised_cost -> selected model
+    embedding.py        # text preprocessing + sentence-transformers encoding (batch or single-query)
+    artifacts.py        # shared JSON Schema validation + write helpers for pipeline output
+    logging_config.py   # logging setup
+  pipeline/          # the offline pipeline — see "What the pipeline does" above
+    cli.py              # the `router pipeline` command group
+    corpus.py           # dataset loading: tagging, exact dedup
+    clustering/           # K-means + cluster-map.json assembly + t-SNE viz
+config/              # human-edited YAML: embedding/clustering config
+artifacts-schema/    # versioned JSON Schema for cluster-map.json
+artifacts/           # pipeline output (git-ignored, regenerable)
+docs/specs/          # design docs, including the original cluster-routing implementation plan
+tests/               # mirrors src/router/'s common/pipeline/runtime split
+```
 
 ## Tests
 

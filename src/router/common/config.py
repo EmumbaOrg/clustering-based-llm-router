@@ -51,6 +51,19 @@ def load_embedding_config(path: Path | None = None) -> EmbeddingConfig:
 
 
 @dataclasses.dataclass(frozen=True)
+class ClusteringConfig:
+    k_candidates: list[int]
+    default_k: int
+    seed: int
+    n_init: int
+
+
+def load_clustering_config(path: Path | None = None) -> ClusteringConfig:
+    data = yaml.safe_load((path or CONFIG_DIR / "clustering.yaml").read_text(encoding="utf-8"))
+    return ClusteringConfig(**data)
+
+
+@dataclasses.dataclass(frozen=True)
 class ModelConfig:
     model_id: str
     provider: str
