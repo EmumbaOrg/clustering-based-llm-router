@@ -43,6 +43,12 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+
+# Pipeline output artifacts — machine-generated, regenerable by re-running the pipeline (see
+# README.md). artifacts-schema/ (the JSON Schema contracts) is NOT covered by this and stays
+# tracked.
+/artifacts/
+
 nosetests.xml
 coverage.xml
 *.cover
