@@ -1,8 +1,3 @@
-"""Orchestrates calibration: select tasks stratified by cluster, run each candidate model (or
-synthesize the reference/null grader-validation controls), grade the result, and aggregate into
-per-cluster error rates. See config/calibration.yaml and the grading/ + runner.py module
-docstrings for the mechanics each step relies on.
-"""
 from __future__ import annotations
 
 import dataclasses

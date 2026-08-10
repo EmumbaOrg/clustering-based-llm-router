@@ -20,8 +20,7 @@ import numpy as np
 
 @dataclasses.dataclass(frozen=True)
 class ClusterMap:
-    """The subset of cluster-map.json this module needs: centroids plus enough metadata to
-    validate an incoming vector against them."""
+    """The subset of cluster-map.json this module needs."""
 
     artifact_id: str
     embedding_model_id: str

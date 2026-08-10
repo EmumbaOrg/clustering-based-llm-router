@@ -111,9 +111,7 @@ def _load_source(name: str, cap: int | None) -> list[CorpusRow]:
 
 
 def dedup_exact(rows: list[CorpusRow]) -> list[CorpusRow]:
-    """Exact-duplicate removal by SHA-256 of trimmed text. Keeps the first occurrence.
-
-    Near-duplicate detection (MinHash/LSH or an embedding-similarity pass) is deferred — every
+    """Near-duplicate detection (MinHash/LSH or an embedding-similarity pass) is deferred — every
     prompt gets embedded anyway, so a cheap cosine-similarity follow-up is possible later without
     touching this function.
     """
@@ -129,10 +127,8 @@ def dedup_exact(rows: list[CorpusRow]) -> list[CorpusRow]:
 
 
 def build_corpus(sample: int | None = None) -> tuple[list[CorpusRow], list[SourceProvenance]]:
-    """Loads all configured sources, tags each row, and dedups the combined result.
-
-    `sample`, when given, caps EACH source at that many rows (a dry-run knob, not a global cap) —
-    so a small sample still exercises every loader rather than only the first source's data.
+    """`sample`, when given, caps EACH source at that many rows (a dry-run knob, not a global cap)
+    — so a small sample still exercises every loader rather than only the first source's data.
     """
     all_rows: list[CorpusRow] = []
     provenances: list[SourceProvenance] = []

@@ -1,5 +1,3 @@
-"""Top-level `router` command: `router pipeline <cmd>` for the offline pipeline, `router runtime
-<cmd>` for the online routing runtime. See pipeline/cli.py and runtime/cli.py respectively."""
 from __future__ import annotations
 
 import typer

@@ -82,7 +82,6 @@ def score_candidates(
 
 
 def select_model(scored: list[ScoredCandidate]) -> ScoredCandidate | None:
-    """Deterministic argmin: routing_score ascending, model_id ascending on an exact tie."""
     if not scored:
         return None
     return min(scored, key=lambda s: (s.routing_score, s.model_id))

@@ -87,9 +87,9 @@ def load_routing_context(
     candidates: list[ModelConfig] | None = None,
     embedding_config: EmbeddingConfig | None = None,
 ) -> RoutingContext:
-    """Loads, cross-checks, and hard-fails on both artifacts. `candidates` and `embedding_config`
-    are injectable so tests can run this against fixtures with zero dependence on whatever happens
-    to be in config/ on a given machine; both default to the real config/*.yaml loaders."""
+    """`candidates` and `embedding_config` are injectable so tests can run this against fixtures
+    with zero dependence on whatever happens to be in config/ on a given machine; both default to
+    the real config/*.yaml loaders."""
     if not math.isfinite(lambda_) or lambda_ < 0:
         raise ValueError(f"lambda must be finite and >= 0, got {lambda_}")
 

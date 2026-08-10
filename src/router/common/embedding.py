@@ -5,7 +5,7 @@ the other, and both must always agree on the exact same rule (see `prepare_embed
 docstring) — one file makes that impossible to drift apart by construction.
 
 No server, no HTTP call — the encoder runs in-process via sentence-transformers. That was a
-deliberate choice for the pipeline's batch corpus embedding (see ../../config/README.md), and
+deliberate choice for the pipeline's batch corpus embedding, and
 applies equally to the runtime once it exists: embedding one live prompt is just `embed_texts`
 called with a one-element list, so there is no separate runtime-specific embedding path to build
 or keep in sync with this one.
@@ -29,12 +29,10 @@ def normalize_line_endings(text: str) -> str:
 
 
 def prepare_embedding_input(text: str, max_chars: int) -> str:
-    """CRLF -> LF, trim, then head-truncate to max_chars. Matches embedding.yaml's declared rule.
-
-    Deliberately no case folding and no whitespace collapsing — indentation and casing are signal
-    for a code-oriented embedding model. If you change this rule, update embedding.yaml's `input`
-    block to match: it's copied verbatim into cluster-map.json so any future consumer applies the
-    exact same rule to a new query, and the two must never drift apart silently.
+    """Deliberately no case folding and no whitespace collapsing — indentation and casing are
+    signal for a code-oriented embedding model. If you change this rule, update embedding.yaml's
+    `input` block to match: it's copied verbatim into cluster-map.json so any future consumer
+    applies the exact same rule to a new query, and the two must never drift apart silently.
     """
     normalized = normalize_line_endings(text).strip()
     if len(normalized) <= max_chars:
@@ -99,9 +97,8 @@ def embed_texts(
 
 
 def embed_one(text: str, config: EmbeddingConfig) -> np.ndarray:
-    """Embeds a single live prompt — the runtime's entry point into this module. Thin wrapper over
-    `embed_texts` (batch_size is irrelevant for one row; the progress bar is noise for one row) so
-    there is exactly one encoding code path, not a runtime-specific copy of it."""
+    """Thin wrapper over `embed_texts` so there is exactly one encoding code path, not a
+    runtime-specific copy of it."""
     return embed_texts([text], config, batch_size=1, show_progress_bar=False)[0]
 
 

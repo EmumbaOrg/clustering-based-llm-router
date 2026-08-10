@@ -30,7 +30,7 @@ def decide(
     model_profiles: str | None = typer.Option(None, help="Path to model-profiles.json. Defaults to artifacts/model-profiles.json."),
     json_output: bool = typer.Option(False, "--json", help="Print the full decision as one JSON object."),
 ) -> None:
-    """Embed PROMPT, assign it to a cluster, and print the selected model and score table."""
+    """Print the selected model and score table for PROMPT."""
     cluster_map_path = Path(cluster_map) if cluster_map else DEFAULT_CLUSTER_MAP_PATH
     model_profiles_path = Path(model_profiles) if model_profiles else DEFAULT_MODEL_PROFILES_PATH
     ctx = load_routing_context(cluster_map_path, model_profiles_path, lambda_)

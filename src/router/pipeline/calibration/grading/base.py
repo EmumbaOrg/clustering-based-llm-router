@@ -60,13 +60,8 @@ _RESULT_LINE = re.compile(r"^RESULT:\s*(PASS|FAIL|ERROR_MISSING_DEP)\b(.*)$")
 
 
 def run_graded_script(script: str, timeout_seconds: int, extra_files: dict[str, bytes] | None = None) -> GradeResult:
-    """Runs `script` — a self-contained Python program that prints exactly one
-    `RESULT: <TAG> [detail]` line as its last action (see module docstring) — in a subprocess, in
-    its own throwaway temp directory, with a hard wall-clock timeout.
-
-    `extra_files`, if given, is written into the same temp directory before the script runs (e.g.
-    a reference image for a comparison-based grader).
-    """
+    """`extra_files`, if given, is written into the same temp directory before the script runs
+    (e.g. a reference image for a comparison-based grader)."""
     with tempfile.TemporaryDirectory(prefix="router-grade-") as tmp:
         tmp_path = Path(tmp)
         script_path = tmp_path / "grade.py"

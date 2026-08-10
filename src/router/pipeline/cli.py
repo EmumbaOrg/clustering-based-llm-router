@@ -1,4 +1,3 @@
-"""The `router pipeline` command group: `uv run router pipeline <command>`."""
 from __future__ import annotations
 
 import json
@@ -37,7 +36,6 @@ def main_callback(
         "INFO", "--log-level", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR)."
     ),
 ) -> None:
-    """Configures logging once before any command runs."""
     configure_logging(level=log_level)
 
 WORK_DIR = REPO_ROOT / ".cache"
@@ -61,7 +59,7 @@ def corpus(
         None, help="Cap EACH source at this many rows (dry run). Omit for the full corpus."
     ),
 ) -> None:
-    """Load, tag, and dedup the corpus from all configured sources; write corpus.jsonl."""
+    """Build corpus.jsonl."""
     _run_corpus(sample)
 
 
@@ -83,7 +81,7 @@ def embed(
         None, help="Only embed the first N rows of corpus.jsonl (dry run)."
     ),
 ) -> None:
-    """Embed corpus.jsonl; write embeddings.npz."""
+    """Build embeddings.npz."""
     _run_embed(sample)
 
 
@@ -99,7 +97,7 @@ def _run_cluster() -> None:
 
 @app.command()
 def cluster() -> None:
-    """Run K-means for every candidate k in config/clustering.yaml; print diagnostics."""
+    """Print K-means diagnostics for every candidate k in config/clustering.yaml."""
     _run_cluster()
 
 
@@ -140,7 +138,7 @@ def build_artifact(
         None, help="Which k to promote to the final artifact. Defaults to clustering.yaml's default_k."
     ),
 ) -> None:
-    """Cluster at the chosen k, assemble cluster-map.json, validate, and write it."""
+    """Build and validate cluster-map.json."""
     _run_build_artifact(k)
 
 
@@ -149,7 +147,6 @@ def run_all(
     sample: int | None = typer.Option(None, help="Dry-run cap applied to corpus."),
     k: int | None = typer.Option(None, help="Which k to promote. Defaults to clustering.yaml's default_k."),
 ) -> None:
-    """Convenience: corpus -> embed -> cluster -> build-artifact in one shot."""
     _run_corpus(sample)
     _run_embed(None)  # corpus already applied the sample cap; don't cap twice
     _run_cluster()
@@ -205,8 +202,7 @@ def validate_graders(
 
 @app.command()
 def calibrate() -> None:
-    """Select tasks stratified by cluster, run every configured model (real + controls), and
-    write the validated model-profiles.json artifact."""
+    """Build and validate model-profiles.json."""
     if not CLUSTER_MAP_PATH.exists():
         raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
 
@@ -243,9 +239,7 @@ def calibrate() -> None:
 
 @app.command()
 def evaluate() -> None:
-    """Re-select the same (deterministic) task split, run the holdout split against every model,
-    and report the lambda-sweep resolution/cost table plus always-strongest/always-cheapest/oracle
-    baselines."""
+    """Re-select the same (deterministic) task split and report the holdout resolution/cost table."""
     if not PROFILES_PATH.exists():
         raise typer.BadParameter(f"{PROFILES_PATH} not found — run `calibrate` first.")
     if not CLUSTER_MAP_PATH.exists():
