@@ -12,18 +12,14 @@ using per-cluster error rates measured by calibration. Two parts, both pure Pyth
 
 ## Design
 
-Planned in `docs/specs/2026-08-04-cluster-routing-implementation-plan.md`, as a standalone,
-Python-only project: the offline pipeline and a from-scratch Python runtime, so the routing logic
-that must agree between calibration/evaluation and live routing — nearest-centroid assignment, the
-scoring formula — is one shared module (`src/router/common/`), not two implementations kept in
-sync by hand.
+A standalone, Python-only project: the offline pipeline and a from-scratch Python runtime, so the
+routing logic that must agree between calibration/evaluation and live routing — nearest-centroid
+assignment, the scoring formula — is one shared module (`src/router/common/`), not two
+implementations kept in sync by hand.
 
 ## Runtime status
 
-Implemented per `docs/specs/2026-08-10-python-runtime-implementation-plan.md`, which supersedes
-the runtime phases of the older `2026-08-04-cluster-routing-implementation-plan.md` (that plan's
-Phase 2 artifact contract still applies unchanged). Deliberately **stateless** — no session, no
-escalation, no budget caps; see the plan's "Explicitly out of scope" for why.
+Deliberately **stateless** — no session, no escalation, no budget caps.
 
 ```bash
 uv run router runtime validate                      # check both artifacts, no embedding, no model download
@@ -99,17 +95,58 @@ uv run router pipeline evaluate    # holdout run + lambda-sweep report
 
 `evaluate` executes real model calls for every holdout task against every non-control model in
 `config/models.yaml` — for a `runner: pi` entry that means a live `pi -p` subprocess per task, so
-whatever it points at (a hosted provider, or a local `llama serve`/similar via a custom
-`~/.pi/agent/models.json` provider) must be reachable first.
+whatever it points at must be reachable first — see "Aligning `config/models.yaml` with the Pi
+coding agent" below.
+
+### Aligning `config/models.yaml` with the Pi coding agent
+
+Every `runner: pi` candidate is invoked through the
+[Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) CLI
+(`pi --provider <provider> --model <model_id> -p ...`, one subprocess per task — see
+`pipeline/calibration/runner.py`'s `run_pi`). This repo only *names* providers/models in
+`config/models.yaml`; it never manages credentials or talks to a model API directly, so each
+`provider`/`model_id` pair needs a matching entry in your own Pi provider config
+(`~/.pi/agent/models.json`, or `$PI_CODING_AGENT_DIR/models.json` if you've overridden that).
+
+Minimal example matching this repo's Groq candidates:
+
+```json
+{
+  "providers": {
+    "groq": {
+      "baseUrl": "https://api.groq.com/openai/v1",
+      "api": "openai-completions",
+      "apiKey": "<your Groq API key>",
+      "models": [
+        {
+          "id": "llama-3.1-8b-instant",
+          "name": "Llama 3.1 8B Instant",
+          "contextWindow": 131072,
+          "maxTokens": 2048,
+          "cost": { "input": 0.05, "output": 0.08, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}
+```
+
+| `config/models.yaml` | Pi provider config | Note |
+|---|---|---|
+| `provider` | `providers.<name>` key | Must match exactly — `provider: groq` needs a `providers.groq` entry. |
+| `model_id` | `providers.<name>.models[].id` | Must match exactly — this is the `--model` value `run_pi` passes. |
+| `context_window` | `models[].contextWindow` | Informational on both sides; neither enforces it against the other. |
+| `max_tokens` | `models[].maxTokens` | Keep this modest (e.g. 2048, not a model's full output ceiling) — see "Calibrating against Groq" below for why. |
+| `cost_input` / `cost_output` | `models[].cost.input` / `.output` | **Different units** — `config/models.yaml` is $ per 1k tokens, Pi's config is $ per 1M tokens; multiply by 1000 going from ours to theirs. |
+| `rate_limit_rpm` | *(no Pi equivalent)* | Paced entirely on this repo's side by `runner.py`'s `RateLimiter`, before the `pi` subprocess is ever invoked. |
+
+`reference`/`null`-runner candidates (the grader-validation controls) never go through this path
+at all — they're synthesized directly in `calibrate.py`, not run through `pi`.
 
 ### Calibrating against Groq
 
 The three real candidates in `config/models.yaml` (`llama-3.1-8b-instant`, `openai/gpt-oss-120b`,
 `llama-3.3-70b-versatile`) run on [Groq](https://groq.com)'s free tier — no local model this pass.
-
-**Setup, outside this repo:** add a `groq` provider to your own Pi provider config (e.g.
-`~/.pi/agent/models.json`) pointing at Groq's API with a Groq API key. This repo only names the
-provider in `config/models.yaml`; it doesn't manage credentials.
 
 **Free-tier rate limits** (per Groq's own docs, `console.groq.com/docs/rate-limits`, checked
 August 2026): each of these three models allows 30 requests/minute on the free tier, with daily
@@ -263,7 +300,6 @@ src/router/
 config/              # human-edited YAML: embedding/clustering/calibration/model-roster config
 artifacts-schema/    # versioned JSON Schema for cluster-map.json / model-profiles.json
 artifacts/           # pipeline output (git-ignored, regenerable)
-docs/specs/          # design docs, including the original cluster-routing implementation plan
 tests/               # mirrors src/router/'s common/pipeline/runtime split
 ```
 
