@@ -5,14 +5,14 @@
 # artifacts/model-profiles.json. See ../README.md for the full protocol.
 
 # Sources whose ground truth we can grade today. BigCodeBench and DS-1000 are self-contained —
-# their tests ship inline in each row, so grading needs only a Python interpreter. swe-smith needs
-# Docker (a prebuilt per-task image, see grading/swesmith.py) — a cold, uncached image pull adds
-# real latency the first time a given task's image is used. swe-gym is not yet implemented (its
-# environment reconstruction is an open problem — see grading/swegym.py).
+# their tests ship inline in each row, so grading needs only a Python interpreter. swe-smith is
+# implemented (grading/swesmith.py) but disabled here for now — it needs a local Docker daemon,
+# which isn't available in every environment this pipeline runs in (e.g. Colab); re-add it once
+# that's not a constraint. swe-gym is not yet implemented (its environment reconstruction is an
+# open problem — see grading/swegym.py).
 gradeable_sources:
   - bigcodebench
   - ds1000
-  - swe-smith
 
 # Target calibration tasks per cluster. The spec's reference figure is 20+ per cluster against a
 # 24-cluster map; keep it low here because this pass targets pipeline completeness, not

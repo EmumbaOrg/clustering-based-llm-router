@@ -26,7 +26,6 @@ from .calibration import profiles as profiles_mod
 from .calibration.calibrate import SelectedTask
 from .calibration.grading import bigcodebench as bigcodebench_grading
 from .calibration.grading import ds1000 as ds1000_grading
-from .calibration.grading import swesmith as swesmith_grading
 from .calibration.tasks import load_gradeable_tasks
 from .clustering import cluster as cluster_mod
 from .clustering import cluster_map as cluster_map_mod
@@ -174,12 +173,7 @@ def validate_graders(
     """GATE: run the reference (gold solution) and null (empty solution) controls over a small
     sample per gradeable source. reference must score ~100% pass, null ~0% pass — this is what
     proves the grader itself is correct, independent of any model's actual coding ability. If this
-    gate fails, nothing downstream (calibration, evaluation) means anything.
-
-    SWE-smith's reference/null aren't graded as solution strings — grade_reference/grade_null
-    establish the bug then reverse the same patch / apply no fix, matching calibrate.py's
-    run_and_grade special-casing. Docker-based, so this source alone can take several minutes at
-    the default --tasks-per-source; pass a smaller value for a quicker check."""
+    gate fails, nothing downstream (calibration, evaluation) means anything."""
     calibration_config = load_calibration_config()
     reference_and_null_graders = {
         "bigcodebench": (
@@ -189,10 +183,6 @@ def validate_graders(
         "ds1000": (
             lambda t, timeout: ds1000_grading.grade(t, t.reference_solution, timeout_seconds=timeout),
             lambda t, timeout: ds1000_grading.grade(t, "", timeout_seconds=timeout),
-        ),
-        "swe-smith": (
-            lambda t, timeout: swesmith_grading.grade_reference(t, timeout_seconds=timeout),
-            lambda t, timeout: swesmith_grading.grade_null(t, timeout_seconds=timeout),
         ),
     }
 
