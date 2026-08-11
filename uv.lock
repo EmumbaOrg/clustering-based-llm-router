@@ -277,6 +277,7 @@ source = { editable = "." }
 dependencies = [
     { name = "datasets" },
     { name = "einops" },
+    { name = "huggingface-hub" },
     { name = "jsonschema" },
     { name = "matplotlib" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -303,6 +304,7 @@ dev = [
 requires-dist = [
     { name = "datasets", specifier = ">=5.0.1" },
     { name = "einops", specifier = ">=0.8.2" },
+    { name = "huggingface-hub", specifier = ">=0.36.2" },
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "matplotlib", specifier = ">=3.11.1" },
     { name = "numpy", specifier = ">=2.4.6" },

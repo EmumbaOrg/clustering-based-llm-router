@@ -65,13 +65,16 @@ default `torch` pulls a full CUDA stack (multiple GB) that this pipeline doesn't
 ```bash
 # Recommended: dry run first. --sample caps EACH source at N rows, so it still exercises every
 # loader. CPU throughput for jina-embeddings-v2-base-code on this corpus is not yet benchmarked —
-# this is how you find out before committing to the full run.
+# this is how you find out before committing to the full run. For multi-swe-rl specifically,
+# --sample reads the smallest file per language first, so a dry run costs megabytes, not the full
+# ~4GB — but that also means a capped multi-swe-rl sample is biased toward small repos, not random.
 uv run router pipeline corpus --sample 200
 uv run router pipeline embed
 uv run router pipeline cluster
 
 # Full run
-uv run router pipeline corpus            # ~24,578 rows before dedup
+uv run router pipeline corpus            # ~29,301 rows before dedup (~4GB one-time download for
+                                          # multi-swe-rl, cached under ~/.cache/huggingface/hub)
 uv run router pipeline embed
 uv run router pipeline cluster           # review diagnostics for k=16/24/32
 uv run router pipeline build-artifact --k 24
@@ -172,7 +175,7 @@ nothing to trade accuracy against.
 
 ## What the pipeline does
 
-1. **`corpus`** — loads four benchmark/training datasets from Hugging Face, tags and dedups them into one corpus:
+1. **`corpus`** — loads five benchmark/training datasets from Hugging Face, tags and dedups them into one corpus:
 
    | Source | Rows used | License |
    |---|---|---|
@@ -180,12 +183,27 @@ nothing to trade accuracy against.
    | SWE-Gym | 2,438 (all) | MIT |
    | BigCodeBench-Instruct | 1,140 (all, `v0.1.4` split) | Apache-2.0 |
    | DS-1000 | 1,000 (all) | CC-BY-SA-4.0 |
+   | Multi-SWE-RL | ~4,723 (all of batch `data_20240601_20250331`) | unverified — see below |
 
-   **Multi-SWE-RL is deliberately excluded** — a 23.8GB download with no independently-verifiable
-   row count and a license conflict between its README (CC0) and its repo metadata tag (`other`).
-   Revisit once someone confirms the actual license terms; adding it back is additive (a new entry
-   in `corpus.py`'s `SOURCE_METADATA` plus a loader for its non-parquet JSONL layout), not a
-   redesign.
+   **Multi-SWE-RL is a clustering-corpus source only** — there's no grader for it (that would need
+   a per-repo Docker image per instance), so `config/calibration.yaml`'s `gradeable_sources` never
+   lists it. It also can't use the generic `load_dataset(hf_id, split=split)` path the other four
+   sources share: its batch-1 files have per-repo-heterogeneous nested fields, and Arrow schema
+   unification across them fails outright (`TypeError: Couldn't cast array of type string to
+   null`) — the same reason the HF dataset viewer is broken for this dataset. `corpus.py` instead
+   fetches each file individually via `huggingface_hub.hf_hub_download` and parses it with plain
+   `json.loads`. The dataset has no `problem_statement` field; its `title`/`body` is the *pull
+   request* (a solution description), so the corpus text comes from `resolved_issues[].title`+
+   `.body` instead (the *issue*, i.e. the actual problem) — measured 750 median chars vs. 128 for
+   the PR text, present in every record sampled. Only the initial release batch is pulled (a
+   second, larger upstream batch is deliberately not); even so, that's ~4GB (JSONL is
+   row-oriented, so the ~750 chars of usable text per record can't be separated from the multi-MB
+   test-log fields stored alongside it). **License is recorded as `unverified`** rather than
+   resolved one way or the other: the dataset card states "licensed under CC0 ... subject to any
+   intellectual property rights in the dataset owned by Bytedance" and that use "must comply with
+   [the underlying repositories'] respective licenses", while the repo's own HuggingFace metadata
+   tag says `license: other` — get sign-off from whoever owns data licensing before using this
+   corpus beyond local experimentation.
 
 2. **`embed`** — embeds the corpus in-process with `sentence-transformers`
    (`jinaai/jina-embeddings-v2-base-code`, 768-dim, CPU) per the rule declared in
