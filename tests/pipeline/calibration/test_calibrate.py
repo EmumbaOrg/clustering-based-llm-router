@@ -1,7 +1,12 @@
 from router.common.config import CalibrationConfig, ModelConfig, SmoothingConfig
 from router.pipeline.calibration import calibrate as calibrate_module
-from router.pipeline.calibration.calibrate import _stats_from_outcomes, run_and_grade
-from router.pipeline.calibration.grading.base import Task
+from router.pipeline.calibration.calibrate import (
+    _expected_solution,
+    _preview,
+    _stats_from_outcomes,
+    run_and_grade,
+)
+from router.pipeline.calibration.grading.base import GradeResult, Task
 from router.pipeline.calibration.runner import RunResult
 
 
@@ -85,3 +90,60 @@ def test_run_and_grade_still_treats_a_genuine_no_solution_as_a_real_failure(monk
     )
     result = run_and_grade(_task(), _pi_model(), _calibration_config())
     assert result.outcome == "error_no_solution"
+
+
+def test_expected_solution_falls_back_to_the_gold_patch_when_reference_solution_is_empty():
+    # swe-smith/swe-gym leave reference_solution empty on purpose (see tasks.py) — the
+    # review-worthy "expected" text for those sources is the gold patch instead.
+    task = Task(task_id="t", source="swe-smith", prompt="p", reference_solution="", row={"patch": "diff --git a/x"})
+    assert _expected_solution(task) == "diff --git a/x"
+
+
+def test_expected_solution_prefers_reference_solution_when_present():
+    task = Task(task_id="t", source="bigcodebench", prompt="p", reference_solution="return 1", row={"patch": "unused"})
+    assert _expected_solution(task) == "return 1"
+
+
+def test_preview_truncates_long_text_and_reports_how_much_was_cut():
+    text = "x" * 2000
+    preview = _preview(text)
+    assert preview.startswith("x" * 100)
+    assert preview.endswith("more chars]")
+    assert len(preview) < len(text)
+
+
+def test_preview_leaves_short_text_untouched():
+    assert _preview("  a short answer  ") == "a short answer"
+
+
+def test_run_and_grade_logs_expected_vs_provided_solution_at_debug(monkeypatch, caplog):
+    monkeypatch.setattr(
+        calibrate_module.runner_mod, "run_pi",
+        lambda task, model, timeout_seconds: RunResult(solution="def f():\n    return 1", detail="", rate_limited=False),
+    )
+    monkeypatch.setitem(
+        calibrate_module._GRADERS, "bigcodebench",
+        lambda task, solution, timeout_seconds: GradeResult(outcome="fail", detail="assertion: expected 2, got 1"),
+    )
+    # logger=... (not just a bare level) matters here: test_logging_config.py exercises
+    # configure_logging, which sets the "router" logger's propagate=False — a bare caplog.at_level
+    # only listens at the root logger, so it would see nothing once that's run earlier in the
+    # suite. Naming the logger attaches caplog's handler directly to it instead.
+    with caplog.at_level("DEBUG", logger="router.pipeline.calibration.calibrate"):
+        result = run_and_grade(_task(), _pi_model(), _calibration_config())
+
+    assert result.outcome == "fail"
+    assert "-> fail" in caplog.text
+    assert "expected: x" in caplog.text  # _task()'s reference_solution
+    assert "provided: def f():" in caplog.text
+    assert "assertion: expected 2, got 1" in caplog.text
+
+
+def test_run_and_grade_logs_no_solution_extracted_when_pi_returns_none(monkeypatch, caplog):
+    monkeypatch.setattr(
+        calibrate_module.runner_mod, "run_pi",
+        lambda task, model, timeout_seconds: RunResult(solution=None, detail="empty response", rate_limited=False),
+    )
+    with caplog.at_level("DEBUG", logger="router.pipeline.calibration.calibrate"):
+        run_and_grade(_task(), _pi_model(), _calibration_config())
+    assert "provided: (no solution extracted)" in caplog.text

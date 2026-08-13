@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 from datetime import UTC, datetime
+from pathlib import Path
 
 import typer
 
@@ -38,8 +39,11 @@ def main_callback(
     log_level: str = typer.Option(
         "INFO", "--log-level", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR)."
     ),
+    log_file: str | None = typer.Option(
+        None, "--log-file", help="Also append logs to this file, in addition to stderr."
+    ),
 ) -> None:
-    configure_logging(level=log_level)
+    configure_logging(level=log_level, log_file=Path(log_file) if log_file else None)
 
 WORK_DIR = REPO_ROOT / ".cache"
 CORPUS_PATH = WORK_DIR / "corpus.jsonl"

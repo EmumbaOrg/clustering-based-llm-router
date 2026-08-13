@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "datasets>=5.0.1",
     "einops>=0.8.2",
+    "faker>=40.36.0",
     "huggingface-hub>=0.36.2",
     "jsonschema>=4.26.0",
     "matplotlib>=3.11.1",
@@ -47,6 +48,8 @@ module-name = "router"
 
 [dependency-groups]
 dev = [
+    "ipykernel>=7.3.0",
+    "jupyter>=1.1.1",
     "pytest>=9.1.1",
     "ruff>=0.16.1",
 ]

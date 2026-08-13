@@ -10,6 +10,44 @@ using per-cluster error rates measured by calibration. Two parts, both pure Pyth
 2. **The online runtime** (`src/router/runtime/`) — given one live prompt, embeds it, assigns it
    to a cluster, and selects a model.
 
+## Prerequisites
+
+**Hard requirements — needed for anything here, including just running the tests:**
+
+- **Python >= 3.11** (`pyproject.toml`'s `requires-python`).
+- **[uv](https://docs.astral.sh/uv/) >= 0.11.5** — this repo's build backend is pinned to
+  `uv_build>=0.11.5,<0.12.0` (`pyproject.toml`'s `[build-system]`); an older `uv` won't satisfy it.
+- **git**, to clone the repo.
+- Internet access and a few GB of free disk: `uv sync` downloads all Python dependencies
+  (including `torch`/`sentence-transformers`), and the pipeline itself downloads datasets from
+  Hugging Face on first use — the full corpus pull alone is a one-time ~4GB download (mostly
+  Multi-SWE-RL; see "What the pipeline does" below), cached under `~/.cache/huggingface/hub`.
+
+**Can be skipped initially** — none of this is needed to run `corpus` → `embed` → `cluster` →
+`build-artifact`, or to run the test suite. It's only needed once you get to
+`validate-graders`/`calibrate`/`evaluate`:
+
+- **Node.js >= 22.19.0 + npm**, to install the
+  [Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) CLI
+  (`npm install -g @earendil-works/pi-coding-agent`, engine requirement per its own
+  `package.json`) — see "Aligning `config/models.yaml` with the Pi coding agent" below.
+- **A Groq API key** (the free tier is enough) — see "Calibrating against Groq" below.
+- **Docker** — not required today. The only `gradeable_sources` currently enabled
+  (`bigcodebench`, `ds1000`) are self-contained; Docker would only matter if SWE-smith grading is
+  re-enabled in `config/calibration.yaml` later.
+- **A GPU** — entirely optional. `torch` is pinned to the CPU-only wheel in this repo (see below);
+  a GPU only makes `embed` faster, and needs its own `torch` install to take advantage of.
+
+### Setup
+
+```bash
+git clone https://github.com/hamad1safdar/clustering-based-llm-router.git
+cd clustering-based-llm-router
+uv sync
+uv run pytest -q   # sanity check — fully offline, should pass with no setup beyond `uv sync`
+```
+From here, see "Running the pipeline" below.
+
 ## Design
 
 A standalone, Python-only project: the offline pipeline and a from-scratch Python runtime, so the
@@ -53,14 +91,9 @@ HTTP service).
 
 ## Running the pipeline
 
-Requires [`uv`](https://docs.astral.sh/uv/).
-
-```bash
-uv sync
-```
-
-`torch` is pinned to the CPU-only wheel (see `pyproject.toml`'s `[tool.uv.sources]`) — PyPI's
-default `torch` pulls a full CUDA stack (multiple GB) that this pipeline doesn't need.
+Assumes you've already done the one-time `uv sync` from "Prerequisites" above. `torch` is pinned
+to the CPU-only wheel there (see `pyproject.toml`'s `[tool.uv.sources]`) — PyPI's default `torch`
+pulls a full CUDA stack (multiple GB) that this pipeline doesn't need.
 
 ```bash
 # Recommended: dry run first. --sample caps EACH source at N rows, so it still exercises every
@@ -279,9 +312,20 @@ Every command logs progress through Python's stdlib `logging` — not `print`, n
 Configured once per invocation by the CLI's Typer callback (`--log-level`, default `INFO`).
 
 Deliberately plain — one console handler (`stderr`), one readable line per call, no structured
-fields, no log file: `logger.info("loaded 1140 rows from bigcodebench")`. Call sites inline any
-detail worth keeping directly into the message string rather than attaching it as a separate
-field, so there's nothing to configure or look up beyond reading the line itself.
+fields: `logger.info("loaded 1140 rows from bigcodebench")`. Call sites inline any detail worth
+keeping directly into the message string rather than attaching it as a separate field, so there's
+nothing to configure or look up beyond reading the line itself.
+
+A log **file** is opt-in via `--log-file <path>` (appended to, not overwritten, so re-running a
+command doesn't erase an earlier run) — useful for `calibrate`/`evaluate`, which can run long
+enough that you want a persistent record to grep through afterward rather than relying on terminal
+scrollback:
+```bash
+uv run router pipeline --log-level DEBUG --log-file calibrate.log calibrate
+```
+With `--log-level DEBUG`, `calibrate`/`evaluate` also log the expected vs. actual solution for
+every `runner: pi` task (`calibrate.py`'s `run_and_grade`) — useful for seeing exactly what a model
+produced when a task unexpectedly failed.
 
 Level guidance applied consistently across the pipeline: **INFO** for stage boundaries and
 per-item progress (the bulk of it — per-source/per-k/per-task, including a running progress

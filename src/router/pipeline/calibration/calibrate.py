@@ -25,6 +25,26 @@ _GRADERS = {
     "swe-gym": swegym.grade,
 }
 
+# Debug-only preview length for expected-vs-provided logging (see run_and_grade's pi branch).
+# Long enough to see the shape of a real answer; short enough that a 1.4MB swe-gym patch doesn't
+# flood the log. --log-level DEBUG is scoped to the `router` logger only (logging_config.py), so
+# this never mixes with third-party DEBUG noise from datasets/huggingface_hub/sentence-transformers.
+_LOG_PREVIEW_CHARS = 1000
+
+
+def _preview(text: str) -> str:
+    text = text.strip()
+    if len(text) <= _LOG_PREVIEW_CHARS:
+        return text
+    return text[:_LOG_PREVIEW_CHARS] + f" ...[{len(text) - _LOG_PREVIEW_CHARS} more chars]"
+
+
+def _expected_solution(task: Task) -> str:
+    # bigcodebench/ds1000 carry the gold answer directly in reference_solution. Patch-based
+    # sources (swe-smith/swe-gym) leave it empty on purpose (see tasks.py) — their gold fix is
+    # task.row["patch"] instead, which run_and_grade's reference/null branches use directly.
+    return task.reference_solution or str(task.row.get("patch", ""))
+
 
 @dataclasses.dataclass(frozen=True)
 class SelectedTask:
@@ -103,10 +123,23 @@ def run_and_grade(task: Task, model: ModelConfig, calibration_config: Calibratio
         if run_result.rate_limited:
             # An infra/quota rejection, not the model failing to answer — excluded rather than
             # counted as a wrong answer, same reasoning as error_timeout/error_missing_dep.
-            return GradeResult(outcome="error_harness", detail=run_result.detail)
-        if run_result.solution is None:
-            return GradeResult(outcome="error_no_solution", detail=run_result.detail)
-        return grader(task, run_result.solution, timeout_seconds=timeout)
+            result = GradeResult(outcome="error_harness", detail=run_result.detail)
+        elif run_result.solution is None:
+            result = GradeResult(outcome="error_no_solution", detail=run_result.detail)
+        else:
+            result = grader(task, run_result.solution, timeout_seconds=timeout)
+
+        # Multi-line despite the "one line per call" logging convention (logging_config.py) —
+        # deliberately: this is the one place meant for reading a code/diff block back, and
+        # collapsing it to one line would make exactly the thing it's for unreadable. DEBUG-only
+        # so it never appears in a normal run.
+        logger.debug(
+            f"{task.task_id} ({model.model_id}) -> {result.outcome}\n"
+            f"  expected: {_preview(_expected_solution(task))}\n"
+            f"  provided: {_preview(run_result.solution) if run_result.solution is not None else '(no solution extracted)'}\n"
+            f"  detail: {result.detail}"
+        )
+        return result
 
     raise ValueError(f"unknown runner {model.runner!r} for model {model.model_id}")
 
