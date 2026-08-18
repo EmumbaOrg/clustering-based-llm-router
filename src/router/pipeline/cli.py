@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,8 +26,6 @@ from . import evaluate as evaluate_mod
 from .calibration import calibrate as calibrate_mod
 from .calibration import profiles as profiles_mod
 from .calibration.calibrate import SelectedTask
-from .calibration.grading import bigcodebench as bigcodebench_grading
-from .calibration.grading import ds1000 as ds1000_grading
 from .calibration.tasks import load_gradeable_tasks
 from .clustering import cluster as cluster_mod
 from .clustering import cluster_map as cluster_map_mod
@@ -170,40 +169,44 @@ def _load_selected_tasks() -> tuple[ClusterMap, EmbeddingConfig, CalibrationConf
     return cluster_map, embedding_config, calibration_config, models, selected
 
 
+# A module-level singleton, not an inline default — ruff's B008 flags any `list[...]`-typed
+# Option/Argument default as a suspected mutable default, even though typer's own repeated-flag
+# ("--source", repeatable) support requires exactly this pattern.
+_SOURCE_OPTION = typer.Option(
+    None, "--source", help="Gate only this source (repeatable). Defaults to every source in "
+    "calibration.yaml's gradeable_sources."
+)
+
+
 @app.command("validate-graders")
 def validate_graders(
     tasks_per_source: int = typer.Option(10, help="How many tasks per gradeable source to check."),
+    source: list[str] | None = _SOURCE_OPTION,
 ) -> None:
     """GATE: run the reference (gold solution) and null (empty solution) controls over a small
     sample per gradeable source. reference must score ~100% pass, null ~0% pass — this is what
     proves the grader itself is correct, independent of any model's actual coding ability. If this
-    gate fails, nothing downstream (calibration, evaluation) means anything."""
-    calibration_config = load_calibration_config()
-    reference_and_null_graders = {
-        "bigcodebench": (
-            lambda t, timeout: bigcodebench_grading.grade(t, t.reference_solution, timeout_seconds=timeout),
-            lambda t, timeout: bigcodebench_grading.grade(t, "", timeout_seconds=timeout),
-        ),
-        "ds1000": (
-            lambda t, timeout: ds1000_grading.grade(t, t.reference_solution, timeout_seconds=timeout),
-            lambda t, timeout: ds1000_grading.grade(t, "", timeout_seconds=timeout),
-        ),
-    }
+    gate fails, nothing downstream (calibration, evaluation) means anything.
 
-    for source in calibration_config.gradeable_sources:
-        graders = reference_and_null_graders.get(source)
-        if graders is None:
-            typer.echo(f"{source}: no self-contained grader wired into this gate (skipped)")
-            continue
-        grade_reference, grade_null = graders
-        tasks = load_gradeable_tasks(source)[:tasks_per_source]
-        timeout = calibration_config.task_timeout_seconds
-        ref_outcomes = [grade_reference(t, timeout).outcome for t in tasks]
-        null_outcomes = [grade_null(t, timeout).outcome for t in tasks]
+    Uses `calibrate.py`'s `grade_reference`/`grade_null` — the SAME dispatch calibration itself
+    uses — so an unwired source raises immediately instead of being silently skipped, and this
+    gate can never drift from what a real calibration run actually does."""
+    calibration_config = load_calibration_config()
+    sources = source or calibration_config.gradeable_sources
+    # random.sample, not [:n] — a source grouped by repo/instance (e.g. swe-smith's 128 repos)
+    # would otherwise always sample the same handful of repos and never gate most of the dataset.
+    rng = random.Random(calibration_config.seed)
+
+    for src in sources:
+        all_tasks = load_gradeable_tasks(src)
+        tasks = rng.sample(all_tasks, min(tasks_per_source, len(all_tasks)))
+        timeout = calibration_config.grading_timeout_for(src)
+        ref_outcomes = [calibrate_mod.grade_reference(t, timeout).outcome for t in tasks]
+        null_outcomes = [calibrate_mod.grade_null(t, timeout).outcome for t in tasks]
         ref_pass = sum(1 for o in ref_outcomes if o == "pass")
         null_pass = sum(1 for o in null_outcomes if o == "pass")
         typer.echo(
-            f"{source} (n={len(tasks)}): reference {ref_pass}/{len(tasks)} pass {dict(Counter(ref_outcomes))} | "
+            f"{src} (n={len(tasks)}): reference {ref_pass}/{len(tasks)} pass {dict(Counter(ref_outcomes))} | "
             f"null {null_pass}/{len(tasks)} pass {dict(Counter(null_outcomes))}"
         )
 

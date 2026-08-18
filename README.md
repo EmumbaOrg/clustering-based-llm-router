@@ -32,9 +32,15 @@ using per-cluster error rates measured by calibration. Two parts, both pure Pyth
   (`npm install -g @earendil-works/pi-coding-agent`, engine requirement per its own
   `package.json`) — see "Aligning `config/models.yaml` with the Pi coding agent" below.
 - **A Groq API key** (the free tier is enough) — see "Calibrating against Groq" below.
-- **Docker** — not required today. The only `gradeable_sources` currently enabled
-  (`bigcodebench`, `ds1000`) are self-contained; Docker would only matter if SWE-smith grading is
-  re-enabled in `config/calibration.yaml` later.
+- **Docker** — required for `swe-smith`, one of the `gradeable_sources` now enabled in
+  `config/calibration.yaml` (`bigcodebench`/`ds1000` alone don't need it — they're self-contained).
+  `docker info` must succeed on whichever host runs `validate-graders`/`calibrate`/`evaluate`; no
+  further setup beyond a running daemon. SWE-smith images are large (~3.2-3.5GB measured) and span
+  ~128 repos — `grading/dockerexec.py` keeps a bounded LRU cache of the 15 most recently used
+  images (~50GB ceiling) rather than either accumulating every one ever pulled or re-pulling on
+  every single grading call; a `calibrate` run touching more than 15 distinct swe-smith tasks will
+  still see some re-pulls once the cache rolls over. Budget real wall-clock time for this — a
+  handful of tasks can take 10+ minutes when images aren't already cached.
 - **A GPU** — entirely optional. `torch` is pinned to the CPU-only wheel in this repo (see below);
   a GPU only makes `embed` faster, and needs its own `torch` install to take advantage of.
 
@@ -238,6 +244,11 @@ nothing to trade accuracy against.
    tag says `license: other` — get sign-off from whoever owns data licensing before using this
    corpus beyond local experimentation.
 
+   **SWE-Gym is also corpus-only for now** — `grading/swegym.py` is a stub (`grade()` raises
+   `NotImplementedError`), so it isn't in `config/calibration.yaml`'s `gradeable_sources` either.
+   Unlike Multi-SWE-RL, this is a scoping decision, not a data-format one — a real grader for it is
+   planned as separate follow-up work.
+
 2. **`embed`** — embeds the corpus in-process with `sentence-transformers`
    (`jinaai/jina-embeddings-v2-base-code`, 768-dim, CPU) per the rule declared in
    `config/embedding.yaml`. No server, no HTTP call.
@@ -253,7 +264,12 @@ nothing to trade accuracy against.
 5. **`validate-graders`** — GATE, run before trusting anything downstream. Runs each gradeable
    source's own reference (gold) solution and an empty (null) solution through its grader with no
    model involved. Reference must score ~100% pass, null ~0% — this is what proves the grader
-   itself discriminates correct from incorrect code, independent of any model's actual ability.
+   itself discriminates correct from incorrect code, independent of any model's actual ability. Any
+   shortfall should show up as `error_harness`/`error_timeout` in the printed outcome counts —
+   never as `fail`, which would mean the grader itself, not the (gold/empty) solution, is broken.
+   Repeatable `--source` narrows the gate to one or more sources at a time (e.g.
+   `--source swe-smith`), and the sample is drawn with `random.sample` rather than the first N
+   rows, so a source grouped by repo (like swe-smith's 128) doesn't always gate the same handful.
 
 6. **`calibrate`** — selects tasks stratified across `cluster-map.json`'s clusters (from
    `config/calibration.yaml`'s gradeable sources), runs every model in `config/models.yaml`
@@ -376,6 +392,10 @@ They cover preprocessing, dedup, K-means determinism/dtype, artifact assembly + 
 (including the cross-field invariants the schema itself can't express — see "Config and artifact
 schema" above), nearest-centroid assignment, the smoothing/scoring arithmetic,
 grading outcome classification, the logging setup, and the runtime's hard-fail validation +
-lambda-sweep scoring against the `tests/runtime/fixtures/` artifact pair. The `validate-graders`
-gate above is the actual correctness proof for grading — it needs real datasets and isn't part of
-`pytest`.
+lambda-sweep scoring against the `tests/runtime/fixtures/` artifact pair. Docker-based grading
+(`grading/dockerexec.py`'s sentinel classification, `grading/swesmith.py`'s script construction) is
+tested by monkeypatching `subprocess.run` — real `docker run` calls are exercised only by
+`validate-graders`, not `pytest`. `test_registration.py` guards against a source being listed in
+`gradeable_sources` but missing from one of the dispatch tables a real run depends on. The
+`validate-graders` gate above is the actual correctness proof for grading — it needs real datasets
+(and, for swe-smith, a reachable Docker daemon) and isn't part of `pytest`.

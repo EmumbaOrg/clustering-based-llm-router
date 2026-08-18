@@ -6,13 +6,14 @@
 
 # Sources whose ground truth we can grade today. BigCodeBench and DS-1000 are self-contained —
 # their tests ship inline in each row, so grading needs only a Python interpreter. swe-smith is
-# implemented (grading/swesmith.py) but disabled here for now — it needs a local Docker daemon,
-# which isn't available in every environment this pipeline runs in (e.g. Colab); re-add it once
-# that's not a constraint. swe-gym is not yet implemented (its environment reconstruction is an
-# open problem — see grading/swegym.py).
+# Docker-based (grading/swesmith.py) — it needs a local Docker daemon, which isn't available in
+# every environment this pipeline runs in (e.g. Colab); drop it from this list rather than running
+# there. swe-gym and multi-swe-rl are corpus-only for now — no grader is wired up for either yet
+# (see grading/swegym.py's stub and corpus.py's module docstring).
 gradeable_sources:
   - bigcodebench
   - ds1000
+  - swe-smith
 
 # Target calibration tasks per cluster. The spec's reference figure is 20+ per cluster against a
 # 24-cluster map; keep it low here because this pass targets pipeline completeness, not
@@ -27,14 +28,19 @@ tasks_per_cluster: 4
 # a bounded, predictable cost — consistent with this pass's completeness-over-rigor goal.
 candidate_pool_oversample: 4
 
-# Hard wall-clock limit per graded task, in seconds. The SAME value is used for every source
-# (run_and_grade doesn't distinguish them), so it has to cover the slowest one: SWE-smith's
-# Docker-based grading (image pull if uncached + patch apply + conda activate + the full
-# FAIL_TO_PASS/PASS_TO_PASS suite), not just BigCodeBench/DS-1000's sub-second in-process runs.
-# 60s was fine before SWE-smith was wired; a single `docker run` alone can exceed that. Exceeding
-# this yields the `error_timeout` outcome, which is EXCLUDED from error rates rather than counted
-# as a model failure — a slow machine or a cold image pull must never look like a bad model.
+# Hard wall-clock limit, in seconds, for a `run_pi` model call AND for grading any source with no
+# entry in task_timeout_overrides below (BigCodeBench/DS-1000's sub-second in-process runs are
+# comfortably inside this). Exceeding this yields the `error_timeout` outcome, which is EXCLUDED
+# from error rates rather than counted as a model failure — a slow machine or a cold image pull
+# must never look like a bad model.
 task_timeout_seconds: 300
+
+# Per-source override for GRADING calls only (never run_pi, so a hung LLM call can't inherit a
+# Docker source's much longer leash) — additive and backward-compatible; a source missing here
+# just uses task_timeout_seconds above. swe-smith needs more room than that base value: image pull
+# (if uncached) + patch apply + conda activate + the full FAIL_TO_PASS/PASS_TO_PASS suite.
+task_timeout_overrides:
+  swe-smith: 600
 
 # Smoothing: shrink each per-cluster error rate toward the model's own global rate, so a lucky
 # 4-for-4 in a thin cluster doesn't read as a confident 0% error rate.

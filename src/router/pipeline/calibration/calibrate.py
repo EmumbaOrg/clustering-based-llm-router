@@ -25,6 +25,28 @@ _GRADERS = {
     "swe-gym": swegym.grade,
 }
 
+# Patch-based sources leave `reference_solution` empty (see tasks.py) and grade the gold/empty
+# patch through a dedicated entry point instead of the generic `grader(task, solution)` shape —
+# see grade_reference/grade_null below, which are the single source of truth cli.py's
+# validate-graders gate and run_and_grade's reference/null branches both call through.
+_REFERENCE_GRADERS = {"swe-smith": swesmith.grade_reference}
+_NULL_GRADERS = {"swe-smith": swesmith.grade_null}
+
+
+def grade_reference(task: Task, timeout_seconds: int) -> GradeResult:
+    special = _REFERENCE_GRADERS.get(task.source)
+    if special is not None:
+        return special(task, timeout_seconds=timeout_seconds)
+    return _GRADERS[task.source](task, task.reference_solution, timeout_seconds=timeout_seconds)
+
+
+def grade_null(task: Task, timeout_seconds: int) -> GradeResult:
+    special = _NULL_GRADERS.get(task.source)
+    if special is not None:
+        return special(task, timeout_seconds=timeout_seconds)
+    return _GRADERS[task.source](task, "", timeout_seconds=timeout_seconds)
+
+
 # Debug-only preview length for expected-vs-provided logging (see run_and_grade's pi branch).
 # Long enough to see the shape of a real answer; short enough that a 1.4MB swe-gym patch doesn't
 # flood the log. --log-level DEBUG is scoped to the `router` logger only (logging_config.py), so
@@ -106,20 +128,19 @@ def run_and_grade(task: Task, model: ModelConfig, calibration_config: Calibratio
     grader = _GRADERS.get(task.source)
     if grader is None:
         raise ValueError(f"no grader for source {task.source!r}")
-    timeout = calibration_config.task_timeout_seconds
+    # Grading (Docker-based sources especially) and the model call itself can need very different
+    # timeouts — see CalibrationConfig.task_timeout_overrides. run_pi always uses the plain,
+    # unoverridden value so a slow grader can't also give a hung LLM call the same long leash.
+    grading_timeout = calibration_config.grading_timeout_for(task.source)
 
     if model.runner == "reference":
-        if task.source == "swe-smith":
-            return swesmith.grade_reference(task, timeout_seconds=timeout)
-        return grader(task, task.reference_solution, timeout_seconds=timeout)
+        return grade_reference(task, grading_timeout)
 
     if model.runner == "null":
-        if task.source == "swe-smith":
-            return swesmith.grade_null(task, timeout_seconds=timeout)
-        return grader(task, "", timeout_seconds=timeout)
+        return grade_null(task, grading_timeout)
 
     if model.runner == "pi":
-        run_result = runner_mod.run_pi(task, model, timeout_seconds=timeout)
+        run_result = runner_mod.run_pi(task, model, timeout_seconds=calibration_config.task_timeout_seconds)
         if run_result.rate_limited:
             # An infra/quota rejection, not the model failing to answer — excluded rather than
             # counted as a wrong answer, same reasoning as error_timeout/error_missing_dep.
@@ -127,7 +148,7 @@ def run_and_grade(task: Task, model: ModelConfig, calibration_config: Calibratio
         elif run_result.solution is None:
             result = GradeResult(outcome="error_no_solution", detail=run_result.detail)
         else:
-            result = grader(task, run_result.solution, timeout_seconds=timeout)
+            result = grader(task, run_result.solution, timeout_seconds=grading_timeout)
 
         # Multi-line despite the "one line per call" logging convention (logging_config.py) —
         # deliberately: this is the one place meant for reading a code/diff block back, and

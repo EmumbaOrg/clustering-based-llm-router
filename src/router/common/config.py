@@ -98,6 +98,15 @@ class CalibrationConfig:
     holdout_fraction: float
     seed: int
     lambda_sweep: list[float]
+    # Additive, backward-compatible: absent/empty means every source grades under the plain
+    # task_timeout_seconds, same as before this field existed. Only GRADING calls (Docker-based
+    # sources in particular, which can need far longer than a Groq completion) read this — `run_pi`
+    # always uses task_timeout_seconds directly, so a slow grader can't also give a hung LLM call
+    # the same long leash.
+    task_timeout_overrides: dict[str, int] = dataclasses.field(default_factory=dict)
+
+    def grading_timeout_for(self, source: str) -> int:
+        return self.task_timeout_overrides.get(source, self.task_timeout_seconds)
 
 
 def load_calibration_config(path: Path | None = None) -> CalibrationConfig:
@@ -112,6 +121,7 @@ def load_calibration_config(path: Path | None = None) -> CalibrationConfig:
         holdout_fraction=data["holdout_fraction"],
         seed=data["seed"],
         lambda_sweep=data["lambda_sweep"],
+        task_timeout_overrides=data.get("task_timeout_overrides", {}),
     )
 
 
