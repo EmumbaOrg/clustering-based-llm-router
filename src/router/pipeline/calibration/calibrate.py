@@ -29,8 +29,8 @@ _GRADERS = {
 # patch through a dedicated entry point instead of the generic `grader(task, solution)` shape —
 # see grade_reference/grade_null below, which are the single source of truth cli.py's
 # validate-graders gate and run_and_grade's reference/null branches both call through.
-_REFERENCE_GRADERS = {"swe-smith": swesmith.grade_reference}
-_NULL_GRADERS = {"swe-smith": swesmith.grade_null}
+_REFERENCE_GRADERS = {"swe-smith": swesmith.grade_reference, "swe-gym": swegym.grade_reference}
+_NULL_GRADERS = {"swe-smith": swesmith.grade_null, "swe-gym": swegym.grade_null}
 
 
 def grade_reference(task: Task, timeout_seconds: int) -> GradeResult:

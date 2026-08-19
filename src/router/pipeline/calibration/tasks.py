@@ -4,12 +4,9 @@ dataset-native identifiers (`task_id` / `instance_id` / `metadata.problem_id`), 
 post-shuffle indices, so a task can be referenced across separate runs without depending on load
 order.
 
-Only the gradeable sources (see config/calibration.yaml) are covered. swe-gym is NOT here —
-grading/swegym.py is a deliberate stub (no `environment_setup_commit` in the dataset, 161 distinct
-`version` strings with no setup-command mapping, real git-clone-based execution needed); adding a
-loader for it without a working grader would let a sampled swe-gym task crash calibration outright
-the moment `grade()` raises. swe-smith IS wired below — its Docker grader was validated against a
-real instance before this loader was added (see grading/swesmith.py).
+Only the gradeable sources (see config/calibration.yaml) are covered. swe-smith and swe-gym are
+both wired below — each Docker grader was validated against real instances before its loader was
+added (see grading/swesmith.py, grading/swegym.py).
 """
 from __future__ import annotations
 
@@ -95,10 +92,27 @@ def _swesmith_tasks() -> list[Task]:
     return tasks
 
 
+def _swegym_tasks() -> list[Task]:
+    meta = SOURCE_METADATA["swe-gym"]
+    ds = load_dataset(meta["hf_id"], split=meta["split"])
+    return [
+        Task(
+            task_id=row["instance_id"],
+            source="swe-gym",
+            prompt=row["problem_statement"],
+            reference_solution="",  # unused: calibrate.py special-cases swe-gym to
+            # swegym.grade_reference/grade_null, same reasoning as swe-smith above.
+            row=dict(row),
+        )
+        for row in ds
+    ]
+
+
 _LOADERS = {
     "bigcodebench": _bigcodebench_tasks,
     "ds1000": _ds1000_tasks,
     "swe-smith": _swesmith_tasks,
+    "swe-gym": _swegym_tasks,
 }
 
 

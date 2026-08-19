@@ -124,6 +124,10 @@ _INSTRUCTIONS = {
         "Respond with a unified diff (git apply-compatible) that fixes this, and nothing else. "
         "Wrap it in a single ```diff code block."
     ),
+    "swe-gym": (
+        "Respond with a unified diff (git apply-compatible) that fixes this, and nothing else. "
+        "Wrap it in a single ```diff code block."
+    ),
 }
 
 # Used instead of _INSTRUCTIONS' entry when repo_context has checked out a real working tree for
@@ -132,6 +136,12 @@ _INSTRUCTIONS = {
 # _REPO_SOURCES entry (repo_context.py) ever reach this path.
 _CONTEXT_INSTRUCTIONS = {
     "swe-smith": (
+        "The repository is checked out in your current working directory, at the state before "
+        "this issue was fixed. Use your available tools to explore the codebase and understand "
+        "the issue, then make the necessary changes directly using your edit/write tools. You may "
+        "also summarize the change or include a diff in your final response."
+    ),
+    "swe-gym": (
         "The repository is checked out in your current working directory, at the state before "
         "this issue was fixed. Use your available tools to explore the codebase and understand "
         "the issue, then make the necessary changes directly using your edit/write tools. You may "

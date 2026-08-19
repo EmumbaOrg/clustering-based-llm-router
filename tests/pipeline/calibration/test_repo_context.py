@@ -38,6 +38,15 @@ def test_remote_and_ref_resolves_swesmith_repo_field():
     assert result == ("https://github.com/swesmith/oauthlib__oauthlib.1fd52536.git", "HEAD")
 
 
+def test_remote_and_ref_resolves_swegym_repo_and_base_commit():
+    task = Task(
+        task_id="getmoto__moto-7365", source="swe-gym", prompt="fix the bug", reference_solution="",
+        row={"repo": "getmoto/moto", "base_commit": "7f6c9cb1deafb280fe7fcc7551c38e397f11a706"},
+    )
+    result = remote_and_ref(task)
+    assert result == ("https://github.com/getmoto/moto.git", "7f6c9cb1deafb280fe7fcc7551c38e397f11a706")
+
+
 @pytest.mark.parametrize("source", ["bigcodebench", "ds1000"])
 def test_remote_and_ref_is_a_true_no_op_for_self_contained_sources(source):
     task = Task(task_id="t", source=source, prompt="p", reference_solution="", row={})

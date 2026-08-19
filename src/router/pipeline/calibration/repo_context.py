@@ -51,9 +51,14 @@ def _swesmith_remote_and_ref(task: Task) -> tuple[str, str]:
     return f"https://github.com/{task.row['repo']}.git", "HEAD"
 
 
-# Extend with swe-gym here (one entry, `repo` + `base_commit` are both real fields) once its
-# grader exists — this dispatch, not the functions below, is the only thing that needs to grow.
-_REPO_SOURCES = {"swe-smith": _swesmith_remote_and_ref}
+def _swegym_remote_and_ref(task: Task) -> tuple[str, str]:
+    # Unlike swe-smith's single-commit synthetic mirror, swe-gym's `repo` is a real, unmodified
+    # upstream OSS repo (e.g. "getmoto/moto") and `base_commit` a real commit SHA — the buggy,
+    # pre-fix state the grading image is also built at (see grading/swegym.py).
+    return f"https://github.com/{task.row['repo']}.git", task.row["base_commit"]
+
+
+_REPO_SOURCES = {"swe-smith": _swesmith_remote_and_ref, "swe-gym": _swegym_remote_and_ref}
 
 
 def remote_and_ref(task: Task) -> tuple[str, str] | None:

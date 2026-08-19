@@ -5,15 +5,16 @@
 # artifacts/model-profiles.json. See ../README.md for the full protocol.
 
 # Sources whose ground truth we can grade today. BigCodeBench and DS-1000 are self-contained —
-# their tests ship inline in each row, so grading needs only a Python interpreter. swe-smith is
-# Docker-based (grading/swesmith.py) — it needs a local Docker daemon, which isn't available in
-# every environment this pipeline runs in (e.g. Colab); drop it from this list rather than running
-# there. swe-gym and multi-swe-rl are corpus-only for now — no grader is wired up for either yet
-# (see grading/swegym.py's stub and corpus.py's module docstring).
+# their tests ship inline in each row, so grading needs only a Python interpreter. swe-smith and
+# swe-gym are both Docker-based (grading/swesmith.py, grading/swegym.py) — they need a local Docker
+# daemon, which isn't available in every environment this pipeline runs in (e.g. Colab); drop them
+# from this list rather than running there. multi-swe-rl is corpus-only — no grader is wired up for
+# it (see corpus.py's module docstring; it would need a per-repo Docker image per instance).
 gradeable_sources:
   - bigcodebench
   - ds1000
   - swe-smith
+  - swe-gym
 
 # Target calibration tasks per cluster. The spec's reference figure is 20+ per cluster against a
 # 24-cluster map; keep it low here because this pass targets pipeline completeness, not
@@ -38,9 +39,14 @@ task_timeout_seconds: 300
 # Per-source override for GRADING calls only (never run_pi, so a hung LLM call can't inherit a
 # Docker source's much longer leash) — additive and backward-compatible; a source missing here
 # just uses task_timeout_seconds above. swe-smith needs more room than that base value: image pull
-# (if uncached) + patch apply + conda activate + the full FAIL_TO_PASS/PASS_TO_PASS suite.
+# (if uncached) + patch apply + conda activate + the full FAIL_TO_PASS/PASS_TO_PASS suite. swe-gym
+# needs even more headroom for a rare but real worst case: a patch touching pandas' meson.build
+# triggers a full ~125-file Cython rebuild on next import (measured directly against a real
+# instance — several minutes), entirely automatic via the editable install's build backend, not
+# something this pipeline's own code controls or can skip.
 task_timeout_overrides:
   swe-smith: 600
+  swe-gym: 900
 
 # Smoothing: shrink each per-cluster error rate toward the model's own global rate, so a lucky
 # 4-for-4 in a thin cluster doesn't read as a confident 0% error rate.
