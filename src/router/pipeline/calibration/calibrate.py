@@ -141,7 +141,12 @@ def run_and_grade(task: Task, model: ModelConfig, calibration_config: Calibratio
 
     if model.runner == "pi":
         run_result = runner_mod.run_pi(task, model, timeout_seconds=calibration_config.task_timeout_seconds)
-        if run_result.rate_limited:
+        if run_result.context_unavailable:
+            # Repo clone/checkout failed before pi was ever invoked — an infra problem, not the
+            # model's fault, and per the spec's fairness requirement a task that can't be set up
+            # consistently for every model shouldn't be scored for any of them.
+            result = GradeResult(outcome="error_harness", detail=run_result.detail)
+        elif run_result.rate_limited:
             # An infra/quota rejection, not the model failing to answer — excluded rather than
             # counted as a wrong answer, same reasoning as error_timeout/error_missing_dep.
             result = GradeResult(outcome="error_harness", detail=run_result.detail)

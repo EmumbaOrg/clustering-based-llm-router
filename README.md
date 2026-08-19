@@ -41,6 +41,12 @@ using per-cluster error rates measured by calibration. Two parts, both pure Pyth
   every single grading call; a `calibrate` run touching more than 15 distinct swe-smith tasks will
   still see some re-pulls once the cache rolls over. Budget real wall-clock time for this — a
   handful of tasks can take 10+ minutes when images aren't already cached.
+- **Outbound access to github.com**, for the `pi` runner against swe-smith: `repo_context.py`
+  clones each task's `swesmith/{owner}__{project}.{hash}` mirror (a real, public GitHub org — see
+  "What the pipeline does" below) so the agent gets real repo access instead of a bare paragraph.
+  Bare clones are cached per repo under `.cache/repo_context/clones/` (bounded LRU, same idea as
+  the Docker image cache above); a disposable `git worktree` per task is what the agent's tools
+  actually see, removed again once that task's `pi` call finishes.
 - **A GPU** — entirely optional. `torch` is pinned to the CPU-only wheel in this repo (see below);
   a GPU only makes `embed` faster, and needs its own `torch` install to take advantage of.
 
@@ -281,6 +287,16 @@ nothing to trade accuracy against.
    `config/calibration.yaml`'s `lambda_sweep`, plus always-strongest / always-cheapest / oracle
    baselines. Routing decisions use only the calibration profiles, never anything from the holdout
    run itself — the same constraint a live router would have.
+
+**swe-smith tasks give the `pi` agent real repo access, not just a paragraph.** `repo_context.py`
+clones the task's GitHub mirror (cached per repo) and checks out a disposable `git worktree` for
+each `run_pi` call, so the agent's already-enabled read/bash/edit/write tools have a real,
+isolated working tree to explore and fix rather than nothing to point them at. The resulting
+solution is captured via `git diff` on that worktree — a tool-using agent's actual edits, not a
+hand-written diff parsed from its text response — falling back to the old text-extraction path
+only if the agent responds with prose instead of using its tools. A clone/checkout failure is
+recorded as `error_harness` (never scored as a wrong answer) before `pi` is even invoked.
+bigcodebench/ds1000 are unaffected — they're self-contained snippet tasks with no repo to clone.
 
 **Calibration's target is pipeline completeness, not research-grade numbers.** The tiny task
 volume this pass runs at (`tasks_per_cluster: 4`) is chosen to exercise the full pipeline cheaply

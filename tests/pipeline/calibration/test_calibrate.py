@@ -83,6 +83,18 @@ def test_run_and_grade_maps_a_rate_limited_run_result_to_error_harness_not_error
     assert result.outcome == "error_harness"
 
 
+def test_run_and_grade_maps_context_unavailable_to_error_harness(monkeypatch):
+    # A repo clone/checkout failure happens before pi is ever invoked — an infra problem, and per
+    # the spec's fairness requirement a task that can't be set up consistently for every model
+    # shouldn't be scored as a wrong answer for any of them.
+    monkeypatch.setattr(
+        calibrate_module.runner_mod, "run_pi",
+        lambda task, model, timeout_seconds: RunResult(solution=None, detail="clone failed", context_unavailable=True),
+    )
+    result = run_and_grade(_task(), _pi_model(), _calibration_config())
+    assert result.outcome == "error_harness"
+
+
 def test_run_and_grade_still_treats_a_genuine_no_solution_as_a_real_failure(monkeypatch):
     monkeypatch.setattr(
         calibrate_module.runner_mod, "run_pi",

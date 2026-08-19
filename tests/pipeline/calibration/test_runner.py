@@ -111,6 +111,13 @@ def _task() -> Task:
     return Task(task_id="bigcodebench:0", source="bigcodebench", prompt="do the thing", reference_solution="", row={})
 
 
+def _swesmith_task() -> Task:
+    return Task(
+        task_id="oauthlib__oauthlib.1fd52536", source="swe-smith", prompt="fix the bug",
+        reference_solution="", row={"repo": "swesmith/oauthlib__oauthlib.1fd52536"},
+    )
+
+
 def _model() -> ModelConfig:
     # rate_limit_rpm=None so RateLimiter.wait() is a no-op and doesn't add real sleeps of its own.
     return ModelConfig(
@@ -183,3 +190,107 @@ def test_run_pi_does_not_retry_a_non_rate_limit_failure(monkeypatch):
 
     assert len(calls) == 1
     assert result.rate_limited is False
+
+
+# --- repo-context wiring ---------------------------------------------------------------------
+
+def test_run_pi_skips_repo_context_entirely_for_sources_without_it(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["cwd"] = kwargs.get("cwd")
+        return subprocess.CompletedProcess(args, 0, stdout="```python\nreturn 1\n```", stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner_module.repo_context, "extract_diff", lambda wt: pytest.fail("should not be called"))
+
+    result = run_pi(_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert captured["cwd"] is None
+    assert result.solution == "return 1"
+
+
+def test_run_pi_returns_context_unavailable_without_calling_pi_when_clone_fails(monkeypatch):
+    def fake_run(args, **kwargs):
+        pytest.fail("pi should never be invoked when repo context setup fails")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        runner_module.repo_context, "ensure_cached_clone",
+        lambda url: (_ for _ in ()).throw(runner_module.repo_context.RepoContextError("clone failed")),
+    )
+
+    result = run_pi(_swesmith_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert result.context_unavailable is True
+    assert result.solution is None
+
+
+def test_run_pi_passes_the_worktree_as_cwd_when_repo_context_is_available(monkeypatch, tmp_path):
+    cached_clone = tmp_path / "cached_clone"
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    captured = {}
+    removed = []
+
+    monkeypatch.setattr(runner_module.repo_context, "ensure_cached_clone", lambda url: cached_clone)
+    monkeypatch.setattr(runner_module.repo_context, "checkout_worktree", lambda clone, ref: worktree)
+    monkeypatch.setattr(runner_module.repo_context, "extract_diff", lambda wt: "some diff")
+    monkeypatch.setattr(
+        runner_module.repo_context, "remove_worktree",
+        lambda clone, wt: removed.append((clone, wt)),
+    )
+
+    def fake_run(args, **kwargs):
+        captured["cwd"] = kwargs.get("cwd")
+        return subprocess.CompletedProcess(args, 0, stdout="explored and fixed it", stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+
+    result = run_pi(_swesmith_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert captured["cwd"] == worktree
+    assert result.solution == "some diff"
+    assert removed == [(cached_clone, worktree)]  # cleaned up after use
+
+
+def test_run_pi_falls_back_to_text_extraction_when_the_worktree_is_clean(monkeypatch, tmp_path):
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+
+    monkeypatch.setattr(runner_module.repo_context, "ensure_cached_clone", lambda url: tmp_path)
+    monkeypatch.setattr(runner_module.repo_context, "checkout_worktree", lambda clone, ref: worktree)
+    monkeypatch.setattr(runner_module.repo_context, "extract_diff", lambda wt: None)
+    monkeypatch.setattr(runner_module.repo_context, "remove_worktree", lambda clone, wt: None)
+
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout="```diff\nsome hand-written diff\n```", stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+
+    result = run_pi(_swesmith_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert result.solution == "some hand-written diff"
+
+
+def test_run_pi_cleans_up_the_worktree_even_when_pi_times_out(monkeypatch, tmp_path):
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    removed = []
+
+    monkeypatch.setattr(runner_module.repo_context, "ensure_cached_clone", lambda url: tmp_path)
+    monkeypatch.setattr(runner_module.repo_context, "checkout_worktree", lambda clone, ref: worktree)
+    monkeypatch.setattr(
+        runner_module.repo_context, "remove_worktree",
+        lambda clone, wt: removed.append(wt),
+    )
+
+    def fake_run(args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout", 0))
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+
+    result = run_pi(_swesmith_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert result.solution is None
+    assert removed == [worktree]
