@@ -47,32 +47,55 @@ models:
   # off. rate_limit_rpm is Groq's documented free-tier requests-per-minute cap for that model;
   # runner.py's RateLimiter paces real calls against it (with its own safety margin) so
   # calibration/evaluation don't 429 partway through a run.
-  - model_id: llama-3.1-8b-instant
-    provider: groq
-    runner: pi
-    cost_input: 0.00005
-    cost_output: 0.00008
-    context_window: 131072
-    max_tokens: 131072
-    rate_limit_rpm: 30
+  # - model_id: llama-3.1-8b-instant
+  #   provider: groq
+  #   runner: pi
+  #   cost_input: 0.00005
+  #   cost_output: 0.00008
+  #   context_window: 131072
+  #   max_tokens: 131072
+  #   rate_limit_rpm: 30
 
-  - model_id: openai/gpt-oss-120b
-    provider: groq
-    runner: pi
-    cost_input: 0.00015
-    cost_output: 0.00060
-    context_window: 131072
-    max_tokens: 65536
-    rate_limit_rpm: 30
+  # - model_id: openai/gpt-oss-120b
+  #   provider: groq
+  #   runner: pi
+  #   cost_input: 0.00015
+  #   cost_output: 0.00060
+  #   context_window: 131072
+  #   max_tokens: 65536
+  #   rate_limit_rpm: 30
 
-  - model_id: llama-3.3-70b-versatile
-    provider: groq
+  # - model_id: llama-3.3-70b-versatile
+  #   provider: groq
+  #   runner: pi
+  #   cost_input: 0.00059
+  #   cost_output: 0.00079
+  #   context_window: 131072
+  #   max_tokens: 32768
+  #   rate_limit_rpm: 30
+
+  # ── Local llama.cpp candidates (dev/testing only — see README "Aligning config/models.yaml" ─
+  # section). Each provider below needs a matching `~/.pi/agent/models.json` entry with a
+  # baseUrl pointing at a local `llama serve` instance already running and holding that model
+  # loaded — see the two `llama serve -hf ... --port ...` commands this pair was set up with.
+  # cost_input/cost_output here are nominal placeholders proportional to parameter count (there's
+  # no metered API cost for a self-hosted model) — kept nonzero and distinct so normalise_costs
+  # doesn't collapse the cost term to zero for this pair (see scoring.py's normalise_costs).
+  - model_id: qwen2.5-coder-7b-instruct
+    provider: local-7b
     runner: pi
-    cost_input: 0.00059
-    cost_output: 0.00079
-    context_window: 131072
-    max_tokens: 32768
-    rate_limit_rpm: 30
+    cost_input: 0.00003
+    cost_output: 0.00003
+    context_window: 8192
+    max_tokens: 2048
+
+  - model_id: qwen2.5-coder-3b-instruct
+    provider: local-3b
+    runner: pi
+    cost_input: 0.00001
+    cost_output: 0.00001
+    context_window: 8192
+    max_tokens: 2048
 
   # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
   # Commented out so calibration doesn't attempt them. Uncomment as keys become available.

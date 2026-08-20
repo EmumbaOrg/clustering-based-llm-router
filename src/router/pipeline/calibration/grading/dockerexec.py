@@ -126,6 +126,7 @@ def run(
     # Named so a timed-out container can actually be found and killed (see below). The nonce is
     # already unique per call and hex-only, so it's a valid container name with no collision risk.
     container_name = f"router-grade-{nonce}"
+    logger.info(f"docker run starting: image={image} container={container_name} timeout={timeout_seconds}s")
     try:
         proc = subprocess.run(
             ["docker", "run", "--rm", "-i", "--name", container_name, *volume_args, image,

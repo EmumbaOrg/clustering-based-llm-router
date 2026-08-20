@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import csv
 import dataclasses
 import logging
 import random
 import time
+from pathlib import Path
 
 import numpy as np
 
+from ...common.artifacts import ARTIFACTS_DIR
 from ...common.assign import ClusterMap, assign_cluster
 from ...common.config import CalibrationConfig, EmbeddingConfig, ModelConfig
 from ...common.embedding import embed_texts
@@ -133,7 +136,13 @@ def select_tasks(
     return selected
 
 
-def run_and_grade(task: Task, model: ModelConfig, calibration_config: CalibrationConfig) -> GradeResult:
+def run_and_grade(task: Task, model: ModelConfig, calibration_config: CalibrationConfig) -> tuple[GradeResult, str | None]:
+    """Returns (GradeResult, solution) — `solution` is what the candidate actually produced (the
+    gold answer for `reference`, empty for `null`, the extracted/diff solution for `pi` — falling
+    back to the raw agent response when no solution could be extracted, so a CSV/log consumer can
+    still see what the agent said even when extraction failed). Kept alongside `GradeResult` rather
+    than folded into it so `GradeResult` stays the small, stable type graders/tests already build
+    on."""
     grader = _GRADERS.get(task.source)
     if grader is None:
         raise ValueError(f"no grader for source {task.source!r}")
@@ -143,10 +152,10 @@ def run_and_grade(task: Task, model: ModelConfig, calibration_config: Calibratio
     grading_timeout = calibration_config.grading_timeout_for(task.source)
 
     if model.runner == "reference":
-        return grade_reference(task, grading_timeout)
+        return grade_reference(task, grading_timeout), _expected_solution(task)
 
     if model.runner == "null":
-        return grade_null(task, grading_timeout)
+        return grade_null(task, grading_timeout), ""
 
     if model.runner == "pi":
         run_result = runner_mod.run_pi(task, model, timeout_seconds=calibration_config.task_timeout_seconds)
@@ -174,23 +183,35 @@ def run_and_grade(task: Task, model: ModelConfig, calibration_config: Calibratio
             f"  provided: {_preview(run_result.solution) if run_result.solution is not None else '(no solution extracted)'}\n"
             f"  detail: {result.detail}"
         )
-        return result
+        returned = run_result.solution if run_result.solution is not None else run_result.raw_response
+        return result, returned
 
     raise ValueError(f"unknown runner {model.runner!r} for model {model.model_id}")
 
 
-def run_and_log(task: Task, model: ModelConfig, calibration_config: CalibrationConfig, index: int, total: int) -> GradeResult:
+@dataclasses.dataclass(frozen=True)
+class TaskRunRecord:
+    """`run_and_grade`'s (GradeResult, solution) pair plus timing — one row of "what actually
+    happened" for a single (task, model) call, kept separate from `GradeResult` for the same reason
+    `run_and_grade` returns a tuple instead of widening it (see that function's docstring)."""
+    result: GradeResult
+    solution: str | None
+    duration_ms: int
+
+
+def run_and_log(task: Task, model: ModelConfig, calibration_config: CalibrationConfig, index: int, total: int) -> TaskRunRecord:
     """`run_and_grade` plus the timing/progress log line — shared by calibrate_model's per-model
     loop below and evaluate.py's per-model x per-task holdout loop, which otherwise duplicate this
     exact started/duration/excluded-vs-not branch."""
+    logger.info(f"[{index}/{total}] {model.model_id} task {task.task_id} ({task.source}) starting...")
     started = time.monotonic()
-    result = run_and_grade(task, model, calibration_config)
+    result, solution = run_and_grade(task, model, calibration_config)
     duration_ms = round((time.monotonic() - started) * 1000)
     if result.outcome in grading_base.EXCLUDED_OUTCOMES:
         logger.warning(f"[{index}/{total}] {model.model_id} task {task.task_id} excluded: {result.outcome} ({duration_ms}ms)")
     else:
         logger.info(f"[{index}/{total}] {model.model_id} task {task.task_id} -> {result.outcome} ({duration_ms}ms)")
-    return result
+    return TaskRunRecord(result=result, solution=solution, duration_ms=duration_ms)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -247,9 +268,54 @@ def image_affinity_key(task: Task) -> tuple[str, str]:
     return (task.source, str(task.row.get("image_name") or task.row.get("repo") or task.task_id))
 
 
+@dataclasses.dataclass(frozen=True)
+class CalibrationDetailRow:
+    """One (task, model) call, flattened for `calibration-details.csv` — everything `run_and_log`
+    knows about a single call, alongside the task identity it was made for."""
+    task_id: str
+    source: str
+    cluster_id: int
+    split: str
+    model_id: str
+    provider: str
+    outcome: str
+    detail: str
+    solution: str
+    duration_ms: int
+
+
+# Truncation length for the `solution` column — long enough to see the shape of a real answer
+# (a full diff/patch can be huge), short enough that a multi-MB swe-gym patch doesn't blow up the
+# CSV. Same idea as _LOG_PREVIEW_CHARS above, just a separate constant since a CSV meant to be
+# opened in a spreadsheet tool can afford to keep more than a debug log line.
+_CSV_SOLUTION_MAX_CHARS = 2000
+
+
+def _csv_preview(text: str) -> str:
+    if len(text) <= _CSV_SOLUTION_MAX_CHARS:
+        return text
+    return text[:_CSV_SOLUTION_MAX_CHARS] + f" ...[{len(text) - _CSV_SOLUTION_MAX_CHARS} more chars]"
+
+
+def write_calibration_details_csv(rows: list[CalibrationDetailRow], path: Path | None = None) -> Path:
+    target = path or (ARTIFACTS_DIR / "calibration-details.csv")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            ["task_id", "source", "cluster_id", "split", "model_id", "provider", "outcome", "detail", "solution", "duration_ms"]
+        )
+        for row in rows:
+            writer.writerow(
+                [row.task_id, row.source, row.cluster_id, row.split, row.model_id, row.provider,
+                 row.outcome, row.detail, row.solution, row.duration_ms]
+            )
+    return target
+
+
 def calibrate_models(
     models: list[ModelConfig], selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
-) -> list[ModelCalibrationResult]:
+) -> tuple[list[ModelCalibrationResult], list[CalibrationDetailRow]]:
     """Runs every (task, model) pair TASKS-OUTER / MODELS-INNER, then aggregates per model.
 
     The loop order is the optimization, and it is worth roughly a factor of `len(models)` on the
@@ -278,14 +344,28 @@ def calibrate_models(
         "(tasks-outer, models-inner)"
     )
     outcomes_by_model: dict[str, list[tuple[SelectedTask, GradeResult]]] = {m.model_id: [] for m in models}
+    detail_rows: list[CalibrationDetailRow] = []
     index = 0
     for st in calibration_only:
         for model in models:
             index += 1
-            result = run_and_log(st.task, model, calibration_config, index, total)
-            outcomes_by_model[model.model_id].append((st, result))
+            record = run_and_log(st.task, model, calibration_config, index, total)
+            outcomes_by_model[model.model_id].append((st, record.result))
+            detail_rows.append(CalibrationDetailRow(
+                task_id=st.task.task_id,
+                source=st.task.source,
+                cluster_id=st.cluster_id,
+                split=st.split,
+                model_id=model.model_id,
+                provider=model.provider,
+                outcome=record.result.outcome,
+                detail=record.result.detail,
+                solution=_csv_preview(record.solution or ""),
+                duration_ms=record.duration_ms,
+            ))
 
-    return [_aggregate_outcomes(m, outcomes_by_model[m.model_id], calibration_config) for m in models]
+    aggregated = [_aggregate_outcomes(m, outcomes_by_model[m.model_id], calibration_config) for m in models]
+    return aggregated, detail_rows
 
 
 def _aggregate_outcomes(

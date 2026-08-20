@@ -44,7 +44,7 @@ def run_holdout_outcomes(
     )
     started = time.monotonic()
     outcomes = {
-        (model.model_id, st.task.task_id): run_and_log(st.task, model, calibration_config, i, total).outcome
+        (model.model_id, st.task.task_id): run_and_log(st.task, model, calibration_config, i, total).result.outcome
         for i, (st, model) in enumerate(((s, m) for s in holdout for m in models), start=1)
     }
     logger.info(f"holdout run completed in {time.monotonic() - started:.1f}s")

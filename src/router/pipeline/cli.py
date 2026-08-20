@@ -227,7 +227,7 @@ def calibrate() -> None:
     # logger (--log-level INFO) rather than echoed here, since the run no longer proceeds
     # model-by-model.
     typer.echo(f"Grading {len(models)} models against each task (tasks-outer)...")
-    results = calibrate_mod.calibrate_models(models, selected, calibration_config)
+    results, detail_rows = calibrate_mod.calibrate_models(models, selected, calibration_config)
     for result in results:
         stats = result.global_stats
         typer.echo(
@@ -235,6 +235,9 @@ def calibrate() -> None:
             f"{stats.number_succeeded}/{stats.number_of_tasks} pass, "
             f"smoothed_error_rate={stats.smoothed_error_rate:.3f}, excluded={stats.excluded}"
         )
+
+    details_path = calibrate_mod.write_calibration_details_csv(detail_rows)
+    typer.echo(f"Wrote per-task-per-model details to {details_path}")
 
     calibration_run_id = f"cal-{datetime.now(UTC).strftime('%Y-%m-%d-%H%M%S')}"
     artifact = profiles_mod.build_profiles_dict(
