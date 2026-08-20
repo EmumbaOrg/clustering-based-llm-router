@@ -1,7 +1,9 @@
-"""Grader for Multi-SWE-RL's Go slice — Docker-based, built on `dockerexec.py`'s sentinel
-protocol, mirroring `swegym.py`'s shape. **Go-only pilot**: `tasks.py`'s loader for this source
-returns only rows from the dataset's `go/` batch directory — see its own docstring for why the
-other 6 languages (C, C++, Java, JS, Rust, TS) in this dataset are corpus-only for now.
+"""Grader for Multi-SWE-RL's Go, JS, and TS slices — Docker-based, built on `dockerexec.py`'s
+sentinel protocol, mirroring `swegym.py`'s shape. `tasks.py`'s loader for this source returns rows
+from the dataset's `go/`, `js/`, and `ts/` batch directories — see its own docstring for why the
+other 4 languages (C, C++, Java, Rust) in this dataset are corpus-only for now. The Go section
+immediately below was the original (single-convention) pilot; JS/TS's own section further down
+covers the considerably less uniform second pass.
 
 Confirmed empirically this session (real `docker pull`/`docker run` against `gin-gonic/gin`,
 `prometheus/prometheus`, and `istio/istio` — small, medium, and the largest repo in the corpus)
@@ -104,10 +106,73 @@ Row semantics: `fix_patch` is the GOLD FIX (same convention as swe-gym's `patch`
 swe-smith's bug-injecting `patch`) — `base_commit` (`row["base"]["sha"]`) is already the buggy,
 pre-fix state the image is built at. A separate `test_patch` field (same role as swe-gym's) carries
 the test changes needed to exercise the four test-outcome dicts and must be applied in every mode.
+
+--- JS/TS (second pilot) -------------------------------------------------------------------------
+
+`_REPO_CONFIG` covers the JS (619 tasks, 10 repos) and TS (412 tasks, 8 repos) slices — the
+second- and third-largest language buckets after Go.
+
+An early version of this guessed the test command from each repo's `package.json` and tried to
+replicate Go's staged discriminating/regression-guard split by parsing a file path or test name out
+of each `f2p_tests`/`p2p_tests` key. Both guesses turned out wrong, or at least far riskier than
+necessary, once checked against ground truth: the official `multi_swe_bench` harness's own source
+(`multi_swe_bench/harness/repos/{javascript,typescript}/{org}/{repo}.py` in
+github.com/multi-swe-bench/multi-swe-bench) literally defines each repo's `prepare.sh`/`run.sh`/
+`test-run.sh`, and pulling two real images (`expressjs/express`, `colinhacks/zod`) confirmed those
+exact scripts are baked into every image at `/home/*.sh` — a much stronger source of truth than
+inferring from `package.json` alone. Two real findings from reading that source, not the dataset
+schema:
+
+1. **`package.json` guessed the wrong framework for `zod`.** It looked like Vitest (a `test:vitest`
+   script exists); the harness's own confirmed `run.sh` uses `yarn build && yarn test`, which
+   resolves to Jest (`test:ts-jest`) — `package.json` had multiple test scripts and the wrong one
+   was picked. Trusting the harness's own confirmed invocation instead of a heuristic avoided
+   shipping a broken command for that repo.
+2. **Almost none of the 18 confirmed commands support name-based narrowing.** Most are each repo's
+   own `npm test`/`yarn test`/`pnpm test` wrapper (`mongoose`'s is a bare `npm test`), not a direct
+   framework invocation we could append `--grep`/`--testNamePattern` to with any confidence it'd be
+   forwarded. Given that, and that a live run confirmed these suites are fast — `express`'s 1,149
+   Mocha tests ran in 4.9s — the staged discriminating-then-regression-guard split Go relies on
+   (see above) isn't worth the narrowing complexity/risk here: JS/TS runs the confirmed command
+   ONCE per grading call and reads the outcome from its exit code (`_js_ts_test_script`), covering
+   both test sets in a single pass. `grade_null` still fails correctly here with no special-casing:
+   the discriminating tests are defined to fail without a fix, so the whole suite's exit code is
+   already non-zero.
+
+`_RepoConfig` has no install step: `prepare.sh` (dependency install) is a genuine one-time
+IMAGE-BUILD step (`RUN bash /home/prepare.sh` in the harness's own `dockerfile()`), not something
+to repeat at grading time — confirmed directly (both pulled images already had `node_modules`
+present: 59MB for `express`, 732MB for `zod`), the same "pre-resolved, don't touch it" shape as
+Go's `GOMODCACHE`. A handful of repos DO need a genuine per-call `build` step (`zod`, `nuxt`,
+`react-router`) because their tests run against compiled output that a candidate's source patch
+would otherwise leave stale — confirmed present in their own `run.sh`, not assumed.
+
+This is still genuinely closer in shape to the official harness's own ~533 hand-written per-repo
+classes than to Go's one clean convention — some of those classes exist specifically because a
+repo's test command changed across its own history (e.g. `commander.js` migrated from Jest to
+node's built-in `node:test` at some point) and needed a PR-range-specific override.
+`_REPO_CONFIG` uses whichever class has no such suffix (current/default), which may not exactly
+match every instance's era; a mismatch surfaces as a script failure (`error_harness`), not a
+silently wrong grade — see `_RepoConfig`'s own docstring.
+
+**Validated live against real containers** (`grade_null` ~0%, `grade_reference` ~100%, same bar as
+Go's own pilot): `colinhacks/zod` (has a build step), `expressjs/express` (JSON reporter, no build
+step), and `Automattic/mongoose` — the single largest JS/TS repo (302 of 1,031 tasks). Mongoose's
+first `grade_reference` run FAILED once (`tests failed`) while a byte-identical manual replay and
+an immediate retry both passed cleanly (3579 passing, 0 failing) — mongoose spins up a real
+MongoDB instance per test run (its own suite prints a live "Downloading MongoDB ..." progress
+line, confirmed in a real row's `f2p_tests` key), making it timing/network-sensitive per container.
+Treated the same way istio's/prometheus's occasional unrelated-test noise is treated above: a
+known, accepted flakiness source for this specific (large, heavyweight-setup) repo, not a grader
+bug — re-run rather than trust a single `grade_reference` failure there as conclusive. The
+remaining 15 repos share one of these three already-validated shapes (no build + JSON reporter,
+no build + plain exit code, or a build step) and haven't each been individually run against a
+container yet.
 """
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 from ....common.config import REPO_ROOT
 from . import dockerexec
@@ -170,6 +235,75 @@ def _regression_guard_test_names(task: Task) -> list[str]:
     return sorted(_top_level_names(task.row, _REGRESSION_GUARD_TEST_KEY))
 
 
+@dataclass(frozen=True)
+class _RepoConfig:
+    """One row per JS/TS repo (keyed by `(org, repo)` in `_REPO_CONFIG`), copied directly from the
+    official `multi_swe_bench` harness's own per-repo source
+    (`multi_swe_bench/harness/repos/{javascript,typescript}/{org}/{repo}.py` in
+    github.com/multi-swe-bench/multi-swe-bench) — not guessed from `package.json`, and
+    independently confirmed by pulling `expressjs/express`'s and `colinhacks/zod`'s real images and
+    finding those exact commands baked into `/home/run.sh`/`/home/test-run.sh`.
+
+    `build` is a per-grading-call compile step for the handful of repos whose tests run against
+    compiled output rather than source directly (`yarn build` for zod/react-router, `pnpm
+    build:stub` for nuxt) — confirmed present in their own `run.sh`, so it isn't optional. `test`
+    is the confirmed test invocation. There is no `install` field: `prepare.sh` (dependency
+    install) runs once at IMAGE BUILD time (`RUN bash /home/prepare.sh` in the harness's own
+    `dockerfile()`), the same way Go's module cache is pre-resolved — confirmed directly by
+    inspecting a pulled image (`express`'s `node_modules` was already 59MB; `zod`'s 732MB) rather
+    than assumed by analogy.
+
+    A handful of these repos have PR-range-specific override classes upstream (e.g. `commander.js`
+    migrated from Jest to node's built-in `node:test` at some point in its history) — this table
+    uses whichever class has no numeric PR-range suffix (the current/default one), which may not
+    exactly match every instance's era. Treated as a known, low-blast-radius risk: a mismatched
+    command surfaces as a script failure (`error_harness`), not a silently wrong grade."""
+    build: str | None
+    test: str
+
+
+_REPO_CONFIG: dict[tuple[str, str], _RepoConfig] = {
+    # --- JS ---------------------------------------------------------------------------------
+    ("anuraghazra", "github-readme-stats"): _RepoConfig(None, "npm run test -- --verbose"),
+    ("Automattic", "mongoose"): _RepoConfig(None, "npm test"),
+    ("axios", "axios"): _RepoConfig(None, "npm test -- --reporter console"),
+    ("caolan", "async"): _RepoConfig(None, "npm test -- --verbose"),
+    ("expressjs", "express"): _RepoConfig(None, "npm run test-ci -- --reporter json"),
+    ("google", "zx"): _RepoConfig(None, "npm test -- --reporter=verbose"),
+    # Drops the upstream script's own trailing `&& codecov` — a coverage upload with no token in
+    # this environment would fail and flip an otherwise-passing run's exit code to non-zero.
+    ("iamkun", "dayjs"): _RepoConfig(None, "npm test -- --verbose"),
+    ("Kong", "insomnia"): _RepoConfig(None, "npm test -- --verbose"),
+    ("sveltejs", "svelte"): _RepoConfig(None, "pnpm test -- --reporter verbose"),
+    ("tj", "commander.js"): _RepoConfig(None, "npm test"),
+    # --- TS ---------------------------------------------------------------------------------
+    ("colinhacks", "zod"): _RepoConfig("yarn build", "yarn test"),
+    ("darkreader", "darkreader"): _RepoConfig(
+        None, "npm run test:ci -- --json --outputFile=test-results-unit.json"
+    ),
+    ("mui", "material-ui"): _RepoConfig(None, "yarn run test:unit --reporter json --exit"),
+    ("nuxt", "nuxt"): _RepoConfig("pnpm build:stub", "pnpm test:unit -- --verbose && pnpm test:runtime --no-watch"),
+    ("reduxjs", "redux"): _RepoConfig(None, "yarn test"),
+    ("remix-run", "react-router"): _RepoConfig("yarn build", "yarn test -- --verbose"),
+    ("trpc", "trpc"): _RepoConfig(None, "pnpm turbo --filter tests test-ci"),
+    ("vuejs", "core"): _RepoConfig(None, "pnpm run test-unit --no-watch --reporter=verbose"),
+}
+
+
+def _js_ts_config(task: Task) -> _RepoConfig | None:
+    return _REPO_CONFIG.get((task.row.get("org"), task.row.get("repo")))
+
+
+def _volumes(task: Task) -> dict[str, str] | None:
+    """Go mounts a persistent build cache (see `_cache_volumes`) because the SAME `base_commit`
+    gets recompiled from scratch on every grading call. JS/TS mounts nothing: dependencies are
+    baked into the image at build time (see `_RepoConfig`'s docstring) and never touched again, and
+    the handful of repos with a genuine per-call build step compile from source into a small
+    per-container `dist`/`lib` output — not yet measured as worth caching the way Go's build cache
+    was (that mount was added only after measuring a 34x speedup, not assumed)."""
+    return None if _js_ts_config(task) is not None else _cache_volumes()
+
+
 def _setup_script(task: Task, nonce: str) -> str:
     """Shared by all three modes: apply the test changes every mode needs to exercise the four
     test-outcome dicts. A failure here is always `error_harness` — it's the dataset's own
@@ -228,15 +362,47 @@ def _regression_guard_stage_script(task: Task, nonce: str, on_pass: str) -> str:
     return _run_test_stage(task, nonce, names, "regression-guard", on_pass)
 
 
+def _js_ts_test_script(task: Task, nonce: str, config: _RepoConfig, on_pass: str) -> str:
+    """Runs the confirmed per-repo build step (if any) and test command ONCE, covering the
+    discriminating and regression-guard sets in a single pass — see `_RepoConfig`'s docstring for
+    why JS/TS doesn't stage the way Go does. A build-step failure is `error_harness` (it doesn't
+    depend on the candidate at all beyond whatever source it touches); a non-zero test-command
+    exit is `FAIL`, the same "no named-test breakdown available" signal the confirmed harness
+    command itself reports (most of these, e.g. mongoose's bare `npm test`, give nothing more
+    granular than whole-suite pass/fail either)."""
+    repo_dir = _repo_dir(task)
+    harness_build = dockerexec.report_cmd(nonce, "HARNESS", "build step failed")
+    fail_cmd = dockerexec.report_cmd(nonce, "FAIL", "tests failed")
+    lines = []
+    if config.build:
+        lines.append(f"cd {repo_dir} && {config.build} || {{ {harness_build}; }}")
+    lines.append(f"cd {repo_dir} && {config.test} > /tmp/jsts_test.log 2>&1")
+    lines.append("TEST_EXIT=$?")
+    lines.append(f'if [ "$TEST_EXIT" -ne 0 ]; then {fail_cmd}; fi')
+    return "\n".join(lines) + "\n" + on_pass
+
+
+def _test_stage_script(task: Task, nonce: str, on_pass: str, include_regression_guard: bool = True) -> str:
+    """Dispatches to JS/TS's single whole-suite run (`_js_ts_test_script` — always covers both test
+    sets in one pass, so `include_regression_guard` has no effect there) or Go's discriminating
+    stage, optionally followed by the regression-guard stage. `grade_null` passes
+    `include_regression_guard=False` for Go — see its own docstring for why."""
+    config = _js_ts_config(task)
+    if config is not None:
+        return _js_ts_test_script(task, nonce, config, on_pass)
+    if not include_regression_guard:
+        return _discriminating_stage_script(task, nonce, on_pass=on_pass)
+    return _discriminating_stage_script(task, nonce, on_pass=_regression_guard_stage_script(task, nonce, on_pass=on_pass))
+
+
 def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -> GradeResult:
     """`solution` is a forward-apply unified diff — the shape a real candidate/agent produces,
     applied on top of the test-patched baseline. An inapplicable candidate diff is `fail` (the
     model's own failure), not `error_harness`.
 
-    Staged: the (small, fast) discriminating tests run first; the (large, slow) regression-guard
-    tests only run if those pass. A candidate that doesn't fix the bug is already decided by the
-    first stage — see module docstring for the measured payoff and why this changes nothing about
-    the final outcome for a candidate that DOES pass both."""
+    Go: staged — the (small, fast) discriminating tests run first; the (large, slow)
+    regression-guard tests only run if those pass. JS/TS: one whole-suite run — see
+    `_RepoConfig`'s docstring for why staging isn't worth it there."""
     if not solution.strip():
         return GradeResult(outcome="fail", detail="empty patch — bug remains unfixed")
 
@@ -248,10 +414,10 @@ def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECON
         _setup_script(task, nonce)
         + f"{dockerexec.write_file_cmd(solution, '/tmp/candidate.patch')}\n"
         + f"git apply /tmp/candidate.patch || {{ {fail_candidate_apply}; }}\n"
-        + _discriminating_stage_script(task, nonce, on_pass=_regression_guard_stage_script(task, nonce, on_pass=pass_cmd))
+        + _test_stage_script(task, nonce, on_pass=pass_cmd)
     )
     try:
-        return dockerexec.run(image, script, nonce, timeout_seconds, volumes=_cache_volumes())
+        return dockerexec.run(image, script, nonce, timeout_seconds, volumes=_volumes(task))
     finally:
         dockerexec.touch_image(image)
 
@@ -262,9 +428,9 @@ def grade_reference(task: Task, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -
     is `error_harness`, not `fail` — the dataset's own fix failing to apply is a dataset/image
     problem, never a signal about candidate quality.
 
-    Always runs both stages (unlike `grade_null`, see below) — this is the one control that must
-    actually prove the regression-guard set passes, since "reference scores ~100%" is what
-    validates the grader is correct in the first place."""
+    Go always runs both stages here — this is the one control that must actually prove the
+    regression-guard set passes, since "reference scores ~100%" is what validates the grader is
+    correct in the first place. JS/TS's single whole-suite run already covers both sets at once."""
     image = _image(task)
     nonce = uuid.uuid4().hex
     harness_fix_apply = dockerexec.report_cmd(nonce, "HARNESS", "fix patch failed to apply")
@@ -273,10 +439,10 @@ def grade_reference(task: Task, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -
         _setup_script(task, nonce)
         + f"{dockerexec.write_file_cmd(task.row['fix_patch'], '/tmp/fix.patch')}\n"
         + f"git apply /tmp/fix.patch || {{ {harness_fix_apply}; }}\n"
-        + _discriminating_stage_script(task, nonce, on_pass=_regression_guard_stage_script(task, nonce, on_pass=pass_cmd))
+        + _test_stage_script(task, nonce, on_pass=pass_cmd)
     )
     try:
-        return dockerexec.run(image, script, nonce, timeout_seconds, volumes=_cache_volumes())
+        return dockerexec.run(image, script, nonce, timeout_seconds, volumes=_volumes(task))
     finally:
         dockerexec.touch_image(image)
 
@@ -286,17 +452,19 @@ def grade_null(task: Task, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -> Gra
     (`f2p_tests`/`n2p_tests`/`s2p_tests`) are expected to fail. Must score ~0% or the grader is
     broken.
 
-    Deliberately NEVER runs the regression-guard (`p2p_tests`) stage — those are defined by the
-    dataset as passing both BEFORE and after the gold fix, and null's state (test_patch applied,
-    no fix) IS the "before" state, so by the dataset's own labeling they're already guaranteed to
-    pass here. Checking them would only add cost, not signal — measured directly: 27s for the
-    discriminating stage alone vs. 150-190s for the full set on the same real instance, a ~6x cut
-    on every single null-control run."""
+    Go deliberately never runs the regression-guard (`p2p_tests`) stage here — those are defined
+    by the dataset as passing both BEFORE and after the gold fix, and null's state (test_patch
+    applied, no fix) IS the "before" state, so by the dataset's own labeling they're already
+    guaranteed to pass here. Checking them would only add cost, not signal — measured directly:
+    27s for the discriminating stage alone vs. 150-190s for the full set on the same real
+    instance, a ~6x cut on every single null-control run. JS/TS has no separate stage to skip
+    (see `_RepoConfig`'s docstring) — its one whole-suite run naturally fails here because the
+    discriminating tests fail without a fix, exactly the same signal a staged run would give."""
     image = _image(task)
     nonce = uuid.uuid4().hex
     pass_cmd = dockerexec.report_cmd(nonce, "PASS")
-    script = _setup_script(task, nonce) + _discriminating_stage_script(task, nonce, on_pass=pass_cmd)
+    script = _setup_script(task, nonce) + _test_stage_script(task, nonce, on_pass=pass_cmd, include_regression_guard=False)
     try:
-        return dockerexec.run(image, script, nonce, timeout_seconds, volumes=_cache_volumes())
+        return dockerexec.run(image, script, nonce, timeout_seconds, volumes=_volumes(task))
     finally:
         dockerexec.touch_image(image)

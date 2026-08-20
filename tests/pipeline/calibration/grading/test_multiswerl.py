@@ -235,3 +235,105 @@ def test_grade_reference_runs_both_stages(monkeypatch):
     assert _b64("^(TestMappingMultipleDefaultWithCollectionFormat)$") in script
     assert _b64("^(TestDisableBindValidation|TestPostingsForMatchers)$") in script
     assert script.index("discriminating") < script.index("regression_guard")
+
+
+# --- JS/TS: whole-suite grading ---------------------------------------------------------------
+# _REPO_CONFIG's build/test commands are copied verbatim from the official multi_swe_bench
+# harness's own per-repo source (see multiswerl.py's module docstring) and confirmed live against
+# two real images (express, zod) — not guessed, so these tests check OUR dispatch/script-building
+# logic around that table, not the commands' own correctness.
+
+def _js_task(**row_overrides) -> Task:
+    row = {
+        "org": "colinhacks", "repo": "zod", "number": 3887,
+        "base": {"sha": "deadbeef"},
+        "fix_patch": "diff --git a/fix.ts b/fix.ts\n+fix\n",
+        "test_patch": "diff --git a/fix.test.ts b/fix.test.ts\n+test\n",
+        "f2p_tests": {"src/__tests__/string.test.ts": {"fix": "PASS", "test": "FAIL", "run": "NONE"}},
+        "n2p_tests": {}, "s2p_tests": {},
+        "p2p_tests": {"src/__tests__/validations.test.ts": {"fix": "PASS", "test": "PASS", "run": "PASS"}},
+    }
+    row.update(row_overrides)
+    return Task(task_id="multi-swe-rl:colinhacks__zod-3887", source="multi-swe-rl", prompt="fix the bug", reference_solution="", row=row)
+
+
+def test_js_ts_config_lookup_is_keyed_by_org_and_repo():
+    assert multiswerl._js_ts_config(_js_task()) is not None
+    assert multiswerl._js_ts_config(_task()) is None  # the Go fixture from above
+
+
+def test_js_ts_test_script_runs_build_then_test_and_reports_harness_on_build_failure():
+    task = _js_task()  # zod: has a build step
+    config = multiswerl._js_ts_config(task)
+    script = multiswerl._js_ts_test_script(task, "nonce", config, on_pass="NEXT\n")
+    assert "cd /home/zod && yarn build ||" in script
+    assert "cd /home/zod && yarn test >" in script
+    assert dockerexec.report_cmd("nonce", "HARNESS", "build step failed") in script
+    assert dockerexec.report_cmd("nonce", "FAIL", "tests failed") in script
+    assert script.endswith("NEXT\n")
+    assert script.index("yarn build") < script.index("yarn test")
+
+
+def test_js_ts_test_script_skips_the_build_step_when_the_repo_has_none():
+    task = _js_task(org="Automattic", repo="mongoose", number=1)  # mongoose: no build step
+    config = multiswerl._js_ts_config(task)
+    script = multiswerl._js_ts_test_script(task, "nonce", config, on_pass="")
+    assert "build" not in script
+    assert "cd /home/mongoose && npm test >" in script
+
+
+def test_js_ts_test_script_gates_on_the_test_commands_exit_code_alone():
+    # Unlike Go, there's no per-name "zero tests matched" guard here — the confirmed harness
+    # commands themselves give nothing more granular than whole-suite pass/fail (see module
+    # docstring), so a non-zero exit is always FAIL, with no HARNESS branch for the test step.
+    task = _js_task(org="expressjs", repo="express", number=1)
+    config = multiswerl._js_ts_config(task)
+    script = multiswerl._js_ts_test_script(task, "nonce", config, on_pass="")
+    assert 'if [ "$TEST_EXIT" -ne 0 ]; then' in script
+    assert dockerexec.report_cmd("nonce", "FAIL", "tests failed") in script
+
+
+def test_test_stage_script_dispatches_js_ts_tasks_to_the_whole_suite_run():
+    task = _js_task()
+    script = multiswerl._test_stage_script(task, "nonce", on_pass="NEXT\n")
+    assert "yarn build" in script and "yarn test" in script
+
+
+def test_test_stage_script_dispatches_go_tasks_to_the_staged_run():
+    script = multiswerl._test_stage_script(_task(), "nonce", on_pass="NEXT\n")
+    assert "go test ./..." in script
+    assert script.index("discriminating") < script.index("regression_guard")
+
+
+def test_grade_runs_the_confirmed_js_ts_command_and_mounts_no_cache_volume(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script, volumes=volumes))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade(_js_task(), "diff --git a/fix.ts b/fix.ts\n+fix\n")
+
+    assert "yarn build" in captured["script"] and "yarn test" in captured["script"]
+    # No Go build-cache mount for JS/TS — see _volumes' docstring for why nothing is mounted.
+    assert captured["volumes"] is None
+
+
+def test_grade_still_mounts_the_go_cache_for_go_tasks(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(volumes=volumes))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade(_task(), "diff --git a/fix.go b/fix.go\n+fix\n")
+
+    assert captured["volumes"] == {str(multiswerl.GOCACHE_HOST_DIR): multiswerl._GOCACHE_CONTAINER_DIR}
+
+
+def test_grade_null_never_runs_the_go_regression_guard_stage_for_go_but_still_runs_js_ts_whole_suite(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade_null(_js_task())
+
+    # JS/TS has no separate regression-guard stage to skip — the one whole-suite run already
+    # covers it (see module docstring), so build+test must both still appear.
+    assert "yarn build" in captured["script"] and "yarn test" in captured["script"]

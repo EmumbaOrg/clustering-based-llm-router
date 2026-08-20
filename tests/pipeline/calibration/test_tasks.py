@@ -70,12 +70,14 @@ def test_trimmed_row_still_satisfies_every_real_grader_accessor(monkeypatch, tmp
     assert multiswerl.grade_null(task).outcome == "pass"
 
 
-def test_multi_swe_rl_tasks_only_reads_go_files_and_tags_rows_as_multi_swe_rl(monkeypatch, tmp_path):
+def test_multi_swe_rl_tasks_reads_go_js_ts_files_only_and_tags_rows_as_multi_swe_rl(monkeypatch, tmp_path):
     batch = tasks_mod.MULTI_SWE_RL_BATCH
     all_files = [
         (f"{batch}/go/gin-gonic__gin_dataset.jsonl", 100),
-        (f"{batch}/rust/BurntSushi__ripgrep_dataset.jsonl", 100),
-        (f"{batch}/go/gohugoio__hugo_dataset.jsonl", 100),
+        (f"{batch}/rust/BurntSushi__ripgrep_dataset.jsonl", 100),  # not yet gradeable — must be skipped
+        (f"{batch}/java/mockito__mockito_dataset.jsonl", 100),  # not yet gradeable — must be skipped
+        (f"{batch}/js/colinhacks__zod_dataset.jsonl", 100),
+        (f"{batch}/ts/vuejs__core_dataset.jsonl", 100),
         (f"{batch}/multi_swe_bench_discarded_instances.jsonl", 100),  # excluded suffix, see corpus.py
     ]
     monkeypatch.setattr(tasks_mod, "_multi_swe_rl_repo_files", lambda: all_files)
@@ -84,29 +86,43 @@ def test_multi_swe_rl_tasks_only_reads_go_files_and_tags_rows_as_multi_swe_rl(mo
         "instance_id": "gin-gonic__gin-4048", "org": "gin-gonic", "repo": "gin", "number": 4048,
         "resolved_issues": [{"title": "bug title here", "body": "a" * 100}],
     }
-    hugo_row = {
-        "instance_id": "gohugoio__hugo-100", "org": "gohugoio", "repo": "hugo", "number": 100,
+    js_row = {
+        "instance_id": "colinhacks__zod-3887", "org": "colinhacks", "repo": "zod", "number": 3887,
         "resolved_issues": [{"title": "another bug", "body": "b" * 100}],
     }
-    gin_path = tmp_path / "gin.jsonl"
-    gin_path.write_text(json.dumps(go_row) + "\n")
-    hugo_path = tmp_path / "hugo.jsonl"
-    hugo_path.write_text(json.dumps(hugo_row) + "\n")
+    ts_row = {
+        "instance_id": "vuejs__core-100", "org": "vuejs", "repo": "core", "number": 100,
+        "resolved_issues": [{"title": "yet another bug", "body": "c" * 100}],
+    }
+    go_path = tmp_path / "gin.jsonl"
+    go_path.write_text(json.dumps(go_row) + "\n")
+    js_path = tmp_path / "zod.jsonl"
+    js_path.write_text(json.dumps(js_row) + "\n")
+    ts_path = tmp_path / "core.jsonl"
+    ts_path.write_text(json.dumps(ts_row) + "\n")
 
     requested_paths = []
 
     def fake_download(hf_id, filename, repo_type):
         requested_paths.append(filename)
         if "gin-gonic" in filename:
-            return str(gin_path)
-        if "hugo" in filename:
-            return str(hugo_path)
-        raise AssertionError(f"should never be called for a non-go file: {filename}")
+            return str(go_path)
+        if "zod" in filename:
+            return str(js_path)
+        if "vuejs" in filename:
+            return str(ts_path)
+        raise AssertionError(f"should never be called for a non-go/js/ts file: {filename}")
 
     monkeypatch.setattr(tasks_mod, "hf_hub_download", fake_download)
 
     result = tasks_mod._multi_swe_rl_tasks()
 
-    assert requested_paths == [f"{batch}/go/gin-gonic__gin_dataset.jsonl", f"{batch}/go/gohugoio__hugo_dataset.jsonl"]
-    assert {t.task_id for t in result} == {"multi-swe-rl:gin-gonic__gin-4048", "multi-swe-rl:gohugoio__hugo-100"}
+    assert requested_paths == [
+        f"{batch}/go/gin-gonic__gin_dataset.jsonl",
+        f"{batch}/js/colinhacks__zod_dataset.jsonl",
+        f"{batch}/ts/vuejs__core_dataset.jsonl",
+    ]
+    assert {t.task_id for t in result} == {
+        "multi-swe-rl:gin-gonic__gin-4048", "multi-swe-rl:colinhacks__zod-3887", "multi-swe-rl:vuejs__core-100",
+    }
     assert all(t.source == "multi-swe-rl" for t in result)

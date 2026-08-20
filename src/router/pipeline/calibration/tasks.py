@@ -5,7 +5,7 @@ post-shuffle indices, so a task can be referenced across separate runs without d
 order.
 
 Only the gradeable sources (see config/calibration.yaml) are covered. swe-smith, swe-gym, and
-multi-swe-rl's Go slice are all wired below — each Docker grader was validated against real
+multi-swe-rl's Go/JS/TS slices are all wired below — each Docker grader was validated against real
 instances before its loader was added (see grading/swesmith.py, grading/swegym.py,
 grading/multiswerl.py).
 """
@@ -136,18 +136,21 @@ _MULTI_SWE_RL_GRADED_FIELDS = frozenset({
 })
 
 
+# Go (1,675 tasks), JS (619), and TS (412) — see grading/multiswerl.py's module docstring for why
+# the other 4 languages in this dataset (C, C++, Java, Rust) aren't gradeable yet.
+_MULTI_SWE_RL_GRADEABLE_LANGUAGES = ("go", "js", "ts")
+
+
 def _multi_swe_rl_tasks() -> list[Task]:
-    """Go-only pilot — see grading/multiswerl.py's module docstring for why the other 6 languages
-    in this dataset aren't gradeable yet. Filters `corpus.py`'s own file listing down to this
-    batch's `go/` directory before downloading anything, so this loader never pays for the other
-    6 languages' (much larger, in total) files. Reuses `corpus.py`'s own text-extraction and
-    row-id helpers rather than reimplementing them — this loader's only real job is the Go-only
-    filter and the `Task` wrapping."""
+    """Filters `corpus.py`'s own file listing down to the gradeable-language directories above
+    before downloading anything, so this loader never pays for the other 4 languages' files.
+    Reuses `corpus.py`'s own text-extraction and row-id helpers rather than reimplementing them —
+    this loader's only real job is the language filter and the `Task` wrapping."""
     meta = SOURCE_METADATA["multi-swe-rl"]
-    go_prefix = f"{MULTI_SWE_RL_BATCH}/go/"
+    prefixes = tuple(f"{MULTI_SWE_RL_BATCH}/{language}/" for language in _MULTI_SWE_RL_GRADEABLE_LANGUAGES)
     paths = sorted(
         path for path, _ in _multi_swe_rl_repo_files()
-        if path.startswith(go_prefix) and path.endswith(_MULTI_SWE_RL_FILE_SUFFIX)
+        if path.startswith(prefixes) and path.endswith(_MULTI_SWE_RL_FILE_SUFFIX)
     )
     tasks: list[Task] = []
     for path in paths:
