@@ -47,6 +47,15 @@ def test_remote_and_ref_resolves_swegym_repo_and_base_commit():
     assert result == ("https://github.com/getmoto/moto.git", "7f6c9cb1deafb280fe7fcc7551c38e397f11a706")
 
 
+def test_remote_and_ref_resolves_multiswerl_org_repo_and_base_sha():
+    task = Task(
+        task_id="multi-swe-rl:gin-gonic__gin-4048", source="multi-swe-rl", prompt="fix the bug", reference_solution="",
+        row={"org": "gin-gonic", "repo": "gin", "base": {"sha": "28e57f58b184b2305ace192e02496bb89f6fd8cb"}},
+    )
+    result = remote_and_ref(task)
+    assert result == ("https://github.com/gin-gonic/gin.git", "28e57f58b184b2305ace192e02496bb89f6fd8cb")
+
+
 @pytest.mark.parametrize("source", ["bigcodebench", "ds1000"])
 def test_remote_and_ref_is_a_true_no_op_for_self_contained_sources(source):
     task = Task(task_id="t", source=source, prompt="p", reference_solution="", row={})

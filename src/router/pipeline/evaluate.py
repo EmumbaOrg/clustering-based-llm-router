@@ -20,7 +20,7 @@ import time
 
 from ..common.config import CalibrationConfig, ModelConfig
 from ..common.scoring import score_candidates, select_model, static_price_per_1m
-from .calibration.calibrate import SelectedTask, run_and_log
+from .calibration.calibrate import SelectedTask, image_affinity_key, run_and_log
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +31,21 @@ def run_holdout_outcomes(
     """Runs EVERY model (including controls) against every holdout task. Controls are included so
     the oracle/always-* baselines and a reference-oracle sanity check are all computable from one
     run, without a second pass. Returns {(model_id, task_id): outcome}."""
-    holdout = [st for st in selected_tasks if st.split == "holdout"]
+    # Tasks-outer / models-inner, for the same reason calibrate_models is — one multi-GB image pull
+    # per task instead of one per (task, model). See calibrate_models' docstring for the numbers.
+    holdout = sorted(
+        (st for st in selected_tasks if st.split == "holdout"),
+        key=lambda st: image_affinity_key(st.task),
+    )
     total = len(models) * len(holdout)
-    logger.info(f"holdout run started: {len(holdout)} tasks x {len(models)} models = {total} calls")
+    logger.info(
+        f"holdout run started: {len(holdout)} tasks x {len(models)} models = {total} calls "
+        "(tasks-outer, models-inner)"
+    )
     started = time.monotonic()
     outcomes = {
         (model.model_id, st.task.task_id): run_and_log(st.task, model, calibration_config, i, total).outcome
-        for i, (model, st) in enumerate(((m, s) for m in models for s in holdout), start=1)
+        for i, (st, model) in enumerate(((s, m) for s in holdout for m in models), start=1)
     }
     logger.info(f"holdout run completed in {time.monotonic() - started:.1f}s")
     return outcomes

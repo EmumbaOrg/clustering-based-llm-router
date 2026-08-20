@@ -69,10 +69,10 @@ def test_multi_swe_rl_is_registered_last_so_dedup_never_evicts_an_incumbent_row(
     assert list(SOURCE_METADATA)[-1] == "multi-swe-rl"
 
 
-def test_multi_swe_rl_is_a_corpus_source_only_not_a_calibration_source():
-    # No grader exists for it (would need a per-repo Docker image per instance) — this documents
-    # that boundary so it stays a conscious decision, not an accidental omission.
-    assert "multi-swe-rl" not in tasks_mod._LOADERS
+def test_multi_swe_rl_has_a_gradeable_task_loader_for_its_go_slice():
+    # Only the Go slice is gradeable (grading/multiswerl.py) — the other 6 languages in this
+    # dataset remain corpus-only, but the source as a whole is no longer ungradeable.
+    assert "multi-swe-rl" in tasks_mod._LOADERS
 
 
 def test_multi_swe_rl_text_prefers_resolved_issue_over_pull_request_text():

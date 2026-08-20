@@ -222,16 +222,19 @@ def calibrate() -> None:
     n_holdout = sum(1 for s in selected if s.split == "holdout")
     typer.echo(f"Selected {len(selected)} tasks: {n_calibration} calibration, {n_holdout} holdout")
 
-    results = []
-    for model in models:
-        typer.echo(f"Calibrating {model.model_id} ({model.runner})...")
-        result = calibrate_mod.calibrate_model(model, selected, calibration_config)
+    # Tasks-outer / models-inner — see calibrate_models' docstring for why the loop order is worth
+    # roughly a factor of len(models) on image-pull cost. Per-model progress is on the `router`
+    # logger (--log-level INFO) rather than echoed here, since the run no longer proceeds
+    # model-by-model.
+    typer.echo(f"Grading {len(models)} models against each task (tasks-outer)...")
+    results = calibrate_mod.calibrate_models(models, selected, calibration_config)
+    for result in results:
         stats = result.global_stats
         typer.echo(
-            f"  global: {stats.number_succeeded}/{stats.number_of_tasks} pass, "
+            f"  {result.model.model_id} ({result.model.runner}): "
+            f"{stats.number_succeeded}/{stats.number_of_tasks} pass, "
             f"smoothed_error_rate={stats.smoothed_error_rate:.3f}, excluded={stats.excluded}"
         )
-        results.append(result)
 
     calibration_run_id = f"cal-{datetime.now(UTC).strftime('%Y-%m-%d-%H%M%S')}"
     artifact = profiles_mod.build_profiles_dict(

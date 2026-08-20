@@ -97,6 +97,48 @@ def test_run_timeout_expired_maps_to_error_timeout(monkeypatch):
     assert result.outcome == "error_timeout"
 
 
+def test_run_names_the_container_so_it_can_be_killed_later(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        return subprocess.CompletedProcess(args, 0, stdout=f"{sentinel(NONCE)}PASS\n", stderr="")
+
+    monkeypatch.setattr(dockerexec.subprocess, "run", fake_run)
+    run("some-image", "echo hi", NONCE, timeout_seconds=5)
+
+    name_index = captured["args"].index("--name")
+    assert captured["args"][name_index + 1] == f"router-grade-{NONCE}"
+
+
+def test_run_kills_the_container_on_timeout(monkeypatch):
+    # Regression test for a confirmed leak: killing the `docker run` client does NOT stop the
+    # container, so without an explicit `docker kill` a timed-out task keeps burning CPU for the
+    # rest of the calibration run. Verified live before this fix — `error_timeout` returned on
+    # schedule while `docker ps` still showed the container `Up` and running.
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        if args[:2] == ["docker", "run"]:
+            raise subprocess.TimeoutExpired(cmd=args, timeout=kwargs.get("timeout", 0))
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(dockerexec.subprocess, "run", fake_run)
+    result = run("some-image", "sleep 300", NONCE, timeout_seconds=5)
+
+    assert result.outcome == "error_timeout"
+    assert ["docker", "kill", f"router-grade-{NONCE}"] in calls
+
+
+def test_kill_container_swallows_a_failing_docker_kill(monkeypatch):
+    def fake_run(*args, **kwargs):
+        raise OSError("docker daemon unreachable")
+
+    monkeypatch.setattr(dockerexec.subprocess, "run", fake_run)
+    dockerexec.kill_container("router-grade-whatever")  # must not raise
+
+
 def test_run_file_not_found_maps_to_error_harness(monkeypatch):
     def fake_run(*args, **kwargs):
         raise FileNotFoundError("docker")
@@ -130,6 +172,36 @@ def test_run_passes_script_via_stdin_never_as_an_argv_element(monkeypatch):
     assert result.outcome == "pass"
     assert captured["input"] == huge_script
     assert all(huge_script not in arg for arg in captured["args"])
+
+
+def test_run_omits_volume_flags_by_default(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        return subprocess.CompletedProcess(args, 0, stdout=f"{sentinel(NONCE)}PASS\n", stderr="")
+
+    monkeypatch.setattr(dockerexec.subprocess, "run", fake_run)
+    run("some-image", "echo hi", NONCE, timeout_seconds=5)
+
+    assert "-v" not in captured["args"]
+
+
+def test_run_passes_each_volume_as_a_host_path_container_path_flag(monkeypatch):
+    captured = {}
+
+    def fake_run(args, **kwargs):
+        captured["args"] = args
+        return subprocess.CompletedProcess(args, 0, stdout=f"{sentinel(NONCE)}PASS\n", stderr="")
+
+    monkeypatch.setattr(dockerexec.subprocess, "run", fake_run)
+    run("some-image", "echo hi", NONCE, timeout_seconds=5, volumes={"/host/cache": "/root/.cache/go-build"})
+
+    args = captured["args"]
+    v_index = args.index("-v")
+    assert args[v_index + 1] == "/host/cache:/root/.cache/go-build"
+    # The volume flags must come before the image name, matching normal `docker run` argument order.
+    assert v_index < args.index("some-image")
 
 
 def test_cleanup_image_swallows_a_failing_docker_rmi(monkeypatch):

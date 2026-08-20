@@ -58,7 +58,18 @@ def _swegym_remote_and_ref(task: Task) -> tuple[str, str]:
     return f"https://github.com/{task.row['repo']}.git", task.row["base_commit"]
 
 
-_REPO_SOURCES = {"swe-smith": _swesmith_remote_and_ref, "swe-gym": _swegym_remote_and_ref}
+def _multiswerl_remote_and_ref(task: Task) -> tuple[str, str]:
+    # Same shape as swe-gym's entry — a real, unmodified upstream repo (`org`/`repo` fields) at a
+    # real commit SHA (`base.sha`), the buggy pre-fix state the grading image is built at (see
+    # grading/multiswerl.py).
+    return f"https://github.com/{task.row['org']}/{task.row['repo']}.git", task.row["base"]["sha"]
+
+
+_REPO_SOURCES = {
+    "swe-smith": _swesmith_remote_and_ref,
+    "swe-gym": _swegym_remote_and_ref,
+    "multi-swe-rl": _multiswerl_remote_and_ref,
+}
 
 
 def remote_and_ref(task: Task) -> tuple[str, str] | None:

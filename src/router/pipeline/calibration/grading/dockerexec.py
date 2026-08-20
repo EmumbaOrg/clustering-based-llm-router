@@ -106,14 +106,30 @@ def classify(nonce: str, returncode: int, stdout: str, stderr: str) -> GradeResu
     return GradeResult(outcome="error_harness", detail=f"no sentinel found (exit {returncode}): {tail}")
 
 
-def run(image: str, script: str, nonce: str, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -> GradeResult:
+def run(
+    image: str,
+    script: str,
+    nonce: str,
+    timeout_seconds: int = DOCKER_TIMEOUT_SECONDS,
+    volumes: dict[str, str] | None = None,
+) -> GradeResult:
     """Runs `script` inside `image` over stdin (constant-size argv — fixes the E2BIG risk) and
     classifies the result. Writing the script to a file before executing it (rather than piping
     straight into `bash -s`) also stops any in-container command from accidentally consuming
-    script bytes off stdin."""
+    script bytes off stdin.
+
+    `volumes` (host path -> container path) is optional and additive — omitted entirely by default,
+    so existing callers (swesmith.py, swegym.py) are unaffected. multiswerl.py uses it to mount a
+    persistent Go build cache across otherwise-fresh `--rm` containers (see its own module
+    docstring for why repeated cold compiles of the same repo are the dominant cost there)."""
+    volume_args = [arg for host_path, container_path in (volumes or {}).items() for arg in ("-v", f"{host_path}:{container_path}")]
+    # Named so a timed-out container can actually be found and killed (see below). The nonce is
+    # already unique per call and hex-only, so it's a valid container name with no collision risk.
+    container_name = f"router-grade-{nonce}"
     try:
         proc = subprocess.run(
-            ["docker", "run", "--rm", "-i", image, "bash", "-c", "cat > /tmp/grade.sh && exec bash /tmp/grade.sh"],
+            ["docker", "run", "--rm", "-i", "--name", container_name, *volume_args, image,
+             "bash", "-c", "cat > /tmp/grade.sh && exec bash /tmp/grade.sh"],
             input=script,
             capture_output=True,
             text=True,
@@ -121,6 +137,14 @@ def run(image: str, script: str, nonce: str, timeout_seconds: int = DOCKER_TIMEO
             check=False,
         )
     except subprocess.TimeoutExpired:
+        # Killing the `docker run` CLIENT does NOT stop the container — the daemon owns its
+        # lifecycle, so without this explicit kill the container runs to completion regardless of
+        # our timeout, burning CPU for the rest of the calibration run and slowing down every
+        # other task still to be graded. Confirmed empirically: an 8s-timeout call returned
+        # `error_timeout` on schedule while `docker ps` still showed its container `Up` and
+        # running. The bounded-CPU cost of a runaway container is exactly the kind of thing that
+        # turns a long grading run into an unpredictable one.
+        kill_container(container_name)
         return GradeResult(outcome="error_timeout", detail=f"exceeded {timeout_seconds}s")
     except FileNotFoundError:
         return GradeResult(outcome="error_harness", detail="docker binary not found on PATH")
@@ -130,6 +154,16 @@ def run(image: str, script: str, nonce: str, timeout_seconds: int = DOCKER_TIMEO
         return GradeResult(outcome="error_harness", detail=f"OSError launching docker: {e}")
 
     return classify(nonce, proc.returncode, proc.stdout, proc.stderr)
+
+
+def kill_container(name: str) -> None:
+    """Best-effort `docker kill`. Never raises — the caller is already on its way to returning a
+    result (an `error_timeout`), and a failed kill must not turn that into a crash. `--rm` then
+    reaps the stopped container on its own."""
+    try:
+        subprocess.run(["docker", "kill", name], capture_output=True, text=True, timeout=60, check=False)
+    except Exception:
+        logger.debug(f"failed to kill container {name}", exc_info=True)
 
 
 def cleanup_image(image: str) -> None:

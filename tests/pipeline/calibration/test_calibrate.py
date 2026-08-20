@@ -1,6 +1,7 @@
 from router.common.config import CalibrationConfig, ModelConfig, SmoothingConfig
 from router.pipeline.calibration import calibrate as calibrate_module
 from router.pipeline.calibration.calibrate import (
+    SelectedTask,
     _expected_solution,
     _preview,
     _stats_from_outcomes,
@@ -70,6 +71,94 @@ def _calibration_config() -> CalibrationConfig:
         task_timeout_seconds=60, smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
         holdout_fraction=0.3, seed=42, lambda_sweep=[0, 0.1],
     )
+
+
+def _named_model(model_id: str) -> ModelConfig:
+    return ModelConfig(
+        model_id=model_id, provider="groq", runner="pi",
+        cost_input=0.00005, cost_output=0.00008, context_window=131072, max_tokens=131072, rate_limit_rpm=30,
+    )
+
+
+def _selected(task_id: str, cluster_id: int) -> SelectedTask:
+    return SelectedTask(
+        task=Task(task_id=task_id, source="bigcodebench", prompt="p", reference_solution="x", row={}),
+        cluster_id=cluster_id,
+        split="calibration",
+    )
+
+
+def _outcome_for(task_id: str, model_id: str) -> str:
+    # Depends only on the (task, model) pair, never on call order — which is exactly what makes the
+    # tasks-outer/models-inner reordering safe.
+    return "pass" if (task_id, model_id) in {("t1", "m1"), ("t2", "m2"), ("t3", "m1")} else "fail"
+
+
+def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the_next_task(monkeypatch):
+    # The whole point of the loop order: swe-gym/multi-swe-rl build one multi-GB image PER INSTANCE,
+    # so all models must be graded while a task's image is still hot. A models-outer loop re-pulls
+    # every image once per model (~5x the bytes at the configured roster size).
+    calls = []
+
+    def fake_run_and_grade(task, model, calibration_config):
+        calls.append((task.task_id, model.model_id))
+        return GradeResult(outcome=_outcome_for(task.task_id, model.model_id))
+
+    monkeypatch.setattr(calibrate_module, "run_and_grade", fake_run_and_grade)
+    models = [_named_model("m1"), _named_model("m2")]
+    selected = [_selected("t1", 0), _selected("t2", 0)]
+
+    calibrate_module.calibrate_models(models, selected, _calibration_config())
+
+    assert calls == [("t1", "m1"), ("t1", "m2"), ("t2", "m1"), ("t2", "m2")]
+
+
+def test_calibrate_models_stats_are_identical_to_the_old_models_outer_aggregation(monkeypatch):
+    # Guards the "purely a reordering" claim: every statistic is computed after all grading, so
+    # reordering the calls must not move a single number.
+    monkeypatch.setattr(
+        calibrate_module, "run_and_grade",
+        lambda task, model, cfg: GradeResult(outcome=_outcome_for(task.task_id, model.model_id)),
+    )
+    models = [_named_model("m1"), _named_model("m2")]
+    selected = [_selected("t1", 0), _selected("t2", 1), _selected("t3", 1)]
+    config = _calibration_config()
+
+    results = calibrate_module.calibrate_models(models, selected, config)
+
+    # Rebuild each model's outcome list the OLD way (models-outer, original task order) and
+    # aggregate that instead — the two must agree exactly.
+    expected = [
+        calibrate_module._aggregate_outcomes(
+            model,
+            [(st, GradeResult(outcome=_outcome_for(st.task.task_id, model.model_id))) for st in selected],
+            config,
+        )
+        for model in models
+    ]
+    assert [(r.model.model_id, r.global_stats, r.cluster_stats) for r in results] == [
+        (r.model.model_id, r.global_stats, r.cluster_stats) for r in expected
+    ]
+
+
+def test_image_affinity_key_groups_tasks_that_share_a_docker_image():
+    # swe-smith's image_name is per bug-injected repo, shared by many instances — those should sort
+    # adjacently so the second instance reuses the first's pulled image.
+    def swesmith(task_id, image):
+        return Task(task_id=task_id, source="swe-smith", prompt="p", reference_solution="", row={"image_name": image})
+
+    tasks = [swesmith("b", "img-2"), swesmith("a", "img-1"), swesmith("c", "img-1")]
+    ordered = sorted(tasks, key=calibrate_module.image_affinity_key)
+    assert [t.task_id for t in ordered] == ["a", "c", "b"]  # both img-1 tasks before the img-2 one
+
+
+def test_image_affinity_key_falls_back_to_repo_then_task_id():
+    # swe-gym/multi-swe-rl have one image per instance, so `repo` is the useful grouping (it's also
+    # what repo_context.py's bare-clone cache is keyed on).
+    gym = Task(task_id="x", source="swe-gym", prompt="p", reference_solution="", row={"repo": "getmoto/moto"})
+    assert calibrate_module.image_affinity_key(gym) == ("swe-gym", "getmoto/moto")
+    bare = Task(task_id="ds1000:7", source="ds1000", prompt="p", reference_solution="", row={})
+    assert calibrate_module.image_affinity_key(bare) == ("ds1000", "ds1000:7")
 
 
 def test_run_and_grade_maps_a_rate_limited_run_result_to_error_harness_not_error_no_solution(monkeypatch):

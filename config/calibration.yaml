@@ -5,16 +5,18 @@
 # artifacts/model-profiles.json. See ../README.md for the full protocol.
 
 # Sources whose ground truth we can grade today. BigCodeBench and DS-1000 are self-contained —
-# their tests ship inline in each row, so grading needs only a Python interpreter. swe-smith and
-# swe-gym are both Docker-based (grading/swesmith.py, grading/swegym.py) — they need a local Docker
-# daemon, which isn't available in every environment this pipeline runs in (e.g. Colab); drop them
-# from this list rather than running there. multi-swe-rl is corpus-only — no grader is wired up for
-# it (see corpus.py's module docstring; it would need a per-repo Docker image per instance).
+# their tests ship inline in each row, so grading needs only a Python interpreter. swe-smith,
+# swe-gym, and multi-swe-rl are all Docker-based (grading/swesmith.py, grading/swegym.py,
+# grading/multiswerl.py) — they need a local Docker daemon, which isn't available in every
+# environment this pipeline runs in (e.g. Colab); drop them from this list rather than running
+# there. multi-swe-rl is a Go-only pilot — the other 6 languages in that dataset (C, C++, Java, JS,
+# Rust, TS) remain corpus-only (see grading/multiswerl.py's module docstring for why).
 gradeable_sources:
   - bigcodebench
   - ds1000
   - swe-smith
   - swe-gym
+  - multi-swe-rl
 
 # Target calibration tasks per cluster. The spec's reference figure is 20+ per cluster against a
 # 24-cluster map; keep it low here because this pass targets pipeline completeness, not
@@ -43,10 +45,13 @@ task_timeout_seconds: 300
 # needs even more headroom for a rare but real worst case: a patch touching pandas' meson.build
 # triggers a full ~125-file Cython rebuild on next import (measured directly against a real
 # instance — several minutes), entirely automatic via the editable install's build backend, not
-# something this pipeline's own code controls or can skip.
+# something this pipeline's own code controls or can skip. multi-swe-rl needs the most headroom of
+# all: its largest repo (istio) measured at 6m51s for a single grading call against ~11,000
+# individual Go subtests — sized well above that measured worst case, not guessed.
 task_timeout_overrides:
   swe-smith: 600
   swe-gym: 900
+  multi-swe-rl: 1200
 
 # Smoothing: shrink each per-cluster error rate toward the model's own global rate, so a lucky
 # 4-for-4 in a thin cluster doesn't read as a confident 0% error rate.

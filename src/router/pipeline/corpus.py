@@ -1,8 +1,8 @@
 """Loads the corpus: SWE-smith (sampled 20,000 of ~59,136), SWE-Gym, BigCodeBench-Instruct,
 DS-1000 (all rows from each), and Multi-SWE-RL (batch 1 only, ~4,723 multilingual instances — see
-../README.md). Multi-SWE-RL is a CORPUS source only, not a calibration/grading source: it has no
-grader (grading it would need a per-repo Docker image per instance), which is why
-config/calibration.yaml's gradeable_sources never lists it.
+../README.md). Multi-SWE-RL spans 7 languages (C, C++, Go, Java, JS, Rust, TS); only its Go slice
+is gradeable so far (`calibration/grading/multiswerl.py`, `calibration/tasks.py`'s Go-only loader)
+— the other 6 remain corpus-only here, same as before.
 
 Multi-SWE-RL can't use the generic `load_dataset(hf_id, split=split)` path below — its 74
 batch-1 JSONL files have per-repo-heterogeneous nested fields, and Arrow schema unification across

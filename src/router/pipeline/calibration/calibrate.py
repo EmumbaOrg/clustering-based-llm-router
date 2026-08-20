@@ -12,7 +12,7 @@ from ...common.config import CalibrationConfig, EmbeddingConfig, ModelConfig
 from ...common.embedding import embed_texts
 from . import runner as runner_mod
 from .grading import base as grading_base
-from .grading import bigcodebench, ds1000, swegym, swesmith
+from .grading import bigcodebench, ds1000, multiswerl, swegym, swesmith
 from .grading.base import GradeResult, Outcome, Task
 from .tasks import load_gradeable_tasks
 
@@ -23,14 +23,23 @@ _GRADERS = {
     "ds1000": ds1000.grade,
     "swe-smith": swesmith.grade,
     "swe-gym": swegym.grade,
+    "multi-swe-rl": multiswerl.grade,
 }
 
 # Patch-based sources leave `reference_solution` empty (see tasks.py) and grade the gold/empty
 # patch through a dedicated entry point instead of the generic `grader(task, solution)` shape —
 # see grade_reference/grade_null below, which are the single source of truth cli.py's
 # validate-graders gate and run_and_grade's reference/null branches both call through.
-_REFERENCE_GRADERS = {"swe-smith": swesmith.grade_reference, "swe-gym": swegym.grade_reference}
-_NULL_GRADERS = {"swe-smith": swesmith.grade_null, "swe-gym": swegym.grade_null}
+_REFERENCE_GRADERS = {
+    "swe-smith": swesmith.grade_reference,
+    "swe-gym": swegym.grade_reference,
+    "multi-swe-rl": multiswerl.grade_reference,
+}
+_NULL_GRADERS = {
+    "swe-smith": swesmith.grade_null,
+    "swe-gym": swegym.grade_null,
+    "multi-swe-rl": multiswerl.grade_null,
+}
 
 
 def grade_reference(task: Task, timeout_seconds: int) -> GradeResult:
@@ -229,17 +238,62 @@ class ModelCalibrationResult:
     cluster_stats: dict[int, ClusterStats]
 
 
-def calibrate_model(
-    model: ModelConfig, selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
-) -> ModelCalibrationResult:
-    calibration_only = [st for st in selected_tasks if st.split == "calibration"]
-    total = len(calibration_only)
-    logger.info(f"starting calibration for {model.model_id}: {total} tasks")
-    per_task_outcomes: list[tuple[SelectedTask, GradeResult]] = [
-        (st, run_and_log(st.task, model, calibration_config, i, total))
-        for i, st in enumerate(calibration_only, start=1)
-    ]
+def image_affinity_key(task: Task) -> tuple[str, str]:
+    """Sort key that groups tasks sharing a Docker image next to each other, so consecutive grading
+    calls hit a warm image instead of re-pulling. Matters most for swe-smith, whose `image_name` is
+    per bug-injected repo (~128 distinct images across ~59K instances) rather than per instance —
+    swe-gym and multi-swe-rl build one image PER instance, so for them this only groups by repo,
+    which is still the right tiebreak for their shared git clones (repo_context.py)."""
+    return (task.source, str(task.row.get("image_name") or task.row.get("repo") or task.task_id))
 
+
+def calibrate_models(
+    models: list[ModelConfig], selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
+) -> list[ModelCalibrationResult]:
+    """Runs every (task, model) pair TASKS-OUTER / MODELS-INNER, then aggregates per model.
+
+    The loop order is the optimization, and it is worth roughly a factor of `len(models)` on the
+    dominant cost of a real run. swe-gym and multi-swe-rl build one multi-GB Docker image PER
+    INSTANCE (measured 2.9-6.5GB each), so a models-outer loop walks every image once per model
+    while `dockerexec`'s bounded LRU cache (15 images) is far too small to bridge the gap — at a
+    few hundred selected tasks the hit rate collapses to ~0 and every image is re-pulled for every
+    model. Grading each task against all models while its image is still hot pulls each image
+    exactly once instead: for ~250 Docker-backed tasks and 5 configured models that's ~250 pulls
+    (~875GB) rather than ~1,250 (~4.4TB), which at realistic bandwidth is the difference between
+    hours and a day of pure download. It also collapses peak resident disk, since a task's image is
+    finished with the moment its inner loop ends, and it fixes the same thrash for
+    `repo_context.py`'s bare-clone cache.
+
+    Purely a reordering: outcomes are per (model, task) pair and every statistic is computed after
+    the fact by `_aggregate_outcomes`, so results are identical to the previous order. Task
+    selection (and therefore the RNG) has already happened in `select_tasks` by this point, so
+    determinism is unaffected too."""
+    calibration_only = sorted(
+        (st for st in selected_tasks if st.split == "calibration"),
+        key=lambda st: image_affinity_key(st.task),
+    )
+    total = len(calibration_only) * len(models)
+    logger.info(
+        f"calibration started: {len(calibration_only)} tasks x {len(models)} models = {total} calls "
+        "(tasks-outer, models-inner)"
+    )
+    outcomes_by_model: dict[str, list[tuple[SelectedTask, GradeResult]]] = {m.model_id: [] for m in models}
+    index = 0
+    for st in calibration_only:
+        for model in models:
+            index += 1
+            result = run_and_log(st.task, model, calibration_config, index, total)
+            outcomes_by_model[model.model_id].append((st, result))
+
+    return [_aggregate_outcomes(m, outcomes_by_model[m.model_id], calibration_config) for m in models]
+
+
+def _aggregate_outcomes(
+    model: ModelConfig,
+    per_task_outcomes: list[tuple[SelectedTask, GradeResult]],
+    calibration_config: CalibrationConfig,
+) -> ModelCalibrationResult:
+    """Pure aggregation — no grading calls, so it's independent of the order they were made in."""
     prior_weight = calibration_config.smoothing.prior_weight
     all_outcomes = [r.outcome for _, r in per_task_outcomes]
     global_stats = _stats_from_outcomes(all_outcomes, global_raw_error_rate=None, prior_weight=prior_weight)

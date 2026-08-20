@@ -4,17 +4,27 @@ dataset-native identifiers (`task_id` / `instance_id` / `metadata.problem_id`), 
 post-shuffle indices, so a task can be referenced across separate runs without depending on load
 order.
 
-Only the gradeable sources (see config/calibration.yaml) are covered. swe-smith and swe-gym are
-both wired below — each Docker grader was validated against real instances before its loader was
-added (see grading/swesmith.py, grading/swegym.py).
+Only the gradeable sources (see config/calibration.yaml) are covered. swe-smith, swe-gym, and
+multi-swe-rl's Go slice are all wired below — each Docker grader was validated against real
+instances before its loader was added (see grading/swesmith.py, grading/swegym.py,
+grading/multiswerl.py).
 """
 from __future__ import annotations
 
+import json
 import logging
 
 from datasets import load_dataset
+from huggingface_hub import hf_hub_download
 
-from ..corpus import SOURCE_METADATA
+from ..corpus import (
+    _MULTI_SWE_RL_FILE_SUFFIX,
+    MULTI_SWE_RL_BATCH,
+    SOURCE_METADATA,
+    _extract_multi_swe_rl_text,
+    _multi_swe_rl_repo_files,
+    _multi_swe_rl_row_id,
+)
 from .grading.base import Task
 
 logger = logging.getLogger(__name__)
@@ -108,11 +118,74 @@ def _swegym_tasks() -> list[Task]:
     ]
 
 
+# Multi-SWE-RL rows carry three enormous per-test execution-log fields (`fix_patch_result`,
+# `run_result`, `test_patch_result`) plus `fixed_tests`, and NOTHING in the grading path reads any
+# of them — measured at 796MB across the 1,675 Go rows, i.e. 57% of all retained row bytes, held in
+# RAM for the entire run for nothing. `title`/`body`/`resolved_issues` are consumed into
+# `Task.prompt` at load time (see corpus.py's _extract_multi_swe_rl_text) and aren't needed after
+# that either. Keeping only the fields grading/repo_context actually touch is a pure memory win
+# with no behavior change; each entry below names its reader so this stays checkable as the grader
+# evolves (test_tasks.py exercises the real accessors against a trimmed row).
+_MULTI_SWE_RL_GRADED_FIELDS = frozenset({
+    "instance_id",  # not read by the grader — kept as the row's own stable id, and only ~21 B/row
+    "org", "repo", "number",  # grading/multiswerl.py: _image / _repo_dir
+    "base",  # repo_context.py: _multiswerl_remote_and_ref reads base["sha"]
+    "fix_patch",  # grading/multiswerl.py: grade_reference (the GOLD fix)
+    "test_patch",  # grading/multiswerl.py: _setup_script
+    "f2p_tests", "n2p_tests", "s2p_tests", "p2p_tests",  # grading/multiswerl.py: _test_names
+})
+
+
+def _multi_swe_rl_tasks() -> list[Task]:
+    """Go-only pilot — see grading/multiswerl.py's module docstring for why the other 6 languages
+    in this dataset aren't gradeable yet. Filters `corpus.py`'s own file listing down to this
+    batch's `go/` directory before downloading anything, so this loader never pays for the other
+    6 languages' (much larger, in total) files. Reuses `corpus.py`'s own text-extraction and
+    row-id helpers rather than reimplementing them — this loader's only real job is the Go-only
+    filter and the `Task` wrapping."""
+    meta = SOURCE_METADATA["multi-swe-rl"]
+    go_prefix = f"{MULTI_SWE_RL_BATCH}/go/"
+    paths = sorted(
+        path for path, _ in _multi_swe_rl_repo_files()
+        if path.startswith(go_prefix) and path.endswith(_MULTI_SWE_RL_FILE_SUFFIX)
+    )
+    tasks: list[Task] = []
+    for path in paths:
+        local_path = hf_hub_download(meta["hf_id"], filename=path, repo_type="dataset")
+        with open(local_path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                text = _extract_multi_swe_rl_text(row)
+                task_id = _multi_swe_rl_row_id(row)
+                if text is None or task_id is None:
+                    continue
+                tasks.append(
+                    Task(
+                        task_id=task_id,
+                        source="multi-swe-rl",
+                        prompt=text,
+                        reference_solution="",  # unused: calibrate.py special-cases multi-swe-rl to
+                        # multiswerl.grade_reference/grade_null, same reasoning as swe-smith/swe-gym above.
+                        row={k: v for k, v in row.items() if k in _MULTI_SWE_RL_GRADED_FIELDS},
+                    )
+                )
+    return tasks
+
+
 _LOADERS = {
     "bigcodebench": _bigcodebench_tasks,
     "ds1000": _ds1000_tasks,
     "swe-smith": _swesmith_tasks,
     "swe-gym": _swegym_tasks,
+    "multi-swe-rl": _multi_swe_rl_tasks,
 }
 
 
