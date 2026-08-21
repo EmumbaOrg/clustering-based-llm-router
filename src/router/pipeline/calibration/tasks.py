@@ -5,7 +5,7 @@ post-shuffle indices, so a task can be referenced across separate runs without d
 order.
 
 Only the gradeable sources (see config/calibration.yaml) are covered. swe-smith, swe-gym, and
-multi-swe-rl's Go/JS/TS slices are all wired below — each Docker grader was validated against real
+multi-swe-rl's Go/JS/TS/Java slices are all wired below — each Docker grader was validated against real
 instances before its loader was added (see grading/swesmith.py, grading/swegym.py,
 grading/multiswerl.py).
 """
@@ -136,9 +136,9 @@ _MULTI_SWE_RL_GRADED_FIELDS = frozenset({
 })
 
 
-# Go (1,675 tasks), JS (619), and TS (412) — see grading/multiswerl.py's module docstring for why
-# the other 4 languages in this dataset (C, C++, Java, Rust) aren't gradeable yet.
-_MULTI_SWE_RL_GRADEABLE_LANGUAGES = ("go", "js", "ts")
+# Go (1,675 tasks), JS (619), TS (412), and Java (976) — see grading/multiswerl.py's module
+# docstring for why the other 3 languages in this dataset (C, C++, Rust) aren't gradeable yet.
+_MULTI_SWE_RL_GRADEABLE_LANGUAGES = ("go", "js", "ts", "java")
 
 
 def _multi_swe_rl_tasks() -> list[Task]:

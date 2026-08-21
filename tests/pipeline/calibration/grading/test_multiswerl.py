@@ -258,14 +258,14 @@ def _js_task(**row_overrides) -> Task:
 
 
 def test_js_ts_config_lookup_is_keyed_by_org_and_repo():
-    assert multiswerl._js_ts_config(_js_task()) is not None
-    assert multiswerl._js_ts_config(_task()) is None  # the Go fixture from above
+    assert multiswerl._whole_suite_config(_js_task()) is not None
+    assert multiswerl._whole_suite_config(_task()) is None  # the Go fixture from above
 
 
 def test_js_ts_test_script_runs_build_then_test_and_reports_harness_on_build_failure():
     task = _js_task()  # zod: has a build step
-    config = multiswerl._js_ts_config(task)
-    script = multiswerl._js_ts_test_script(task, "nonce", config, on_pass="NEXT\n")
+    config = multiswerl._whole_suite_config(task)
+    script = multiswerl._whole_suite_test_script(task, "nonce", config, on_pass="NEXT\n")
     assert "cd /home/zod && yarn build ||" in script
     assert "cd /home/zod && yarn test >" in script
     assert dockerexec.report_cmd("nonce", "HARNESS", "build step failed") in script
@@ -276,8 +276,8 @@ def test_js_ts_test_script_runs_build_then_test_and_reports_harness_on_build_fai
 
 def test_js_ts_test_script_skips_the_build_step_when_the_repo_has_none():
     task = _js_task(org="Automattic", repo="mongoose", number=1)  # mongoose: no build step
-    config = multiswerl._js_ts_config(task)
-    script = multiswerl._js_ts_test_script(task, "nonce", config, on_pass="")
+    config = multiswerl._whole_suite_config(task)
+    script = multiswerl._whole_suite_test_script(task, "nonce", config, on_pass="")
     assert "build" not in script
     assert "cd /home/mongoose && npm test >" in script
 
@@ -287,8 +287,8 @@ def test_js_ts_test_script_gates_on_the_test_commands_exit_code_alone():
     # commands themselves give nothing more granular than whole-suite pass/fail (see module
     # docstring), so a non-zero exit is always FAIL, with no HARNESS branch for the test step.
     task = _js_task(org="expressjs", repo="express", number=1)
-    config = multiswerl._js_ts_config(task)
-    script = multiswerl._js_ts_test_script(task, "nonce", config, on_pass="")
+    config = multiswerl._whole_suite_config(task)
+    script = multiswerl._whole_suite_test_script(task, "nonce", config, on_pass="")
     assert 'if [ "$TEST_EXIT" -ne 0 ]; then' in script
     assert dockerexec.report_cmd("nonce", "FAIL", "tests failed") in script
 
@@ -337,3 +337,120 @@ def test_grade_null_never_runs_the_go_regression_guard_stage_for_go_but_still_ru
     # JS/TS has no separate regression-guard stage to skip — the one whole-suite run already
     # covers it (see module docstring), so build+test must both still appear.
     assert "yarn build" in captured["script"] and "yarn test" in captured["script"]
+
+
+# --- Java: whole-suite grading (same mechanism as JS/TS, no build step needed) -----------------
+# _REPO_CONFIG's commands are copied verbatim from the official multi_swe_bench harness's own
+# per-repo source (see multiswerl.py's module docstring), same as JS/TS.
+
+def _java_task(**row_overrides) -> Task:
+    row = {
+        "org": "checkstyle", "repo": "checkstyle", "number": 15448,
+        "base": {"sha": "deadbeef"},
+        "fix_patch": "diff --git a/Fix.java b/Fix.java\n+fix\n",
+        "test_patch": "diff --git a/FixTest.java b/FixTest.java\n+test\n",
+        "f2p_tests": {"com.puppycrawl.tools.checkstyle.checks.coding.SimplifyBooleanReturnCheckTest": {"fix": "PASS", "test": "FAIL", "run": "NONE"}},
+        "n2p_tests": {}, "s2p_tests": {},
+        "p2p_tests": {"com.puppycrawl.tools.checkstyle.grammar.java8.LambdaTest": {"fix": "PASS", "test": "PASS", "run": "PASS"}},
+    }
+    row.update(row_overrides)
+    return Task(task_id="multi-swe-rl:checkstyle__checkstyle-15448", source="multi-swe-rl", prompt="fix the bug", reference_solution="", row=row)
+
+
+def test_checkstyle_is_recognized_with_class_granularity_and_no_build_step():
+    task = _java_task()
+    config = multiswerl._whole_suite_config(task)
+    assert config is not None
+    assert config.build is None
+    assert config.test == "mvn clean test -Dstyle.color=never"
+    assert config.granularity == "class"
+
+
+def test_gradle_java_repos_use_their_confirmed_gradle_wrapper_command_and_exit_code_granularity():
+    task = _java_task(org="mockito", repo="mockito", number=1)
+    config = multiswerl._whole_suite_config(task)
+    assert config.build is None
+    assert config.test == "./gradlew test"
+    assert config.granularity == "exit_code"
+
+
+def test_grade_runs_the_confirmed_java_command_and_mounts_no_cache_volume(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script, volumes=volumes))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade(_java_task(), "diff --git a/Fix.java b/Fix.java\n+fix\n")
+
+    assert "mvn clean test -Dstyle.color=never" in captured["script"]
+    # checkstyle has no separate build step — its `clean test` already does compile+test.
+    assert "build step failed" not in captured["script"]
+    assert captured["volumes"] is None
+
+
+# --- Java: class-granularity grading (checkstyle/fastjson2 — see multiswerl.py's module
+# docstring for why the overall exit code is unreliable for these and per-class Surefire XML
+# reports are checked instead) -------------------------------------------------------------------
+
+def test_java_class_names_reads_exact_class_names_with_no_stripping():
+    task = _java_task()
+    assert multiswerl._java_class_names(task, multiswerl._DISCRIMINATING_TEST_KEYS) == [
+        "com.puppycrawl.tools.checkstyle.checks.coding.SimplifyBooleanReturnCheckTest",
+    ]
+    assert multiswerl._java_class_names(task, (multiswerl._REGRESSION_GUARD_TEST_KEY,)) == [
+        "com.puppycrawl.tools.checkstyle.grammar.java8.LambdaTest",
+    ]
+
+
+def test_java_class_ok_snippet_is_trivially_ok_for_an_empty_class_list():
+    assert multiswerl._java_class_ok_snippet([], "SOME_VAR") == "SOME_VAR=1\n"
+
+
+def test_java_class_ok_snippet_searches_for_each_classs_surefire_report():
+    script = multiswerl._java_class_ok_snippet(["com.example.FooTest"], "DISC_OK")
+    assert "DISC_OK=1" in script
+    assert "TEST-com.example.FooTest.xml" in script
+    assert 'errors="0"' in script
+    assert 'failures="0"' in script
+    assert "DISC_OK=0" in script
+
+
+def test_java_class_test_script_runs_the_confirmed_command_once_and_checks_both_class_sets():
+    task = _java_task()
+    config = multiswerl._whole_suite_config(task)
+    script = multiswerl._java_class_test_script(task, "nonce", config, on_pass="NEXT\n", include_regression_guard=True)
+    assert "mvn clean test -Dstyle.color=never" in script
+    assert "TEST-com.puppycrawl.tools.checkstyle.checks.coding.SimplifyBooleanReturnCheckTest.xml" in script
+    assert "TEST-com.puppycrawl.tools.checkstyle.grammar.java8.LambdaTest.xml" in script
+    assert dockerexec.report_cmd("nonce", "FAIL", "tests failed") in script
+    assert script.endswith("NEXT\n")
+    # The confirmed command must run exactly once — no separate narrowed re-run.
+    assert script.count("mvn clean test") == 1
+
+
+def test_java_class_test_script_skips_regression_guard_classes_when_told_to():
+    task = _java_task()
+    config = multiswerl._whole_suite_config(task)
+    script = multiswerl._java_class_test_script(task, "nonce", config, on_pass="", include_regression_guard=False)
+    assert "TEST-com.puppycrawl.tools.checkstyle.checks.coding.SimplifyBooleanReturnCheckTest.xml" in script
+    assert "TEST-com.puppycrawl.tools.checkstyle.grammar.java8.LambdaTest.xml" not in script
+    assert "GUARD_OK=1\n" in script
+
+
+def test_java_class_test_script_reports_harness_when_no_discriminating_classes_exist():
+    task = _java_task(f2p_tests={}, n2p_tests={}, s2p_tests={})
+    config = multiswerl._whole_suite_config(task)
+    script = multiswerl._java_class_test_script(task, "nonce", config, on_pass="UNREACHABLE", include_regression_guard=True)
+    assert dockerexec.report_cmd("nonce", "HARNESS", "no discriminating classes found on this row") in script
+    assert "UNREACHABLE" not in script
+    assert "mvn clean test" not in script  # never even runs the expensive suite
+
+
+def test_grade_null_uses_class_granularity_for_checkstyle_and_skips_guard_classes(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade_null(_java_task())
+
+    assert "TEST-com.puppycrawl.tools.checkstyle.checks.coding.SimplifyBooleanReturnCheckTest.xml" in captured["script"]
+    assert "TEST-com.puppycrawl.tools.checkstyle.grammar.java8.LambdaTest.xml" not in captured["script"]

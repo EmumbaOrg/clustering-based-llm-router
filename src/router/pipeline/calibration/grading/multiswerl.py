@@ -1,9 +1,10 @@
-"""Grader for Multi-SWE-RL's Go, JS, and TS slices — Docker-based, built on `dockerexec.py`'s
+"""Grader for Multi-SWE-RL's Go, JS, TS, and Java slices — Docker-based, built on `dockerexec.py`'s
 sentinel protocol, mirroring `swegym.py`'s shape. `tasks.py`'s loader for this source returns rows
-from the dataset's `go/`, `js/`, and `ts/` batch directories — see its own docstring for why the
-other 4 languages (C, C++, Java, Rust) in this dataset are corpus-only for now. The Go section
-immediately below was the original (single-convention) pilot; JS/TS's own section further down
-covers the considerably less uniform second pass.
+from the dataset's `go/`, `js/`, `ts/`, and `java/` batch directories — see its own docstring for
+why the other 3 languages (C, C++, Rust) in this dataset are corpus-only for now. The Go section
+immediately below was the original (single-convention) pilot; the "whole-suite languages" section
+further down covers JS, TS, and Java, which all ended up sharing one considerably less uniform
+second design.
 
 Confirmed empirically this session (real `docker pull`/`docker run` against `gin-gonic/gin`,
 `prometheus/prometheus`, and `istio/istio` — small, medium, and the largest repo in the corpus)
@@ -107,10 +108,10 @@ swe-smith's bug-injecting `patch`) — `base_commit` (`row["base"]["sha"]`) is a
 pre-fix state the image is built at. A separate `test_patch` field (same role as swe-gym's) carries
 the test changes needed to exercise the four test-outcome dicts and must be applied in every mode.
 
---- JS/TS (second pilot) -------------------------------------------------------------------------
+--- Whole-suite languages: JS, TS, Java (second and third pilots) ------------------------------
 
-`_REPO_CONFIG` covers the JS (619 tasks, 10 repos) and TS (412 tasks, 8 repos) slices — the
-second- and third-largest language buckets after Go.
+`_REPO_CONFIG` covers the JS (619 tasks, 10 repos), TS (412 tasks, 8 repos), and Java (976 tasks,
+6 repos) slices — the second-, third-, and (by task count) largest-after-Go language buckets.
 
 An early version of this guessed the test command from each repo's `package.json` and tried to
 replicate Go's staged discriminating/regression-guard split by parsing a file path or test name out
@@ -134,7 +135,7 @@ schema:
    forwarded. Given that, and that a live run confirmed these suites are fast — `express`'s 1,149
    Mocha tests ran in 4.9s — the staged discriminating-then-regression-guard split Go relies on
    (see above) isn't worth the narrowing complexity/risk here: JS/TS runs the confirmed command
-   ONCE per grading call and reads the outcome from its exit code (`_js_ts_test_script`), covering
+   ONCE per grading call and reads the outcome from its exit code (`_whole_suite_test_script`), covering
    both test sets in a single pass. `grade_null` still fails correctly here with no special-casing:
    the discriminating tests are defined to fail without a fix, so the whole suite's exit code is
    already non-zero.
@@ -168,9 +169,59 @@ bug — re-run rather than trust a single `grade_reference` failure there as con
 remaining 15 repos share one of these three already-validated shapes (no build + JSON reporter,
 no build + plain exit code, or a build step) and haven't each been individually run against a
 container yet.
+
+**Java (added after JS/TS, applying the same lesson from the start)**: went straight to the
+harness's own source (`multi_swe_bench/harness/repos/java/{org}/{repo}.py`) for the confirmed
+command rather than guessing from `pom.xml`/`build.gradle`, and found a much simpler shape than
+JS/TS — every one of the 6 repos has exactly one class (no PR-range overrides), and every
+confirmed command is already whole-suite with no name-based narrowing (`mvn clean test
+-Dstyle.color=never` for `checkstyle`; `./gradlew test`/`./gradlew clean test --continue` for the
+Gradle repos; a Maven-wrapper variant with the repo's own required profile flags for `fastjson2`).
+No repo needs a separate `build` field — Maven/Gradle's `clean test` already does compile+test in
+one command. `clean` wipes `target/`/`build/` on every call (the harness's own confirmed choice,
+not a shortcut of ours to remove without evidence), so unlike Go's incremental `go test`, a Java
+grading call always pays a full recompile.
+
+`checkstyle` is 845 of Java's 976 tasks (86.6%) — overwhelmingly the repo that matters here; the
+other 5 (`spotbugs` 57, `junit5` 55, `logstash`/`mockito` 7 each, `fastjson2` 5) are comparatively
+low-volume.
+
+**Whole-suite exit code turned out to be unreliable for `checkstyle` specifically — confirmed live,
+not assumed.** Its ~2,900-5,100-test suite has at least one baked-in, always-reproducible failure
+completely unrelated to any patch, reproducing even on the raw base commit with zero patches
+applied: on one real PR, `ImportControlLoaderTest.testInputStreamThatFailsOnClose` fails a Mockito
+`verify(times(1))` check (`Wanted 1 time but was 2 times`) — a JDK/library-version sensitivity, not
+a real regression; on a different, much later PR, `MainTest.testExistingTargetFileButWithoutReadAccess`
+fails because it expects a permission-denied file read to fail, but these containers all run as
+**root**, which bypasses Unix permission checks entirely, so the read always succeeds. Two
+different unrelated tests, both 100% deterministic (retried and reproduced on isolated single-class
+runs too) — this is baseline noise inherent to running this suite as root in this environment, not
+occasional flakiness like `istio`'s or `mongoose`'s. Trusting the overall exit code would make
+`grade_reference`/`grade_null` indistinguishable from this noise for 86.6% of all Java tasks.
+
+**Fix**: `checkstyle` and `fastjson2` (the two Maven repos whose `f2p_tests`/`p2p_tests` keys are
+exact fully-qualified class names — confirmed real format) use `granularity="class"`
+(`_java_class_test_script`): the confirmed command still runs exactly once, but the outcome is read
+from the SPECIFIC named classes' Maven Surefire XML reports (`target/surefire-reports/
+TEST-{class}.xml`, one line `<testsuite ... errors="N" failures="M">` per class — confirmed real
+format by inspecting a pulled image), ignoring whatever happens in every OTHER class. `mockito`/
+`junit5`/`logstash`/`spotbugs` key by Gradle *task* name (`buildSrc:generateExternalPluginSpecBuilders`)
+or a mix of task names and JUnit display names, not exact class names — `granularity="exit_code"`
+(no name-based check available) stays for those; lower volume (126 of 976 Java tasks) and no
+evidence yet of the same systemic noise.
+
+**Validated live against real containers** (`grade_null` fails, `grade_reference` passes):
+`checkstyle` on BOTH problem PRs above (confirming the class-granularity fix actually resolves what
+it was built for, not just that it runs), and `mockito` (Gradle, `exit_code` path). `~/.m2`
+confirmed pre-baked in the pulled `checkstyle` image (84MB) — the same "resolved once, baked into
+the image" shape as Go's `GOMODCACHE` and JS/TS's `node_modules`, not assumed by analogy alone.
+`checkstyle`'s suite took 1m37s–4m12s per run across the two validated PRs — real but not
+prohibitive. `fastjson2`/`logstash`/`junit5`/`spotbugs` (131 tasks combined) share an
+already-validated shape but haven't each been individually run against a container yet.
 """
 from __future__ import annotations
 
+import shlex
 import uuid
 from dataclasses import dataclass
 
@@ -257,9 +308,22 @@ class _RepoConfig:
     migrated from Jest to node's built-in `node:test` at some point in its history) — this table
     uses whichever class has no numeric PR-range suffix (the current/default one), which may not
     exactly match every instance's era. Treated as a known, low-blast-radius risk: a mismatched
-    command surfaces as a script failure (`error_harness`), not a silently wrong grade."""
+    command surfaces as a script failure (`error_harness`), not a silently wrong grade.
+
+    `granularity="exit_code"` (the default) trusts the confirmed command's own exit code — correct
+    for every repo above, and for the Gradle-based Java repos (`mockito`/`junit5`/`logstash`/
+    `spotbugs`), whose `f2p_tests`/`p2p_tests` keys are Gradle *task* names, not test names, so
+    there's nothing more specific to check anyway. `granularity="class"` is for Maven repos whose
+    keys ARE exact test class names (`checkstyle`, `fastjson2`) — confirmed necessary, not a
+    speculative refinement: `checkstyle`'s ~2,900-5,100-test suite has at least one baked-in,
+    always-reproducible failure unrelated to any patch (confirmed on two different PRs — a
+    Mockito/JDK-sensitive stream-close count in one, a root-user-bypasses-file-permissions check in
+    another), so trusting the overall exit code would make `grade_reference`/`grade_null`
+    indistinguishable from noise for checkstyle's 845 tasks (86.6% of all Java tasks). See
+    `_java_class_test_script`."""
     build: str | None
     test: str
+    granularity: str = "exit_code"  # "exit_code" or "class"
 
 
 _REPO_CONFIG: dict[tuple[str, str], _RepoConfig] = {
@@ -287,10 +351,30 @@ _REPO_CONFIG: dict[tuple[str, str], _RepoConfig] = {
     ("remix-run", "react-router"): _RepoConfig("yarn build", "yarn test -- --verbose"),
     ("trpc", "trpc"): _RepoConfig(None, "pnpm turbo --filter tests test-ci"),
     ("vuejs", "core"): _RepoConfig(None, "pnpm run test-unit --no-watch --reporter=verbose"),
+    # --- Java -------------------------------------------------------------------------------
+    # `clean` is part of every confirmed command below (Maven/Gradle wipe their build output
+    # before testing), so — unlike Go — a full recompile happens on every single grading call.
+    # That's the harness's own confirmed choice, not a shortcut of ours to remove without
+    # evidence; no `build` field is needed here since `clean test` already does compile+test in
+    # one command, the same way it does for the repos above with `build=None`. `checkstyle`/
+    # `fastjson2` use `granularity="class"` (confirmed necessary, see _RepoConfig's docstring);
+    # the 4 Gradle repos key by build task name, not test name, so exit_code is the only option
+    # and no repo-specific noise has been found there (lower volume, lower validated confidence).
+    ("checkstyle", "checkstyle"): _RepoConfig(None, "mvn clean test -Dstyle.color=never", granularity="class"),
+    ("mockito", "mockito"): _RepoConfig(None, "./gradlew test"),
+    ("elastic", "logstash"): _RepoConfig(None, "./gradlew clean test --continue"),
+    ("junit-team", "junit5"): _RepoConfig(None, "./gradlew clean test --continue"),
+    ("spotbugs", "spotbugs"): _RepoConfig(None, "./gradlew clean test --continue"),
+    ("alibaba", "fastjson2"): _RepoConfig(
+        None,
+        "./mvnw -V --no-transfer-progress -Pgen-javadoc -Pgen-dokka clean test "
+        "-Dsurefire.useFile=false -Dmaven.test.skip=false -DfailIfNoTests=false",
+        granularity="class",
+    ),
 }
 
 
-def _js_ts_config(task: Task) -> _RepoConfig | None:
+def _whole_suite_config(task: Task) -> _RepoConfig | None:
     return _REPO_CONFIG.get((task.row.get("org"), task.row.get("repo")))
 
 
@@ -301,7 +385,7 @@ def _volumes(task: Task) -> dict[str, str] | None:
     the handful of repos with a genuine per-call build step compile from source into a small
     per-container `dist`/`lib` output — not yet measured as worth caching the way Go's build cache
     was (that mount was added only after measuring a 34x speedup, not assumed)."""
-    return None if _js_ts_config(task) is not None else _cache_volumes()
+    return None if _whole_suite_config(task) is not None else _cache_volumes()
 
 
 def _setup_script(task: Task, nonce: str) -> str:
@@ -362,7 +446,7 @@ def _regression_guard_stage_script(task: Task, nonce: str, on_pass: str) -> str:
     return _run_test_stage(task, nonce, names, "regression-guard", on_pass)
 
 
-def _js_ts_test_script(task: Task, nonce: str, config: _RepoConfig, on_pass: str) -> str:
+def _whole_suite_test_script(task: Task, nonce: str, config: _RepoConfig, on_pass: str) -> str:
     """Runs the confirmed per-repo build step (if any) and test command ONCE, covering the
     discriminating and regression-guard sets in a single pass — see `_RepoConfig`'s docstring for
     why JS/TS doesn't stage the way Go does. A build-step failure is `error_harness` (it doesn't
@@ -382,14 +466,77 @@ def _js_ts_test_script(task: Task, nonce: str, config: _RepoConfig, on_pass: str
     return "\n".join(lines) + "\n" + on_pass
 
 
+def _java_class_names(task: Task, keys: tuple[str, ...]) -> list[str]:
+    """`checkstyle`/`fastjson2` rows' `f2p_tests`/`n2p_tests`/`s2p_tests`/`p2p_tests` keys are
+    already exact fully-qualified Java class names — confirmed directly from real rows, no subtest
+    suffix to strip the way Go's keys need (see `_top_level_names`)."""
+    names: set[str] = set()
+    for key in keys:
+        names |= set(task.row.get(key) or {})
+    return sorted(names)
+
+
+def _java_class_ok_snippet(classes: list[str], result_var: str) -> str:
+    """Sets shell variable `result_var` to `1` if every one of `classes` has a Maven Surefire XML
+    report with zero errors and zero failures, `0` otherwise. Maven writes one
+    `target/surefire-reports/TEST-{class}.xml` per test class, its `<testsuite ...>` opening tag
+    (confirmed real format, one line) carrying `errors="N"` and `failures="M"` attributes —
+    searched with `find` rather than a hardcoded `target/` path since a multi-module Maven project
+    nests `target/` under each module. A MISSING report (the class never ran at all, e.g. a typo'd
+    class name or a compile failure before tests could run) counts as NOT ok — that's not evidence
+    the class passed, the same principle behind Go's `RUN_COUNT` guard."""
+    if not classes:
+        return f"{result_var}=1\n"
+    lines = [f"{result_var}=1"]
+    for cls in classes:
+        report_name = shlex.quote(f"TEST-{cls}.xml")
+        lines.append(
+            f'REPORT=$(find . -path "*/surefire-reports/*" -name {report_name} 2>/dev/null | head -1)\n'
+            f'[ -n "$REPORT" ] && grep -q \' errors="0"\' "$REPORT" && grep -q \' failures="0"\' "$REPORT" '
+            f"|| {result_var}=0"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _java_class_test_script(
+    task: Task, nonce: str, config: _RepoConfig, on_pass: str, include_regression_guard: bool
+) -> str:
+    """`granularity="class"` path (see `_RepoConfig`'s docstring): runs the confirmed command ONCE
+    (same as `_whole_suite_test_script`) but reads the outcome from the SPECIFIC named classes'
+    Surefire XML reports instead of the overall exit code — immune to unrelated pre-existing
+    failures elsewhere in a large suite (confirmed necessary for `checkstyle` specifically).
+    `include_regression_guard=False` (from `grade_null`) skips inspecting `p2p_tests`' classes
+    entirely, matching Go's semantics; JS/TS's whole-suite path has no such distinction because it
+    has no per-class signal to selectively ignore in the first place."""
+    repo_dir = _repo_dir(task)
+    discriminating = _java_class_names(task, _DISCRIMINATING_TEST_KEYS)
+    if not discriminating:
+        return dockerexec.report_cmd(nonce, "HARNESS", "no discriminating classes found on this row")
+    guard = _java_class_names(task, (_REGRESSION_GUARD_TEST_KEY,)) if include_regression_guard else []
+
+    harness_build = dockerexec.report_cmd(nonce, "HARNESS", "build step failed")
+    fail_cmd = dockerexec.report_cmd(nonce, "FAIL", "tests failed")
+    lines = []
+    if config.build:
+        lines.append(f"cd {repo_dir} && {config.build} || {{ {harness_build}; }}")
+    lines.append(f"cd {repo_dir} && {config.test} > /tmp/java_test.log 2>&1")
+    lines.append(_java_class_ok_snippet(discriminating, "DISC_OK"))
+    lines.append(_java_class_ok_snippet(guard, "GUARD_OK"))
+    lines.append(f'if [ "$DISC_OK" -eq 0 ] || [ "$GUARD_OK" -eq 0 ]; then {fail_cmd}; fi')
+    return "\n".join(lines) + "\n" + on_pass
+
+
 def _test_stage_script(task: Task, nonce: str, on_pass: str, include_regression_guard: bool = True) -> str:
-    """Dispatches to JS/TS's single whole-suite run (`_js_ts_test_script` — always covers both test
-    sets in one pass, so `include_regression_guard` has no effect there) or Go's discriminating
-    stage, optionally followed by the regression-guard stage. `grade_null` passes
+    """Dispatches to Java's class-based interpretation (`_java_class_test_script`), JS/TS/Gradle
+    Java's single whole-suite run (`_whole_suite_test_script` — always covers both test sets in
+    one pass, so `include_regression_guard` has no effect there), or Go's discriminating stage,
+    optionally followed by the regression-guard stage. `grade_null` passes
     `include_regression_guard=False` for Go — see its own docstring for why."""
-    config = _js_ts_config(task)
+    config = _whole_suite_config(task)
     if config is not None:
-        return _js_ts_test_script(task, nonce, config, on_pass)
+        if config.granularity == "class":
+            return _java_class_test_script(task, nonce, config, on_pass, include_regression_guard)
+        return _whole_suite_test_script(task, nonce, config, on_pass)
     if not include_regression_guard:
         return _discriminating_stage_script(task, nonce, on_pass=on_pass)
     return _discriminating_stage_script(task, nonce, on_pass=_regression_guard_stage_script(task, nonce, on_pass=on_pass))
