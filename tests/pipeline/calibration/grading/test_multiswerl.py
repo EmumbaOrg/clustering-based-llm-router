@@ -454,3 +454,89 @@ def test_grade_null_uses_class_granularity_for_checkstyle_and_skips_guard_classe
 
     assert "TEST-com.puppycrawl.tools.checkstyle.checks.coding.SimplifyBooleanReturnCheckTest.xml" in captured["script"]
     assert "TEST-com.puppycrawl.tools.checkstyle.grammar.java8.LambdaTest.xml" not in captured["script"]
+
+
+# --- Rust: reuses Go's staged discriminating/regression-guard mechanism (same shape as Go, not
+# JS/TS/Java's whole-suite design — see multiswerl.py's module docstring for why) --------------
+
+def _rust_task(**row_overrides) -> Task:
+    row = {
+        "org": "rusqlite", "repo": "rusqlite", "number": 399,
+        "base": {"sha": "deadbeef"},
+        "fix_patch": "diff --git a/src/lib.rs b/src/lib.rs\n+fix\n",
+        "test_patch": "diff --git a/src/lib.rs b/src/lib.rs\n+test\n",
+        "f2p_tests": {}, "s2p_tests": {},
+        "n2p_tests": {"test::test_pragma_query_row": {"fix": "PASS", "test": "FAIL", "run": "NONE"}},
+        "p2p_tests": {"cache::test::test_cache": {"fix": "PASS", "test": "PASS", "run": "PASS"}},
+    }
+    row.update(row_overrides)
+    return Task(task_id="multi-swe-rl:rusqlite__rusqlite-399", source="multi-swe-rl", prompt="fix the bug", reference_solution="", row=row)
+
+
+def test_is_rust_is_keyed_by_org_and_repo():
+    assert multiswerl._is_rust(_rust_task())
+    assert not multiswerl._is_rust(_task())  # the Go fixture
+    assert not multiswerl._is_rust(_java_task())
+
+
+def test_rust_test_names_reads_exact_paths_with_no_stripping():
+    task = _rust_task()
+    assert multiswerl._rust_test_names(task, multiswerl._DISCRIMINATING_TEST_KEYS) == ["test::test_pragma_query_row"]
+    assert multiswerl._rust_test_names(task, (multiswerl._REGRESSION_GUARD_TEST_KEY,)) == ["cache::test::test_cache"]
+
+
+def test_cargo_test_stage_builds_an_exact_multi_name_invocation():
+    task = _rust_task()
+    script = multiswerl._cargo_test_stage(task, "nonce", ["a::b", "c::d"], "discriminating", on_pass="NEXT\n")
+    assert "cargo test -- --exact $(cat /tmp/discriminating_names.txt)" in script
+    assert dockerexec.write_file_cmd("a::b\nc::d", "/tmp/discriminating_names.txt") in script
+    assert dockerexec.report_cmd("nonce", "FAIL", "discriminating tests failed") in script
+    assert dockerexec.report_cmd("nonce", "HARNESS", "no discriminating tests matched the expected names") in script
+    assert script.endswith("NEXT\n")
+
+
+def test_cargo_test_stage_sums_passed_and_failed_across_every_test_result_line():
+    # cargo test prints one "test result: ok. N passed; M failed; ..." line per test binary/crate
+    # target — confirmed live this session (rusqlite prints 4+ such lines per invocation) — so the
+    # "did anything actually run" guard must sum across all of them, not trust just one.
+    script = multiswerl._cargo_test_stage(_rust_task(), "nonce", ["a::b"], "discriminating", on_pass="")
+    assert "grep -oE '[0-9]+ passed; [0-9]+ failed'" in script
+    assert "awk '{sum += $1 + $3} END {print sum+0}'" in script
+
+
+def test_discriminating_stage_dispatches_rust_tasks_to_cargo_test():
+    script = multiswerl._discriminating_stage_script(_rust_task(), "nonce", on_pass="NEXT\n")
+    assert "cargo test -- --exact" in script
+    assert "go test ./..." not in script
+
+
+def test_regression_guard_stage_dispatches_rust_tasks_to_cargo_test():
+    script = multiswerl._regression_guard_stage_script(_rust_task(), "nonce", on_pass="NEXT\n")
+    assert "cargo test -- --exact" in script
+
+
+def test_grade_null_never_runs_the_rust_regression_guard_stage(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script, volumes=volumes))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade_null(_rust_task())
+
+    # Names travel base64-encoded via dockerexec.write_file_cmd — check the encoded form.
+    assert _b64("test::test_pragma_query_row") in captured["script"]
+    assert _b64("cache::test::test_cache") not in captured["script"]
+    # No cache-volume mount for Rust — target/ is confirmed pre-baked in the image.
+    assert captured["volumes"] is None
+
+
+def test_grade_reference_runs_both_rust_stages(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade_reference(_rust_task())
+
+    script = captured["script"]
+    assert _b64("test::test_pragma_query_row") in script
+    assert _b64("cache::test::test_cache") in script
+    assert script.index("discriminating") < script.index("regression_guard")

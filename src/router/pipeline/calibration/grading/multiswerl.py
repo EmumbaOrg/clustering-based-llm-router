@@ -1,10 +1,11 @@
-"""Grader for Multi-SWE-RL's Go, JS, TS, and Java slices — Docker-based, built on `dockerexec.py`'s
-sentinel protocol, mirroring `swegym.py`'s shape. `tasks.py`'s loader for this source returns rows
-from the dataset's `go/`, `js/`, `ts/`, and `java/` batch directories — see its own docstring for
-why the other 3 languages (C, C++, Rust) in this dataset are corpus-only for now. The Go section
-immediately below was the original (single-convention) pilot; the "whole-suite languages" section
-further down covers JS, TS, and Java, which all ended up sharing one considerably less uniform
-second design.
+"""Grader for Multi-SWE-RL's Go, JS, TS, Java, and Rust slices — Docker-based, built on
+`dockerexec.py`'s sentinel protocol, mirroring `swegym.py`'s shape. `tasks.py`'s loader for this
+source returns rows from the dataset's `go/`, `js/`, `ts/`, `java/`, and `rust/` batch directories
+— see its own docstring for why the other 2 languages (C, C++) in this dataset are corpus-only for
+now. The Go section immediately below was the original (single-convention) pilot; the
+"whole-suite languages" section further down covers JS, TS, and Java, which all ended up sharing
+one considerably less uniform second design; Rust (further down still) turned out uniform enough
+to rejoin Go's original staged design instead.
 
 Confirmed empirically this session (real `docker pull`/`docker run` against `gin-gonic/gin`,
 `prometheus/prometheus`, and `istio/istio` — small, medium, and the largest repo in the corpus)
@@ -218,6 +219,54 @@ the image" shape as Go's `GOMODCACHE` and JS/TS's `node_modules`, not assumed by
 `checkstyle`'s suite took 1m37s–4m12s per run across the two validated PRs — real but not
 prohibitive. `fastjson2`/`logstash`/`junit5`/`spotbugs` (131 tasks combined) share an
 already-validated shape but haven't each been individually run against a container yet.
+
+--- Rust (fourth pilot) ---------------------------------------------------------------------
+
+Rust turned out to be the most uniform language pilot yet, closer to Go's shape than to
+JS/TS/Java's — confirmed from the harness's own source
+(`multi_swe_bench/harness/repos/rust/{org}/{repo}.py`), not assumed from `Cargo.toml` conventions:
+**every one of the 14 repos** (`ripgrep`, `alacritty`, `clap`, `fish-shell`, `helix`, `nushell`,
+`rusqlite`, `mdBook`, `serde`, `bat`, `fd`, `bytes`, `tokio`, `tracing`) **uses the exact same
+confirmed command, bare `cargo test`** — no per-repo variation, no PR-range overrides, no build
+step. `f2p_tests`/`n2p_tests`/`s2p_tests`/`p2p_tests` keys are already exact `cargo test` filter
+targets (`module::submodule::test_name`) — Rust identifiers joined by `::`, which can't contain
+regex/shell metacharacters, so (unlike JS/TS) nothing needs parsing, stripping, or escaping.
+
+Given that uniformity, Rust **reuses Go's staged discriminating/regression-guard design directly**
+(`_cargo_test_stage`, dispatched from the same `_discriminating_stage_script`/
+`_regression_guard_stage_script` Go already used) rather than JS/TS/Java's whole-suite compromise:
+`cargo test -- --exact <name1> <name2> ...` runs exactly and only the OR'd named tests — confirmed
+live against a real container, Rust's own equivalent of Go's `-run "^(name1|name2)$"` anchor. Like
+Go's `-run`, it exits 0 even when it matches ZERO tests anywhere (confirmed live: a bogus name and
+a real name checked before its introducing patch was applied both produced `0 passed; 0 failed`
+across every test binary) — `_cargo_test_stage` sums `N passed`/`M failed` across every `test
+result:` line the run prints (one per test binary/crate target) as the "did anything run" guard,
+the same role Go's `RUN_COUNT` plays.
+
+No `_RepoConfig`/`_REPO_CONFIG` entry needed at all: Rust repos are tracked in a separate
+`_RUST_REPOS` set purely for `_is_rust` dispatch, since the confirmed command needs no per-repo
+customization the way JS/TS/Java's does. No cache volume is mounted either — `target/` (cargo's
+build cache) is confirmed pre-baked into the image at build time (`rusqlite`'s image shipped a
+140MB `target/` from `prepare.sh`'s own `cargo test || true` run), the same "resolved once, baked
+in" shape as Go's `GOMODCACHE`; a `$CARGO_TARGET_DIR` host mount (mirroring Go's `GOCACHE`) is a
+candidate future optimization, but — like every other cache-mount decision in this module — only
+worth adding after MEASURING repeated-call cost, not assumed from the Go precedent.
+
+One accepted quirk carries over unchanged, not newly introduced by Rust: a row whose entire
+discriminating set is `n2p_tests` (brand-new tests the fix introduces) shows "0 tests matched"
+against the null state, since those tests don't exist in source without the fix (confirmed live on
+a real `rusqlite` row) — reports `HARNESS`, the same outcome Go's own "zero tests matched" guard
+already produces for this exact class of row (it doesn't distinguish f2p/n2p/s2p either).
+
+**Validated live against real containers** (`grade_null` fails or reports the accepted `n2p`-only
+`HARNESS` outcome, `grade_reference` passes): `rusqlite` (smallest Rust repo, 1 task,
+discriminating set is 100% `n2p_tests` — exercises the accepted quirk above directly) and `clap`
+(largest single Rust repo, 62 tasks; the validated row's `p2p_tests` set was 212 names, confirming
+the multi-name `--exact` invocation holds up at scale, and its `grade_null` genuinely FAILED rather
+than zero-matching, confirming `cargo test`'s exit code correctly reflects a real test failure —
+closing the one risk this pilot's plan flagged as unconfirmed). Repo checkout path (`/home/{repo}`)
+and image tag convention confirmed unchanged. The other 12 repos share this already-validated shape
+but haven't each been individually run against a container yet.
 """
 from __future__ import annotations
 
@@ -284,6 +333,73 @@ def _regression_guard_test_names(task: Task) -> list[str]:
     harness; package-narrowing and storage-backend changes were tested directly and neither
     moved this number meaningfully). See module docstring for when this stage runs at all."""
     return sorted(_top_level_names(task.row, _REGRESSION_GUARD_TEST_KEY))
+
+
+# Every one of these 14 repos is confirmed (from the official multi_swe_bench harness's own
+# run.sh, not guessed) to use the exact same bare `cargo test` command, with no PR-range
+# overrides — the most uniform of any language pilot so far, closer to Go's shape than to
+# JS/TS/Java's. See `_cargo_test_stage`'s docstring and the module docstring's Rust section.
+_RUST_REPOS: frozenset[tuple[str, str]] = frozenset({
+    ("BurntSushi", "ripgrep"),
+    ("alacritty", "alacritty"),
+    ("clap-rs", "clap"),
+    ("fish-shell", "fish-shell"),
+    ("helix-editor", "helix"),
+    ("nushell", "nushell"),
+    ("rusqlite", "rusqlite"),
+    ("rust-lang", "mdBook"),
+    ("serde-rs", "serde"),
+    ("sharkdp", "bat"),
+    ("sharkdp", "fd"),
+    ("tokio-rs", "bytes"),
+    ("tokio-rs", "tokio"),
+    ("tokio-rs", "tracing"),
+})
+
+
+def _is_rust(task: Task) -> bool:
+    return (task.row.get("org"), task.row.get("repo")) in _RUST_REPOS
+
+
+def _rust_test_names(task: Task, keys: tuple[str, ...]) -> list[str]:
+    """Rust's `f2p_tests`/`n2p_tests`/`s2p_tests`/`p2p_tests` keys are already exact `cargo test`
+    filter targets (`module::submodule::test_name`, confirmed real format) — no stripping needed,
+    unlike Go's `_top_level_names` (Rust identifiers joined by `::` can't contain the kind of
+    regex-special subtest-path suffix Go's keys sometimes carry)."""
+    names: set[str] = set()
+    for key in keys:
+        names |= set(task.row.get(key) or {})
+    return sorted(names)
+
+
+def _cargo_test_stage(task: Task, nonce: str, names: list[str], label: str, on_pass: str) -> str:
+    """Rust's equivalent of `_run_test_stage`. `cargo test -- --exact <name1> <name2> ...` runs
+    exactly and only the named tests, OR'd — confirmed live against a real container (two real
+    test names ran and passed, correctly filtered out of every other test binary in the crate) —
+    Rust's own equivalent of Go's `-run "^(name1|name2)$"` anchor, needing no escaping since `::`
+    -joined paths are always safe identifiers.
+
+    Like Go's `-run`, `cargo test -- --exact` exits 0 even when it matches ZERO tests anywhere
+    (confirmed live: a bogus name and a real name checked before its introducing patch was applied
+    both produced `0 passed; 0 failed` across every test binary, exit 0) — so this sums `N passed`/
+    `M failed` across every `test result:` line the run prints (`cargo test` runs one such line per
+    test binary/crate target) rather than trusting the exit code alone."""
+    repo_dir = _repo_dir(task)
+    names_text = "\n".join(names)
+    safe_label = label.replace("-", "_")
+    names_file, log_file = f"/tmp/{safe_label}_names.txt", f"/tmp/cargo_test_{safe_label}.log"
+    exit_var, count_var = f"EXIT_{safe_label.upper()}", f"RUN_COUNT_{safe_label.upper()}"
+    fail_cmd = dockerexec.report_cmd(nonce, "FAIL", f"{label} tests failed")
+    harness_cmd = dockerexec.report_cmd(nonce, "HARNESS", f"no {label} tests matched the expected names")
+    return (
+        f"{dockerexec.write_file_cmd(names_text, names_file)}\n"
+        f"cd {repo_dir} && cargo test -- --exact $(cat {names_file}) > {log_file} 2>&1\n"
+        f"{exit_var}=$?\n"
+        f"{count_var}=$(grep -oE '[0-9]+ passed; [0-9]+ failed' {log_file} "
+        f"| awk '{{sum += $1 + $3}} END {{print sum+0}}')\n"
+        f'if [ "${count_var}" -eq 0 ]; then {harness_cmd}; '
+        f"elif [ ${exit_var} -ne 0 ]; then {fail_cmd}; fi\n"
+    ) + on_pass
 
 
 @dataclass(frozen=True)
@@ -384,8 +500,13 @@ def _volumes(task: Task) -> dict[str, str] | None:
     baked into the image at build time (see `_RepoConfig`'s docstring) and never touched again, and
     the handful of repos with a genuine per-call build step compile from source into a small
     per-container `dist`/`lib` output — not yet measured as worth caching the way Go's build cache
-    was (that mount was added only after measuring a 34x speedup, not assumed)."""
-    return None if _whole_suite_config(task) is not None else _cache_volumes()
+    was (that mount was added only after measuring a 34x speedup, not assumed). Rust mounts nothing
+    either: `target/` (cargo's own build cache) is confirmed pre-baked into the image the same way
+    — a `$CARGO_TARGET_DIR` host mount is a candidate future optimization, same "measure first"
+    bar as Go's `GOCACHE`, not something to add on assumption."""
+    if _whole_suite_config(task) is not None or _is_rust(task):
+        return None
+    return _cache_volumes()
 
 
 def _setup_script(task: Task, nonce: str) -> str:
@@ -428,6 +549,12 @@ def _run_test_stage(task: Task, nonce: str, names: list[str], label: str, on_pas
 
 
 def _discriminating_stage_script(task: Task, nonce: str, on_pass: str) -> str:
+    if _is_rust(task):
+        names = _rust_test_names(task, _DISCRIMINATING_TEST_KEYS)
+        if not names:
+            return dockerexec.report_cmd(nonce, "HARNESS", "no discriminating tests found on this row")
+        return _cargo_test_stage(task, nonce, names, "discriminating", on_pass)
+
     names = _discriminating_test_names(task)
     if not names:
         # Should never happen on a well-formed row — every task needs at least one test that
@@ -438,6 +565,12 @@ def _discriminating_stage_script(task: Task, nonce: str, on_pass: str) -> str:
 
 
 def _regression_guard_stage_script(task: Task, nonce: str, on_pass: str) -> str:
+    if _is_rust(task):
+        names = _rust_test_names(task, (_REGRESSION_GUARD_TEST_KEY,))
+        if not names:
+            return on_pass
+        return _cargo_test_stage(task, nonce, names, "regression-guard", on_pass)
+
     names = _regression_guard_test_names(task)
     if not names:
         # A genuinely empty p2p_tests set is normal (some rows have none) — nothing to check, so
