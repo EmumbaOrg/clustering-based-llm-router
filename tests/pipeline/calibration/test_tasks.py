@@ -57,7 +57,7 @@ def test_trimmed_row_still_satisfies_every_real_grader_accessor(monkeypatch, tmp
     assert multiswerl._discriminating_test_names(task) == ["TestOne"]
     assert multiswerl._regression_guard_test_names(task) == ["TestTwo"]
     assert "git apply /tmp/test.patch" in multiswerl._setup_script(task, "nonce")
-    assert "go test ./..." in multiswerl._run_test_stage(task, "nonce", ["TestOne"], "stage", on_pass="")
+    assert "go test ./..." in multiswerl._run_test_stage(task, "nonce", ["TestOne"], ["TestOne"], "stage", on_pass="")
     assert repo_context.remote_and_ref(task) == (
         "https://github.com/gin-gonic/gin.git", "28e57f58b184b2305ace192e02496bb89f6fd8cb",
     )

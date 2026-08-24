@@ -155,26 +155,43 @@ def test_grade_null_applies_no_fix_patch(monkeypatch):
 
 # --- staged grading -----------------------------------------------------------------------------
 
-def test_run_test_stage_reports_pass_fail_and_harness_off_exit_code_and_run_count():
-    script = multiswerl._run_test_stage(_task(), "nonce", ["TestFoo"], "mystage", on_pass="NEXT\n")
+def test_run_test_stage_reports_pass_fail_and_harness_off_per_test_pass_fail_lines():
+    script = multiswerl._run_test_stage(_task(), "nonce", ["TestFoo"], ["TestFoo"], "mystage", on_pass="NEXT\n")
     assert "go test ./..." in script
     assert dockerexec.report_cmd("nonce", "FAIL", "mystage tests failed") in script
     assert dockerexec.report_cmd("nonce", "HARNESS", "no mystage tests matched the expected names") in script
-    # Regression guard: `go test -run` exits 0 even when the pattern matches nothing (confirmed
-    # live this session, unlike pytest which errors loudly on an unknown node id) — the script
-    # must gate on the `=== RUN` count, not exit code alone.
-    assert "RUN_COUNT" in script
-    assert "=== RUN" in script
+    # Regression guard: the overall exit code and a blanket `=== RUN` count were both confirmed
+    # live this session to misattribute failures unrelated to the actual target test (an unrelated
+    # package failing to compile elsewhere in the module; an unrelated sibling subtest panicking
+    # under the same top-level name) — the script must instead check each target test's OWN
+    # `--- PASS`/`--- FAIL` line, via patterns read from a file (grep -F -f), never interpolated
+    # into the shell command directly (real test names can contain quotes/parens/etc).
+    assert "grep -F -o -f" in script
+    assert _b64("--- PASS: TestFoo\n") in script
+    assert _b64("--- FAIL: TestFoo\n") in script
     # A passing stage must fall through to whatever comes next, verbatim.
     assert script.endswith("NEXT\n")
 
 
 def test_run_test_stage_builds_a_safe_anchored_pattern_with_no_raw_special_characters():
-    # The names passed in are always already-top-level identifiers by the time they reach here —
-    # this just confirms the OR-pattern itself is built cleanly around them. The pattern travels
-    # into the container base64-encoded (dockerexec.write_file_cmd), not as a raw substring.
-    script = multiswerl._run_test_stage(_task(), "nonce", ["TestA", "TestB"], "stage", on_pass="")
+    # The run_names passed in are always already-top-level identifiers by the time they reach
+    # here — this just confirms the OR-pattern itself is built cleanly around them. The pattern
+    # travels into the container base64-encoded (dockerexec.write_file_cmd), not as a raw substring.
+    script = multiswerl._run_test_stage(_task(), "nonce", ["TestA", "TestB"], ["TestA", "TestB"], "stage", on_pass="")
     assert _b64("^(TestA|TestB)$") in script
+
+
+def test_run_test_stage_check_names_use_the_full_untruncated_name_not_the_run_pattern():
+    # A repo whose tests use Go's "one top-level test, many named subtests" pattern needs the
+    # FULL subtest name checked, even though `-run` only ever sees the truncated top-level name —
+    # confirmed live this session (jesseduffield/lazygit's `TestIntegration` fans out to hundreds
+    # of subtests; only the full name tells our target subtest's result apart from a sibling's).
+    script = multiswerl._run_test_stage(
+        _task(), "nonce", ["TestIntegration"], ["TestIntegration/foo/bar"], "mystage", on_pass=""
+    )
+    assert _b64("^(TestIntegration)$") in script
+    assert _b64("--- PASS: TestIntegration/foo/bar\n") in script
+    assert _b64("--- FAIL: TestIntegration/foo/bar\n") in script
 
 
 def test_discriminating_stage_reports_harness_when_no_discriminating_tests_exist():

@@ -335,6 +335,28 @@ def _regression_guard_test_names(task: Task) -> list[str]:
     return sorted(_top_level_names(task.row, _REGRESSION_GUARD_TEST_KEY))
 
 
+def _full_test_names(row: dict, key: str) -> set[str]:
+    """The ORIGINAL, untruncated test/subtest names for `key` — used only to check each target
+    test's own `--- PASS`/`--- FAIL` line in `go test -v`'s output after the run, never for the
+    `-run` pattern itself (see `_top_level_names` for why the pattern needs the truncated,
+    regex-safe form instead). Confirmed live this session why this distinction matters: the
+    truncated top-level name is what SELECTS which tests execute, but for a repo whose tests use
+    Go's "one top-level test, many named subtests" pattern (e.g. `TestIntegration/foo/bar`), only
+    the full name can tell OUR target subtest's result apart from an unrelated sibling subtest's."""
+    return set(row.get(key) or {})
+
+
+def _discriminating_full_test_names(task: Task) -> list[str]:
+    names: set[str] = set()
+    for key in _DISCRIMINATING_TEST_KEYS:
+        names |= _full_test_names(task.row, key)
+    return sorted(names)
+
+
+def _regression_guard_full_test_names(task: Task) -> list[str]:
+    return sorted(_full_test_names(task.row, _REGRESSION_GUARD_TEST_KEY))
+
+
 # Every one of these 14 repos is confirmed (from the official multi_swe_bench harness's own
 # run.sh, not guessed) to use the exact same bare `cargo test` command, with no PR-range
 # overrides — the most uniform of any language pilot so far, closer to Go's shape than to
@@ -523,28 +545,57 @@ def _setup_script(task: Task, nonce: str) -> str:
     )
 
 
-def _run_test_stage(task: Task, nonce: str, names: list[str], label: str, on_pass: str) -> str:
-    """Runs `names` and either falls through to `on_pass` (more script, appended verbatim) if they
-    all pass, or reports FAIL/HARNESS and stops — `report_cmd` ends in `exit 0`, so a fail/harness
-    branch here terminates the whole script and `on_pass` is simply never reached. Unlike
-    swesmith/swe-gym's pytest-based scripts, exit code alone is not enough: `go test -run` exits 0
-    even if the pattern matched ZERO tests anywhere (confirmed directly, unlike pytest which errors
-    loudly on an unknown node id), so a `=== RUN` count of zero is reported as HARNESS rather than
-    trusted as a pass — see module docstring point 5."""
+def _run_test_stage(task: Task, nonce: str, run_names: list[str], check_names: list[str], label: str, on_pass: str) -> str:
+    """Runs `run_names` (top-level, regex-safe truncated names) via `-run`, then decides
+    PASS/FAIL/HARNESS from each of `check_names`' (the ORIGINAL, untruncated) own `--- PASS:`/
+    `--- FAIL:` line in `go test -v`'s output — never from the overall exit code or a blanket
+    `=== RUN` count, both of which were confirmed live this session to misattribute failures that
+    have nothing to do with the tests we're actually checking:
+
+    - `go test ./...` fails the WHOLE run's exit code if ANY package in the module fails to
+      compile, even a third-party test-only dependency completely unrelated to the patch or the
+      target test (`gohugoio/hugo`: an unrelated `go-internal/testscript` Go-toolchain/stdlib
+      mismatch failed the run's exit code while the target test itself printed `--- PASS`).
+    - A blanket `=== RUN` count can't tell OUR named tests apart from an unrelated SIBLING subtest
+      under the same top-level name (`jesseduffield/lazygit`: `TestIntegration` fans out to
+      hundreds of subtests via one top-level Go test function; an unrelated subtest's panic — a
+      missing git identity in the container, not a patch problem — doesn't mean our two named
+      subtests failed).
+
+    `grep -F -f` (patterns read from a file, matched literally) is used throughout instead of
+    interpolating test names into the shell command: real test names contain characters that would
+    otherwise need careful shell escaping (`TestPostingsForMatchers/n!~"(1|2.5)"` is a real key
+    from this dataset, quote marks included) — reading patterns from a file sidesteps that
+    entirely, the same reasoning `write_file_cmd` already exists for. `go test -run` still exits 0
+    even if the pattern matches ZERO tests anywhere (confirmed directly, unlike pytest which errors
+    loudly on an unknown node id — see module docstring point 5), which is exactly the case the
+    "not every check_name got a PASS" branch below reports as HARNESS."""
     repo_dir = _repo_dir(task)
-    pattern = "^(" + "|".join(names) + ")$"
+    pattern = "^(" + "|".join(run_names) + ")$"
     safe_label = label.replace("-", "_")
-    pattern_file, log_file = f"/tmp/{safe_label}_pattern.txt", f"/tmp/go_test_{safe_label}.log"
-    exit_var, count_var = f"EXIT_{safe_label.upper()}", f"RUN_COUNT_{safe_label.upper()}"
+    pattern_file = f"/tmp/{safe_label}_pattern.txt"
+    log_file = f"/tmp/go_test_{safe_label}.log"
+    pass_patterns_file = f"/tmp/{safe_label}_pass_patterns.txt"
+    fail_patterns_file = f"/tmp/{safe_label}_fail_patterns.txt"
+    pass_var, fail_var, total_var = f"PASS_{safe_label.upper()}", f"FAIL_{safe_label.upper()}", f"TOTAL_{safe_label.upper()}"
     fail_cmd = dockerexec.report_cmd(nonce, "FAIL", f"{label} tests failed")
     harness_cmd = dockerexec.report_cmd(nonce, "HARNESS", f"no {label} tests matched the expected names")
+
+    # Trailing newline on every line (including the last) so `wc -l` counts correctly regardless
+    # of how many names there are — a file with content but no trailing newline undercounts by one.
+    pass_patterns = "".join(f"--- PASS: {name}\n" for name in check_names)
+    fail_patterns = "".join(f"--- FAIL: {name}\n" for name in check_names)
+
     return (
         f"{dockerexec.write_file_cmd(pattern, pattern_file)}\n"
+        f"{dockerexec.write_file_cmd(pass_patterns, pass_patterns_file)}\n"
+        f"{dockerexec.write_file_cmd(fail_patterns, fail_patterns_file)}\n"
         f'cd {repo_dir} && go test ./... -run "$(cat {pattern_file})" -v > {log_file} 2>&1\n'
-        f"{exit_var}=$?\n"
-        f"{count_var}=$(grep -c '^=== RUN' {log_file})\n"
-        f'if [ "${count_var}" -eq 0 ]; then {harness_cmd}; '
-        f"elif [ ${exit_var} -ne 0 ]; then {fail_cmd}; fi\n"
+        f"{total_var}=$(wc -l < {pass_patterns_file})\n"
+        f"{pass_var}=$(grep -F -o -f {pass_patterns_file} {log_file} | sort -u | wc -l)\n"
+        f"{fail_var}=$(grep -F -o -f {fail_patterns_file} {log_file} | sort -u | wc -l)\n"
+        f'if [ "${fail_var}" -gt 0 ]; then {fail_cmd}; '
+        f'elif [ "${pass_var}" -ne "${total_var}" ]; then {harness_cmd}; fi\n'
     ) + on_pass
 
 
@@ -561,7 +612,8 @@ def _discriminating_stage_script(task: Task, nonce: str, on_pass: str) -> str:
         # distinguishes buggy from fixed. Unlike the regression-guard stage below, an empty set
         # here is a dataset/harness problem worth surfacing, not a silent pass-through.
         return dockerexec.report_cmd(nonce, "HARNESS", "no discriminating tests found on this row")
-    return _run_test_stage(task, nonce, names, "discriminating", on_pass)
+    check_names = _discriminating_full_test_names(task)
+    return _run_test_stage(task, nonce, names, check_names, "discriminating", on_pass)
 
 
 def _regression_guard_stage_script(task: Task, nonce: str, on_pass: str) -> str:
@@ -576,7 +628,8 @@ def _regression_guard_stage_script(task: Task, nonce: str, on_pass: str) -> str:
         # A genuinely empty p2p_tests set is normal (some rows have none) — nothing to check, so
         # fall straight through rather than treating it as a harness condition.
         return on_pass
-    return _run_test_stage(task, nonce, names, "regression-guard", on_pass)
+    check_names = _regression_guard_full_test_names(task)
+    return _run_test_stage(task, nonce, names, check_names, "regression-guard", on_pass)
 
 
 def _whole_suite_test_script(task: Task, nonce: str, config: _RepoConfig, on_pass: str) -> str:
