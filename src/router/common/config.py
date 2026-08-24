@@ -75,6 +75,13 @@ class ModelConfig:
     rate_limit_rpm: int | None = None  # the provider's documented free-tier requests/minute cap
     # for this model, or None for a provider with no meaningful limit (local, controls). Paced by
     # runner.py's RateLimiter before every real API call — see its docstring for why.
+    supports_tool_calls: bool = True  # False for local llama.cpp providers, confirmed empirically
+    # this session: the model attempts a tool call (in its own training-time dialect, e.g.
+    # `<function-calls>{...}</function-calls>`) but llama.cpp's OpenAI-compatible endpoint never
+    # translates that into the wire protocol's `message.tool_calls` field — Pi only recognizes a
+    # tool call there, sees plain text instead, and returns the inert tool-call text as the "final
+    # answer". runner.py's build_prompt uses this to avoid inviting tool use a provider can't
+    # deliver on.
 
     @property
     def is_control(self) -> bool:

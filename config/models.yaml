@@ -81,21 +81,29 @@ models:
   # cost_input/cost_output here are nominal placeholders proportional to parameter count (there's
   # no metered API cost for a self-hosted model) — kept nonzero and distinct so normalise_costs
   # doesn't collapse the cost term to zero for this pair (see scoring.py's normalise_costs).
-  - model_id: qwen2.5-coder-7b-instruct
-    provider: local-7b
-    runner: pi
-    cost_input: 0.00003
-    cost_output: 0.00003
-    context_window: 8192
-    max_tokens: 2048
+  # - model_id: qwen2.5-coder-7b-instruct   # commented out for this pass — running 14B+7B
+  #   provider: local-7b                     # concurrently thrashed memory on this 18GB machine;
+  #   runner: pi                             # calibrating one model at a time instead.
+  #   cost_input: 0.00003
+  #   cost_output: 0.00003
+  #   context_window: 8192
+  #   max_tokens: 2048
+  #   supports_tool_calls: false             # see the qwen2.5-coder-14b-instruct entry below
 
-  - model_id: qwen2.5-coder-3b-instruct
-    provider: local-3b
+  # supports_tool_calls: false — confirmed empirically this session (a direct curl against this
+  # server's /v1/chat/completions with a real `tools` schema): the model attempts a tool call in
+  # its own dialect (`<function-calls>{...}</function-calls>`), but llama.cpp never translates
+  # that into `message.tool_calls`, so Pi never sees a real tool call. Left at the default (true)
+  # this made every swe-smith/swe-gym/multi-swe-rl task fail 100% of the time, for free — the
+  # model was asked to explore via tools that silently never fire. See runner.py's build_prompt.
+  - model_id: qwen2.5-coder-14b-instruct
+    provider: local-14b
     runner: pi
-    cost_input: 0.00001
-    cost_output: 0.00001
+    cost_input: 0.00008
+    cost_output: 0.00008
     context_window: 8192
     max_tokens: 2048
+    supports_tool_calls: false
 
   # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
   # Commented out so calibration doesn't attempt them. Uncomment as keys become available.

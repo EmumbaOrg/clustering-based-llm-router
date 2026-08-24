@@ -23,6 +23,7 @@ from ..common.config import (
 from ..common.logging_config import configure_logging
 from . import corpus as corpus_mod
 from . import evaluate as evaluate_mod
+from . import visualize as visualize_mod
 from .calibration import calibrate as calibrate_mod
 from .calibration import profiles as profiles_mod
 from .calibration.calibrate import SelectedTask
@@ -49,6 +50,7 @@ CORPUS_PATH = WORK_DIR / "corpus.jsonl"
 EMBEDDINGS_PATH = WORK_DIR / "embeddings.npz"
 CLUSTER_MAP_PATH = cluster_map_mod.ARTIFACTS_DIR / "cluster-map.json"
 PROFILES_PATH = profiles_mod.ARTIFACTS_DIR / "model-profiles.json"
+CLUSTER_VISUALIZATION_PATH = cluster_map_mod.ARTIFACTS_DIR / "cluster-visualization.png"
 
 
 def _run_corpus(sample: int | None) -> None:
@@ -69,11 +71,25 @@ def corpus(
     _run_corpus(sample)
 
 
-def _run_embed(sample: int | None) -> None:
+def _run_embed(sample: int | None, per_source_sample: int | None = None, seed: int = 42) -> None:
     if not CORPUS_PATH.exists():
         raise typer.BadParameter(f"{CORPUS_PATH} not found — run `corpus` first.")
     rows = corpus_mod.read_corpus_jsonl(CORPUS_PATH)
-    if sample is not None:
+    if per_source_sample is not None:
+        # Stratified by source rather than `rows[:N]` — a plain prefix cap would just take
+        # whichever source(s) happen to sort first in corpus.jsonl, not a balanced cross-section.
+        rng = random.Random(seed)
+        by_source: dict[str, list] = {}
+        for r in rows:
+            by_source.setdefault(r.source, []).append(r)
+        sampled = []
+        for source in sorted(by_source):
+            source_rows = sorted(by_source[source], key=lambda r: r.id)  # deterministic before shuffling
+            chosen = rng.sample(source_rows, min(per_source_sample, len(source_rows)))
+            sampled.extend(chosen)
+            typer.echo(f"  {source}: sampled {len(chosen)}/{len(source_rows)}")
+        rows = sampled
+    elif sample is not None:
         rows = rows[:sample]
     config = load_embedding_config()
     vectors = embed_mod.embed_texts([r.text for r in rows], config)
@@ -86,9 +102,15 @@ def embed(
     sample: int | None = typer.Option(
         None, help="Only embed the first N rows of corpus.jsonl (dry run)."
     ),
+    per_source_sample: int | None = typer.Option(
+        None, "--per-source-sample",
+        help="Randomly sample up to N rows PER SOURCE instead of the first N overall (e.g. for a "
+        "source-balanced visualization sample). Overrides --sample.",
+    ),
+    seed: int = typer.Option(42, help="Random seed for --per-source-sample."),
 ) -> None:
     """Build embeddings.npz."""
-    _run_embed(sample)
+    _run_embed(sample, per_source_sample, seed)
 
 
 def _run_cluster() -> None:
@@ -157,6 +179,46 @@ def run_all(
     _run_embed(None)  # corpus already applied the sample cap; don't cap twice
     _run_cluster()
     _run_build_artifact(k)
+
+
+def _run_visualize_clusters(sample_size: int, highlight: list[str], seed: int, output: str | None) -> None:
+    if not EMBEDDINGS_PATH.exists():
+        raise typer.BadParameter(f"{EMBEDDINGS_PATH} not found — run `embed` first.")
+    if not CLUSTER_MAP_PATH.exists():
+        raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
+
+    ids, vectors = embed_mod.load_embeddings(EMBEDDINGS_PATH)
+    cluster_map = load_cluster_map(CLUSTER_MAP_PATH)
+    out_path = Path(output) if output else CLUSTER_VISUALIZATION_PATH
+
+    result_path, missing = visualize_mod.plot_clusters(
+        ids, vectors, cluster_map, out_path, sample_size=sample_size, highlight_ids=highlight, seed=seed,
+    )
+    if missing:
+        typer.echo(f"Warning: {len(missing)} --highlight task_id(s) not found in embeddings.npz: {missing}")
+    typer.echo(f"Wrote cluster visualization ({sample_size} sampled tasks) to {result_path}")
+
+
+# Same reasoning as _SOURCE_OPTION above — a module-level singleton so ruff's B008 doesn't flag the
+# list-typed Option default, while still supporting a repeatable `--highlight` flag.
+_HIGHLIGHT_OPTION = typer.Option(
+    None, "--highlight", help="task_id to annotate on the plot (repeatable), e.g. "
+    "--highlight BigCodeBench/0 --highlight ds1000:42. Included even if not in the random sample."
+)
+
+
+@app.command("visualize-clusters")
+def visualize_clusters(
+    sample_size: int = typer.Option(500, help="How many tasks to randomly sample and plot."),
+    highlight: list[str] | None = _HIGHLIGHT_OPTION,
+    seed: int = typer.Option(42, help="Sampling/PCA random seed."),
+    output: str | None = typer.Option(
+        None, help="Output PNG path. Defaults to artifacts/cluster-visualization.png."
+    ),
+) -> None:
+    """Plot a 2D PCA projection of sampled tasks colored by cluster, against the cluster centroids
+    from cluster-map.json — a sanity-check view of where tasks actually land."""
+    _run_visualize_clusters(sample_size, highlight or [], seed, output)
 
 
 def _load_selected_tasks() -> tuple[ClusterMap, EmbeddingConfig, CalibrationConfig, list[ModelConfig], list[SelectedTask]]:

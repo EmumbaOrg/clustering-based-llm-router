@@ -14,9 +14,9 @@
 gradeable_sources:
   - bigcodebench
   - ds1000
-  - swe-smith
-  - swe-gym
-  - multi-swe-rl
+  - swe-smith    # Docker-based — commented out: Docker isn't running and we're already loading
+  - swe-gym      # two heavy local LLM servers (7B+14B); avoid repeating the earlier swap-thrash
+  - multi-swe-rl # incident by also spinning up Docker Desktop's VM on top of that.
 
 # Target calibration tasks per cluster. The spec's reference figure is 20+ per cluster against a
 # 24-cluster map; keep it low here because this pass targets pipeline completeness, not

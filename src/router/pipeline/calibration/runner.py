@@ -159,6 +159,38 @@ _CONTEXT_INSTRUCTIONS = {
     ),
 }
 
+# Used instead of _CONTEXT_INSTRUCTIONS when the model config says `supports_tool_calls: false`
+# (currently: local llama.cpp providers). Confirmed empirically this session: given the
+# tool-inviting instruction above, these models attempt a tool call in their own training-time
+# dialect (e.g. `<function-calls>{...}</function-calls>`), but llama.cpp's OpenAI-compatible
+# endpoint never translates that into `message.tool_calls` — Pi sees plain text, not a tool call,
+# and returns the inert tool-call text as the "final answer", which always fails to apply as a
+# patch. Asking directly for a diff — the same shape `_INSTRUCTIONS` already uses when there's no
+# repo context at all — at least gets a gradeable answer instead of a guaranteed failure.
+_CONTEXT_INSTRUCTIONS_NO_TOOLS = {
+    "swe-smith": (
+        "The repository is checked out in your current working directory, at the state before "
+        "this issue was fixed, but you do NOT have working tool access in this environment — do "
+        "not attempt to call any read/bash/edit/write tool. Based on the issue description alone, "
+        "respond with a unified diff (git apply-compatible) that fixes it, and nothing else. Wrap "
+        "it in a single ```diff code block."
+    ),
+    "swe-gym": (
+        "The repository is checked out in your current working directory, at the state before "
+        "this issue was fixed, but you do NOT have working tool access in this environment — do "
+        "not attempt to call any read/bash/edit/write tool. Based on the issue description alone, "
+        "respond with a unified diff (git apply-compatible) that fixes it, and nothing else. Wrap "
+        "it in a single ```diff code block."
+    ),
+    "multi-swe-rl": (
+        "The repository is checked out in your current working directory, at the state before "
+        "this issue was fixed, but you do NOT have working tool access in this environment — do "
+        "not attempt to call any read/bash/edit/write tool. Based on the issue description alone, "
+        "respond with a unified diff (git apply-compatible) that fixes it, and nothing else. Wrap "
+        "it in a single ```diff code block."
+    ),
+}
+
 
 @dataclasses.dataclass(frozen=True)
 class RunResult:
@@ -174,9 +206,10 @@ class RunResult:
     # route this to `error_harness` too, the same as rate_limited.
 
 
-def build_prompt(task: Task, has_repo_context: bool = False) -> str:
+def build_prompt(task: Task, has_repo_context: bool = False, supports_tool_calls: bool = True) -> str:
     if has_repo_context:
-        context_instruction = _CONTEXT_INSTRUCTIONS.get(task.source)
+        instructions = _CONTEXT_INSTRUCTIONS if supports_tool_calls else _CONTEXT_INSTRUCTIONS_NO_TOOLS
+        context_instruction = instructions.get(task.source)
         if context_instruction is not None:
             return f"{task.prompt}\n\n{context_instruction}"
     instruction = _INSTRUCTIONS.get(task.source, "Respond with only the code that solves this.")
@@ -186,7 +219,13 @@ def build_prompt(task: Task, has_repo_context: bool = False) -> str:
 def extract_solution(response: str) -> str | None:
     match = _CODE_BLOCK_RE.search(response)
     if match:
-        extracted = match.group(1).strip()
+        # `.strip("\n")` only — a bare `.strip()` here would also eat leading INDENTATION off the
+        # first real line (it strips all leading whitespace, not just blank lines). That's fatal
+        # for bigcodebench: the grader concatenates `code_prompt + solution` directly (code_prompt
+        # ends mid-signature, e.g. "def task_func(...):\n"), so a solution missing its first
+        # line's indentation always raises IndentationError regardless of whether the model's
+        # logic was right. Confirmed empirically this session against real calibration output.
+        extracted = match.group(1).strip("\n")
         return extracted or None
     stripped = response.strip()
     return stripped or None
@@ -209,7 +248,7 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
             return RunResult(solution=None, detail=str(e), context_unavailable=True)
 
     try:
-        prompt = build_prompt(task, has_repo_context=worktree is not None)
+        prompt = build_prompt(task, has_repo_context=worktree is not None, supports_tool_calls=model.supports_tool_calls)
         args = [
             "pi", "-p", prompt,
             "--no-session",
