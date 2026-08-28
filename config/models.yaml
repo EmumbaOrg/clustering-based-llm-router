@@ -81,29 +81,57 @@ models:
   # cost_input/cost_output here are nominal placeholders proportional to parameter count (there's
   # no metered API cost for a self-hosted model) — kept nonzero and distinct so normalise_costs
   # doesn't collapse the cost term to zero for this pair (see scoring.py's normalise_costs).
-  # - model_id: qwen2.5-coder-7b-instruct   # commented out for this pass — running 14B+7B
-  #   provider: local-7b                     # concurrently thrashed memory on this 18GB machine;
-  #   runner: pi                             # calibrating one model at a time instead.
-  #   cost_input: 0.00003
-  #   cost_output: 0.00003
-  #   context_window: 8192
-  #   max_tokens: 2048
-  #   supports_tool_calls: false             # see the qwen2.5-coder-14b-instruct entry below
-
-  # supports_tool_calls: false — confirmed empirically this session (a direct curl against this
-  # server's /v1/chat/completions with a real `tools` schema): the model attempts a tool call in
-  # its own dialect (`<function-calls>{...}</function-calls>`), but llama.cpp never translates
-  # that into `message.tool_calls`, so Pi never sees a real tool call. Left at the default (true)
-  # this made every swe-smith/swe-gym/multi-swe-rl task fail 100% of the time, for free — the
-  # model was asked to explore via tools that silently never fire. See runner.py's build_prompt.
-  - model_id: qwen2.5-coder-14b-instruct
-    provider: local-14b
+  # Qwen2.5-Coder (7B/14B) candidates removed — confirmed empirically this session that
+  # llama.cpp never translates their tool-call attempts into a real `message.tool_calls` (wrong
+  # XML tag, upstream llama.cpp issue, unresolved), so every swe-smith/swe-gym/multi-swe-rl task
+  # failed 100% of the time regardless of the model's actual coding ability. Rather than keep a
+  # model that's capped to self-contained sources only, Llama-3.1-8B-Instruct below has confirmed
+  # working tool calls (verified via direct curl: real `message.tool_calls`, `finish_reason:
+  # "tool_calls"`) and isn't limited that way.
+  - model_id: llama-3.1-8b-instruct
+    provider: local-llama31
     runner: pi
-    cost_input: 0.00008
-    cost_output: 0.00008
+    cost_input: 0.00003
+    cost_output: 0.00003
     context_window: 8192
     max_tokens: 2048
-    supports_tool_calls: false
+
+  # ── Anthropic, native Pi provider (no ~/.pi/agent/models.json entry needed) ────────────────
+  # `provider: anthropic` is built into Pi itself — confirmed via `pi auth check --provider
+  # anthropic` returning `not_ready` (a recognized-but-unauthenticated provider), not an
+  # unknown-provider error. Needs `pi`'s own login (OAuth or ANTHROPIC_API_KEY) before use — no
+  # baseUrl/apiKey config on our side at all, unlike every other provider in this file.
+  # cost_input/cost_output converted from Anthropic's published $1.00 / $5.00 per 1M tokens
+  # (this file's convention is $ per 1k) — real, metered spend, unlike the local candidates above.
+  - model_id: claude-haiku-4-5
+    provider: anthropic
+    runner: pi
+    cost_input: 0.001
+    cost_output: 0.005
+    context_window: 200000
+    max_tokens: 2048
+
+  # ── OpenAI, via Pi's plain `openai` provider ────────────────────────────────────────────────
+  # `pi --list-models luna` resolves this exact (provider, model_id) pair against Pi's own model
+  # catalog, which is where cost_input/cost_output below come from (OpenAI's published $0.20/$1.20
+  # per 1M tokens, developers.openai.com/api/docs/models/gpt-5.6-luna, converted to this file's
+  # $-per-1k convention) — Pi computes its own per-call cost from the same catalog independently
+  # (see runner.py's TokenUsage), so these two numbers should always agree.
+  # The key was originally stored under Pi's `azure-openai-responses` provider by mistake (needs
+  # an Azure endpoint, which this key doesn't have — confirmed failing with "Azure OpenAI base URL
+  # is required"); re-added under plain `openai` and confirmed via `pi auth check --provider
+  # openai` -> ready. context_window is 272K here (not the 1.05M quoted for the azure-responses
+  # variant) — that's `pi --list-models luna`'s reported ceiling for THIS provider mapping, and
+  # matches OpenAI's own pricing page: requests over 272K input tokens get a 2x/1.5x price
+  # multiplier, i.e. 272K is the standard-rate window, not the model's absolute max.
+  # Per instruction: gpt-5.6-luna ONLY — no other model from the gpt-5.6/gpt-5 family is enabled.
+  - model_id: gpt-5.6-luna
+    provider: openai
+    runner: pi
+    cost_input: 0.0002
+    cost_output: 0.0012
+    context_window: 272000
+    max_tokens: 128000
 
   # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
   # Commented out so calibration doesn't attempt them. Uncomment as keys become available.
