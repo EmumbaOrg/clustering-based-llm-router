@@ -138,24 +138,42 @@ _INSTRUCTIONS = {
 # this task (see build_prompt) — the agent has read/bash/edit/write tools pointed at it, so it's
 # told to use them directly rather than hand-write a diff from memory. Only sources with a
 # _REPO_SOURCES entry (repo_context.py) ever reach this path.
+#
+# No "summarize the change or include a diff" escape hatch — confirmed empirically this session
+# why that phrasing was a real bug, not just imprecise wording. There is only ONE path that ever
+# reaches the grading Docker container: repo_context.extract_diff() runs `git diff` on this local
+# worktree AFTER the call finishes, and THAT diff — never the agent's prose or a code block in its
+# text response — is what gets shipped and `git apply`'d in a container that shares nothing else
+# with this worktree. A model that took the "summarize instead" option produced plain code with no
+# diff structure (confirmed on real claude-haiku-4-5 calibration rows, e.g. arrow-py/sqlfluff:
+# bare function bodies, not `diff --git` output) — extract_diff() found no real edits to report,
+# fell back to parsing that text, and `git apply` had nothing valid to work with. It could never
+# have worked regardless of how the model formatted its answer. The fix is to remove the option
+# entirely: the only real deliverable is actually editing the files.
 _CONTEXT_INSTRUCTIONS = {
     "swe-smith": (
         "The repository is checked out in your current working directory, at the state before "
-        "this issue was fixed. Use your available tools to explore the codebase and understand "
-        "the issue, then make the necessary changes directly using your edit/write tools. You may "
-        "also summarize the change or include a diff in your final response."
+        "this issue was fixed. Use your available tools to explore the codebase, understand the "
+        "issue, and make the necessary changes directly using your edit/write tools — actually "
+        "modify the files; do not just describe or show the fix in your response. Your final "
+        "message does not need to include any code or diff — the changes you make to the files "
+        "are the submission."
     ),
     "swe-gym": (
         "The repository is checked out in your current working directory, at the state before "
-        "this issue was fixed. Use your available tools to explore the codebase and understand "
-        "the issue, then make the necessary changes directly using your edit/write tools. You may "
-        "also summarize the change or include a diff in your final response."
+        "this issue was fixed. Use your available tools to explore the codebase, understand the "
+        "issue, and make the necessary changes directly using your edit/write tools — actually "
+        "modify the files; do not just describe or show the fix in your response. Your final "
+        "message does not need to include any code or diff — the changes you make to the files "
+        "are the submission."
     ),
     "multi-swe-rl": (
         "The repository is checked out in your current working directory, at the state before "
-        "this issue was fixed. Use your available tools to explore the codebase and understand "
-        "the issue, then make the necessary changes directly using your edit/write tools. You may "
-        "also summarize the change or include a diff in your final response."
+        "this issue was fixed. Use your available tools to explore the codebase, understand the "
+        "issue, and make the necessary changes directly using your edit/write tools — actually "
+        "modify the files; do not just describe or show the fix in your response. Your final "
+        "message does not need to include any code or diff — the changes you make to the files "
+        "are the submission."
     ),
 }
 
