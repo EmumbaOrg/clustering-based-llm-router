@@ -261,12 +261,20 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
         try:
             cached_clone = repo_context.ensure_cached_clone(remote_url)
             worktree = repo_context.checkout_worktree(cached_clone, ref)
+            repo_context.apply_post_checkout_setup(worktree, task)
         except repo_context.RepoContextError as e:
             logger.error(f"repo context unavailable for {task.task_id}: {e}")
+            # apply_post_checkout_setup can fail AFTER checkout_worktree already created a real
+            # worktree (unlike ensure_cached_clone/checkout_worktree, which clean up after
+            # themselves on failure) — without this, that worktree would leak, since this early
+            # return skips the try/finally below that normally owns worktree cleanup.
+            if worktree is not None:
+                repo_context.remove_worktree(cached_clone, worktree)
             return RunResult(solution=None, detail=str(e), context_unavailable=True)
 
     try:
-        prompt = build_prompt(task, has_repo_context=worktree is not None, supports_tool_calls=model.supports_tool_calls)
+        has_repo_context = worktree is not None
+        prompt = build_prompt(task, has_repo_context=has_repo_context, supports_tool_calls=model.supports_tool_calls)
         args = [
             "pi", "-p", prompt,
             "--no-session",

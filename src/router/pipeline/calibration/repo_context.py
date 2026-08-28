@@ -147,6 +147,63 @@ def checkout_worktree(cached_clone: Path, ref: str) -> Path:
     return worktree
 
 
+def _inject_swesmith_bug(worktree: Path, task: Task) -> None:
+    """swe-smith's mirror repos (`_swesmith_remote_and_ref`) check out at the CLEAN, pre-bug
+    commit — `task.row["patch"]` is the bug-injection diff that `grading/swesmith.py`'s Docker
+    setup applies forward before anything else happens. Without doing the same here, an agent
+    explores/edits code that doesn't have the bug its `problem_statement` describes, and writes a
+    diff against the wrong baseline — confirmed empirically this session: such a diff applies
+    cleanly against the clean worktree, then fails against the actually-buggy grading container,
+    which is exactly the "candidate patch failed to apply" failure seen across every model on
+    swe-smith tasks (not a model-quality or tool-use problem at all).
+
+    Committed, not left as an uncommitted working-tree change: `extract_diff()` does `git diff`
+    against HEAD, and must only ever capture the AGENT's own edits — if this injection stayed
+    unstaged, it would be indistinguishable from the agent's own changes and get folded into
+    `extract_diff()`'s output, corrupting it with a copy of the very step grading already applies
+    on its own inside Docker. Committing moves HEAD to "bug injected" as the new baseline, so a
+    later `git diff` reports only what the agent does on top of that."""
+    patch = task.row.get("patch")
+    if not patch:
+        return
+    patch_file = worktree / ".router-bug-injection.patch"
+    patch_file.write_text(patch)
+    try:
+        proc = subprocess.run(
+            ["git", "apply", str(patch_file)],
+            cwd=worktree, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+        )
+    finally:
+        patch_file.unlink(missing_ok=True)
+    if proc.returncode != 0:
+        raise RepoContextError(f"swe-smith bug-injection patch failed to apply: {proc.stderr[-500:].strip()}")
+
+    subprocess.run(["git", "add", "-A"], cwd=worktree, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False)
+    subprocess.run(
+        # -c user.*  inline rather than relying on any global/repo git config being present — this
+        # commit is purely an internal baseline marker, never pushed or attributed to anyone.
+        ["git", "-c", "user.email=router@localhost", "-c", "user.name=router",
+         "commit", "--no-verify", "-m", "router: inject swe-smith bug (pre-task baseline)"],
+        cwd=worktree, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+    )
+
+
+# Per-source post-checkout setup beyond the plain `git worktree add` — only swe-smith needs one
+# today (see `_inject_swesmith_bug`); swe-gym and multi-swe-rl check out a real historical pre-fix
+# commit directly (confirmed empirically this session: their own gold fix patches apply forward
+# cleanly against the checked-out worktree, meaning the buggy code is already there — no injection
+# needed). A source with no entry here is a deliberate no-op, not an oversight.
+_POST_CHECKOUT_SETUP = {
+    "swe-smith": _inject_swesmith_bug,
+}
+
+
+def apply_post_checkout_setup(worktree: Path, task: Task) -> None:
+    setup = _POST_CHECKOUT_SETUP.get(task.source)
+    if setup is not None:
+        setup(worktree, task)
+
+
 def remove_worktree(cached_clone: Path, worktree: Path) -> None:
     """Best-effort, never raises — cleanup failing must not turn a completed (or already-failed)
     `run_pi` call into a crash. Matches `dockerexec.cleanup_image`'s discipline."""
