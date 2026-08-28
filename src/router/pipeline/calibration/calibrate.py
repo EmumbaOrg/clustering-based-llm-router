@@ -172,6 +172,16 @@ def run_and_grade(
             # An infra/quota rejection, not the model failing to answer — excluded rather than
             # counted as a wrong answer, same reasoning as error_timeout/error_missing_dep.
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
+        elif run_result.harness_error:
+            # The provider itself rejected the call (e.g. an API auth failure) — pi exits 0 in this
+            # case, so it never reached the model at all. Confirmed live this session: 15% of one
+            # model's calls in one run hit this, previously miscounted as error_no_solution.
+            result = GradeResult(outcome="error_harness", detail=run_result.detail)
+        elif run_result.timed_out:
+            # Our own subprocess timeout fired — a call that never finished isn't evidence the
+            # model couldn't solve the task, just that it didn't in the time we gave it. Distinct
+            # from a grader's own error_timeout (about the test run, not the model call).
+            result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.solution is None:
             result = GradeResult(outcome="error_no_solution", detail=run_result.detail)
         else:

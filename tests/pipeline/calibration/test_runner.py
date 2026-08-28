@@ -293,4 +293,49 @@ def test_run_pi_cleans_up_the_worktree_even_when_pi_times_out(monkeypatch, tmp_p
     result = run_pi(_swesmith_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
 
     assert result.solution is None
+    assert result.timed_out is True
     assert removed == [worktree]
+
+
+# --- provider-level errors (see runner._parse_json_stream's NONCE_PLACEHOLDER-adjacent docstring) --
+
+def test_run_pi_flags_a_provider_error_as_harness_error_not_no_solution(monkeypatch):
+    # Regression test: pi exits 0 even when the underlying provider call itself failed (confirmed
+    # live this session against a real Anthropic 401) — the failure is only visible as
+    # `stopReason: "error"` on the last assistant message in the JSON event stream. Before this fix,
+    # such a call looked identical to a genuine empty response and was miscounted as
+    # error_no_solution (graded, counts against the model) instead of error_harness (excluded).
+    stdout = (
+        '{"type":"session"}\n'
+        '{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"hi"}]},'
+        '{"role":"assistant","content":[],"stopReason":"error",'
+        '"errorMessage":"401 {\\"type\\":\\"error\\",\\"error\\":{\\"message\\":\\"API key is invalid.\\"}}"}]}\n'
+    )
+
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    result = run_pi(_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert result.solution is None
+    assert result.harness_error is True
+    assert "API key is invalid" in result.detail
+
+
+def test_run_pi_does_not_flag_a_normal_completion_as_a_harness_error(monkeypatch):
+    stdout = (
+        '{"type":"session"}\n'
+        '{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"hi"}]},'
+        '{"role":"assistant","content":[{"type":"text","text":"```python\\nreturn 1\\n```"}],'
+        '"stopReason":"stop"}]}\n'
+    )
+
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    result = run_pi(_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert result.harness_error is False
+    assert result.solution == "return 1"

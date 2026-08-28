@@ -235,6 +235,15 @@ class RunResult:
     context_unavailable: bool = False  # True if repo_context setup (clone/checkout) itself failed,
     # before pi was ever invoked — an infra problem, not the model's fault, so calibrate.py must
     # route this to `error_harness` too, the same as rate_limited.
+    harness_error: bool = False  # True when Pi's own event stream reports the PROVIDER rejected
+    # the call (e.g. an API auth failure) — confirmed live this session that Pi exits 0 in this
+    # case, so nothing else here would ever catch it. `detail` carries the provider's error message.
+    # Routes to `error_harness`, same reasoning as rate_limited/context_unavailable: the call never
+    # reached the model, so it can't be evidence of the model failing to answer.
+    timed_out: bool = False  # True when OUR subprocess timeout fired (distinct from a grader's own
+    # error_timeout, which is about the TEST run, not the model call). Previously fell through to
+    # `error_no_solution` like a genuine empty response — but a call that never finished isn't
+    # evidence the model couldn't solve the task, just that it didn't in the time we gave it.
     usage: TokenUsage | None = None  # None when pi's stdout wasn't parseable JSON (e.g. it never
     # ran, or emitted plain text) — a genuinely unknown cost, not a zero one; calibrate.py treats
     # that distinction as "0 measured" for the CSV since there's nothing else to report.
@@ -265,11 +274,23 @@ def extract_solution(response: str) -> str | None:
     return stripped or None
 
 
-def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None]:
+def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None, str | None]:
     """Parses `pi --mode json`'s newline-delimited event stream, returning the final assistant
-    message's text and the call's total usage/cost. `agent_end` is always the last event and
-    carries the full conversation, so it alone has everything needed — no need to track events as
-    they stream by.
+    message's text, the call's total usage/cost, and — new — an API-level error message if the
+    provider itself rejected the call.
+
+    That third value matters because Pi's own process exit code does NOT reflect this: confirmed
+    live this session that a real Anthropic 401 ("API key is invalid") left `pi` exiting 0, with
+    the failure visible only as `stopReason: "error"` / `errorMessage: "..."` on the last assistant
+    message. Before this, `run_pi` had no way to tell "the provider rejected the call" apart from
+    "the model genuinely produced nothing" — both looked identical (empty text, zero usage), and
+    calibrate.py counted the former as `error_no_solution` (graded, counts against the model)
+    instead of `error_harness` (excluded) — a real, observed 15% of one model's calls in one run,
+    all in the back half, consistent with a credential degrading partway through rather than being
+    broken from the start.
+
+    `agent_end` is always the last event and carries the full conversation, so it alone has
+    everything needed — no need to track events as they stream by.
 
     Usage is summed across EVERY assistant message in the turn, not read off the last one alone —
     confirmed live this session that each assistant message's `usage` is PER-TURN, not cumulative,
@@ -282,9 +303,9 @@ def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None]:
     one assistant message, where "sum across messages" and "last message" are the same number,
     which is why that earlier verification didn't catch this.
 
-    Returns (None, None) on anything that isn't this NDJSON shape — e.g. a test's plain-text stdout
-    fixture, or a real failure — so callers fall back to treating `stdout` as the raw response,
-    exactly like before this format existed."""
+    Returns (None, None, None) on anything that isn't this NDJSON shape — e.g. a test's plain-text
+    stdout fixture, or a real failure — so callers fall back to treating `stdout` as the raw
+    response, exactly like before this format existed."""
     agent_end = None
     for line in stdout.splitlines():
         line = line.strip()
@@ -298,16 +319,20 @@ def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None]:
             agent_end = event
 
     if agent_end is None:
-        return None, None
+        return None, None, None
 
     assistant_messages = [m for m in agent_end.get("messages", []) if m.get("role") == "assistant"]
     if not assistant_messages:
-        return None, None
+        return None, None, None
 
     last = assistant_messages[-1]
     text = "".join(
         block.get("text", "") for block in last.get("content", []) if block.get("type") == "text"
     )
+    # Checked on the LAST message only: a mid-conversation error on an earlier turn that Pi
+    # recovered from (retried and got a real response afterward) isn't a call-level failure — only
+    # the call's own final state matters here, mirroring how `text` above is also read from `last`.
+    error_message = last.get("errorMessage") if last.get("stopReason") == "error" else None
 
     total_input = 0
     total_output = 0
@@ -322,9 +347,8 @@ def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None]:
         total_output += usage_obj.get("output", 0)
         total_cost += (usage_obj.get("cost") or {}).get("total", 0.0)
 
-    if not saw_usage:
-        return text, None
-    return text, TokenUsage(input_tokens=total_input, output_tokens=total_output, cost_usd=total_cost)
+    usage = TokenUsage(input_tokens=total_input, output_tokens=total_output, cost_usd=total_cost) if saw_usage else None
+    return text, usage, error_message
 
 
 def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.sleep) -> RunResult:
@@ -391,7 +415,7 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
                 )
             except subprocess.TimeoutExpired:
                 logger.warning(f"pi call timed out after {timeout_seconds}s: {model.model_id} on task {task.task_id}")
-                return RunResult(solution=None, detail=f"pi timed out after {timeout_seconds}s")
+                return RunResult(solution=None, detail=f"pi timed out after {timeout_seconds}s", timed_out=True)
             except FileNotFoundError:
                 logger.error(f"pi binary not found on PATH ({model.model_id} on task {task.task_id})")
                 return RunResult(solution=None, detail="pi binary not found on PATH")
@@ -421,7 +445,17 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
                     rate_limited=rate_limited,
                 )
 
-            final_text, usage = _parse_json_stream(proc.stdout)
+            final_text, usage, error_message = _parse_json_stream(proc.stdout)
+            if error_message is not None:
+                # Pi itself exits 0 even when the underlying provider call failed (confirmed live:
+                # a real Anthropic 401 "API key is invalid") — this is an infra/credential problem,
+                # not the model failing to answer, so it must not be scored as error_no_solution.
+                logger.error(
+                    f"provider rejected the call (pi exited 0 but reported an error): "
+                    f"{model.model_id} on task {task.task_id} — {error_message}"
+                )
+                return RunResult(solution=None, detail=error_message, raw_response=proc.stdout, harness_error=True)
+
             response_text = final_text if final_text is not None else proc.stdout
 
             # A tool-using agent's actual edits (captured via `git diff`) are preferred over

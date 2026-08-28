@@ -200,6 +200,29 @@ def test_run_and_grade_still_treats_a_genuine_no_solution_as_a_real_failure(monk
     assert result.outcome == "error_no_solution"
 
 
+def test_run_and_grade_maps_a_harness_error_to_error_harness_not_error_no_solution(monkeypatch):
+    # The provider itself rejected the call (e.g. an API auth failure) — pi exits 0 in this case, so
+    # this never reached the model at all. Confirmed live this session: a real 401 got silently
+    # miscounted as error_no_solution before this fix.
+    monkeypatch.setattr(
+        calibrate_module.runner_mod, "run_pi",
+        lambda task, model, timeout_seconds: RunResult(solution=None, detail="401 API key is invalid", harness_error=True),
+    )
+    result, _solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
+    assert result.outcome == "error_harness"
+
+
+def test_run_and_grade_maps_a_timed_out_run_result_to_error_harness_not_error_no_solution(monkeypatch):
+    # A call that never finished isn't evidence the model couldn't solve the task, just that it
+    # didn't in the time we gave it — must not count against the model's error rate.
+    monkeypatch.setattr(
+        calibrate_module.runner_mod, "run_pi",
+        lambda task, model, timeout_seconds: RunResult(solution=None, detail="pi timed out after 300s", timed_out=True),
+    )
+    result, _solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
+    assert result.outcome == "error_harness"
+
+
 def test_expected_solution_falls_back_to_the_gold_patch_when_reference_solution_is_empty():
     # swe-smith/swe-gym leave reference_solution empty on purpose (see tasks.py) — the
     # review-worthy "expected" text for those sources is the gold patch instead.
