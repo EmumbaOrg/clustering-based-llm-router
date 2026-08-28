@@ -24,8 +24,11 @@ signature too, not just exceptions raised directly by our own harness setup.
 """
 from __future__ import annotations
 
-from .base import GradeResult, Task, run_graded_script
+from .base import GradeResult, NONCE_PLACEHOLDER, Task, run_graded_script
 
+# Every "RESULT_NONCE_PLACEHOLDER:" below has that literal text substituted for a real per-call
+# nonce by run_graded_script before this ever runs — see base.py's NONCE_PLACEHOLDER docstring for
+# why a bare "RESULT:" sentinel is forgeable by the candidate code this script itself exec()s.
 _GRADE_SCRIPT = r"""
 import sys
 import unittest
@@ -39,21 +42,22 @@ try:
     suite = unittest.TestLoader().loadTestsFromTestCase(ns["TestCases"])
     result = unittest.TextTestRunner(stream=sys.stderr, verbosity=0).run(suite)
 except (ImportError, ModuleNotFoundError) as e:
-    print(f"RESULT: ERROR_MISSING_DEP {type(e).__name__}: {e}")
+    print(f"RESULT_NONCE_PLACEHOLDER: ERROR_MISSING_DEP {type(e).__name__}: {e}")
     sys.exit(0)
 except Exception as e:
-    print(f"RESULT: FAIL setup-exception {type(e).__name__}: {e}")
+    print(f"RESULT_NONCE_PLACEHOLDER: FAIL setup-exception {type(e).__name__}: {e}")
     sys.exit(0)
 
 if result.wasSuccessful():
-    print("RESULT: PASS")
+    print("RESULT_NONCE_PLACEHOLDER: PASS")
 else:
     tracebacks = "\n".join(tb for _, tb in (result.failures + result.errors))
     if "ModuleNotFoundError" in tracebacks or "ImportError" in tracebacks:
-        print("RESULT: ERROR_MISSING_DEP raised during test execution (see tracebacks)")
+        print("RESULT_NONCE_PLACEHOLDER: ERROR_MISSING_DEP raised during test execution (see tracebacks)")
     else:
-        print(f"RESULT: FAIL {len(result.failures)} failures, {len(result.errors)} errors")
+        print(f"RESULT_NONCE_PLACEHOLDER: FAIL {len(result.failures)} failures, {len(result.errors)} errors")
 """
+assert NONCE_PLACEHOLDER in _GRADE_SCRIPT, "sentinel placeholder text drifted out of sync with base.py"
 
 
 def grade(task: Task, solution: str, timeout_seconds: int = 60) -> GradeResult:

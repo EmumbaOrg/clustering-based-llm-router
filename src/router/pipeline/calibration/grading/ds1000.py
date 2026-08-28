@@ -19,8 +19,11 @@ during grading is classified error_missing_dep rather than fail.
 """
 from __future__ import annotations
 
-from .base import GradeResult, Task, run_graded_script
+from .base import GradeResult, NONCE_PLACEHOLDER, Task, run_graded_script
 
+# Every "RESULT_NONCE_PLACEHOLDER:" below has that literal text substituted for a real per-call
+# nonce by run_graded_script before this ever runs — see base.py's NONCE_PLACEHOLDER docstring for
+# why a bare "RESULT:" sentinel is forgeable by the candidate code this script itself exec()s.
 _GRADE_SCRIPT = r"""
 import sys
 
@@ -35,17 +38,18 @@ try:
     if "test_string" in ns:
         ns["test_string"](solution)
 except (ImportError, ModuleNotFoundError) as e:
-    print(f"RESULT: ERROR_MISSING_DEP {type(e).__name__}: {e}")
+    print(f"RESULT_NONCE_PLACEHOLDER: ERROR_MISSING_DEP {type(e).__name__}: {e}")
     sys.exit(0)
 except AssertionError as e:
-    print(f"RESULT: FAIL assertion: {e}")
+    print(f"RESULT_NONCE_PLACEHOLDER: FAIL assertion: {e}")
     sys.exit(0)
 except Exception as e:
-    print(f"RESULT: FAIL {type(e).__name__}: {e}")
+    print(f"RESULT_NONCE_PLACEHOLDER: FAIL {type(e).__name__}: {e}")
     sys.exit(0)
 
-print("RESULT: PASS")
+print("RESULT_NONCE_PLACEHOLDER: PASS")
 """
+assert NONCE_PLACEHOLDER in _GRADE_SCRIPT, "sentinel placeholder text drifted out of sync with base.py"
 
 
 def grade(task: Task, solution: str, timeout_seconds: int = 60) -> GradeResult:

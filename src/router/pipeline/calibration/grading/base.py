@@ -3,11 +3,14 @@ every grader builds on.
 
 A task that fails because OUR sandbox lacks a library, or times out on our slow CPU, is NOT the
 model failing — conflating the two would corrupt every error rate the router later trusts. So
-grading scripts built by each grader module print a single `RESULT: <TAG> [detail]` line to stdout
-as their last action, and this module classifies that line into an Outcome rather than trusting a
-bare exit code — which can't tell "candidate code raised an exception" (a real FAIL, since a
-broken solution crashing IS what a wrong answer looks like) apart from "our harness couldn't even
-start" (an environment problem, excluded from error rates).
+grading scripts built by each grader module print a single `RESULT_<nonce>: <TAG> [detail]` line to
+stdout as their last action, and this module classifies that line into an Outcome rather than
+trusting a bare exit code — which can't tell "candidate code raised an exception" (a real FAIL,
+since a broken solution crashing IS what a wrong answer looks like) apart from "our harness
+couldn't even start" (an environment problem, excluded from error rates). The nonce (see
+`NONCE_PLACEHOLDER`) is generated fresh per call, same reasoning as `dockerexec.py`'s own nonce: the
+candidate code this classifies is `exec()`'d in the same process, so a fixed sentinel would be
+forgeable by anything the candidate happens to print.
 
 Isolation note: this runs candidate-generated code via `exec()` in a subprocess with a timeout and
 a throwaway temp cwd — the same approach the benchmarks' own reference harnesses use. That's
@@ -21,6 +24,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 from typing import Literal
 
@@ -56,12 +60,36 @@ class GradeResult:
     detail: str = ""
 
 
-_RESULT_LINE = re.compile(r"^RESULT:\s*(PASS|FAIL|ERROR_MISSING_DEP)\b(.*)$")
+# Every grading script template (bigcodebench.py, ds1000.py) writes its sentinel as
+# `RESULT_NONCE_PLACEHOLDER:` (this literal text) — `run_graded_script` substitutes it with a fresh
+# `uuid4().hex` per call before the script ever runs, exactly mirroring why `dockerexec.py`'s
+# Docker-based graders use a per-call nonce: candidate code here runs via `exec()` in the SAME
+# process as the grading script (see module docstring's isolation note), so it's just as capable of
+# printing arbitrary text as an arbitrary Docker container's candidate patch is. Confirmed
+# empirically this session that the OLD fixed `RESULT:` prefix was exploitable — a candidate
+# solution that merely contains `print("RESULT: PASS")` short-circuited the whole grading run to
+# `pass` before the real test suite ever ran, because the old code returned on the FIRST matching
+# line rather than requiring anything unforgeable. A nonce generated fresh per call and unknown to
+# the candidate ahead of time closes that off the same way it already does for Docker grading.
+NONCE_PLACEHOLDER = "NONCE_PLACEHOLDER"
+
+
+def _result_line_pattern(nonce: str) -> re.Pattern[str]:
+    return re.compile(rf"^RESULT_{nonce}:\s*(PASS|FAIL|ERROR_MISSING_DEP)\b(.*)$")
 
 
 def run_graded_script(script: str, timeout_seconds: int, extra_files: dict[str, bytes] | None = None) -> GradeResult:
     """`extra_files`, if given, is written into the same temp directory before the script runs
-    (e.g. a reference image for a comparison-based grader)."""
+    (e.g. a reference image for a comparison-based grader).
+
+    `script` must use `NONCE_PLACEHOLDER` (this module's constant) everywhere its `RESULT:` sentinel
+    would otherwise go bare — substituted here via plain string replacement (not `.format()`, so it
+    can't collide with the script's own f-string braces) into a real per-call nonce before the
+    script is written to disk."""
+    nonce = uuid.uuid4().hex
+    script = script.replace(NONCE_PLACEHOLDER, nonce)
+    result_line = _result_line_pattern(nonce)
+
     with tempfile.TemporaryDirectory(prefix="router-grade-") as tmp:
         tmp_path = Path(tmp)
         script_path = tmp_path / "grade.py"
@@ -81,7 +109,7 @@ def run_graded_script(script: str, timeout_seconds: int, extra_files: dict[str, 
             return GradeResult(outcome="error_timeout", detail=f"exceeded {timeout_seconds}s")
 
         for line in proc.stdout.splitlines():
-            match = _RESULT_LINE.match(line.strip())
+            match = result_line.match(line.strip())
             if not match:
                 continue
             tag, detail = match.group(1), match.group(2).strip()
