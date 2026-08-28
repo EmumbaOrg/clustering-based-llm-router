@@ -21,7 +21,7 @@ gradeable_sources:
 # Target calibration tasks per cluster. The spec's reference figure is 20+ per cluster against a
 # 24-cluster map; keep it low here because this pass targets pipeline completeness, not
 # statistically confident error rates.
-tasks_per_cluster: 4
+tasks_per_cluster: 1
 
 # Embedding the FULL gradeable pool (~1,985 rows across bigcodebench+ds1000) just to pick a
 # stratified sample would take ~an hour at this machine's measured throughput (~2s/doc) before
