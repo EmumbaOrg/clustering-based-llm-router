@@ -231,5 +231,9 @@ def extract_diff(worktree: Path) -> str | None:
         ["git", "diff"],
         cwd=worktree, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
     )
-    diff = proc.stdout.strip()
-    return diff or None
+    # `.strip()` on the RETURNED value (not just to test for emptiness) used to eat the trailing
+    # newline every valid unified diff needs after its last line — confirmed empirically this
+    # session: `git apply` rejects such a diff outright with "corrupt patch", regardless of whether
+    # the underlying edit was correct. `proc.stdout` itself is returned unmodified when non-empty;
+    # `.strip()` is only used here to test for "nothing changed."
+    return proc.stdout if proc.stdout.strip() else None
