@@ -583,8 +583,21 @@ def _run_test_stage(task: Task, nonce: str, run_names: list[str], check_names: l
 
     # Trailing newline on every line (including the last) so `wc -l` counts correctly regardless
     # of how many names there are — a file with content but no trailing newline undercounts by one.
-    pass_patterns = "".join(f"--- PASS: {name}\n" for name in check_names)
-    fail_patterns = "".join(f"--- FAIL: {name}\n" for name in check_names)
+    #
+    # Each pattern ends in " (" — the fixed text `go test -v` always prints right after a test name
+    # (`--- PASS: TestFoo (0.01s)`) — rather than stopping at the bare name. Go test names routinely
+    # share prefixes (confirmed empirically this session: 8.1M such pairs across this dataset's
+    # 1,675 real Go tasks, e.g. `TestAddTree`/`TestAddTree2`, `TestAlpha`/`TestAlphaDash`), and
+    # `grep -F`'s substring matching doesn't respect name boundaries — without the " (" anchor,
+    # `--- PASS: TestAddTree` matches as a literal substring of `--- PASS: TestAddTree2 (0.01s)`,
+    # so a shorter name could be counted as passed/failed off a completely different, unrelated
+    # sibling test's own result line. The realistic failure mode: `TestAddTree` gets `t.Skip()`-ed
+    # (never prints its own PASS/FAIL line) while `TestAddTree2` genuinely passes — without this
+    # anchor, `TestAddTree` would be silently counted as passed too, even though it was never
+    # actually verified. Appending " (" requires the exact next two characters after the name to
+    # match, which `TestAddTree2 (...)` never produces for the pattern `TestAddTree (`.
+    pass_patterns = "".join(f"--- PASS: {name} (\n" for name in check_names)
+    fail_patterns = "".join(f"--- FAIL: {name} (\n" for name in check_names)
 
     return (
         f"{dockerexec.write_file_cmd(pattern, pattern_file)}\n"

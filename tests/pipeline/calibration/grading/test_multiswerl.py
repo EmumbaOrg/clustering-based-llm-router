@@ -167,8 +167,10 @@ def test_run_test_stage_reports_pass_fail_and_harness_off_per_test_pass_fail_lin
     # `--- PASS`/`--- FAIL` line, via patterns read from a file (grep -F -f), never interpolated
     # into the shell command directly (real test names can contain quotes/parens/etc).
     assert "grep -F -o -f" in script
-    assert _b64("--- PASS: TestFoo\n") in script
-    assert _b64("--- FAIL: TestFoo\n") in script
+    # " (" anchor (not a bare name) — Go test names routinely share prefixes (e.g. TestFoo/TestFoo2)
+    # and a substring match without this would let one test's PASS line get counted for another's.
+    assert _b64("--- PASS: TestFoo (\n") in script
+    assert _b64("--- FAIL: TestFoo (\n") in script
     # A passing stage must fall through to whatever comes next, verbatim.
     assert script.endswith("NEXT\n")
 
@@ -190,8 +192,8 @@ def test_run_test_stage_check_names_use_the_full_untruncated_name_not_the_run_pa
         _task(), "nonce", ["TestIntegration"], ["TestIntegration/foo/bar"], "mystage", on_pass=""
     )
     assert _b64("^(TestIntegration)$") in script
-    assert _b64("--- PASS: TestIntegration/foo/bar\n") in script
-    assert _b64("--- FAIL: TestIntegration/foo/bar\n") in script
+    assert _b64("--- PASS: TestIntegration/foo/bar (\n") in script
+    assert _b64("--- FAIL: TestIntegration/foo/bar (\n") in script
 
 
 def test_discriminating_stage_reports_harness_when_no_discriminating_tests_exist():
