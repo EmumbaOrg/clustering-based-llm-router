@@ -53,6 +53,14 @@ PROFILES_PATH = profiles_mod.ARTIFACTS_DIR / "model-profiles.json"
 CLUSTER_VISUALIZATION_PATH = cluster_map_mod.ARTIFACTS_DIR / "cluster-visualization.png"
 
 
+def _details_csv_path(run_timestamp: str) -> Path:
+    # Timestamp lives in the FILENAME, not a per-row column — this is what actually stops one
+    # calibrate run (or a test run using the wrong path) from silently overwriting another's CSV,
+    # which a per-row timestamp inside a single shared file never did (see CalibrationDetailRow's
+    # docstring for the incident that motivated this).
+    return profiles_mod.ARTIFACTS_DIR / f"calibration-details-{run_timestamp}.csv"
+
+
 def _run_corpus(sample: int | None) -> None:
     rows, sources = corpus_mod.build_corpus(sample=sample)
     corpus_mod.write_corpus_jsonl(rows, CORPUS_PATH)
@@ -284,24 +292,37 @@ def calibrate() -> None:
     n_holdout = sum(1 for s in selected if s.split == "holdout")
     typer.echo(f"Selected {len(selected)} tasks: {n_calibration} calibration, {n_holdout} holdout")
 
+    # One timestamp for the whole run, shared by the details CSV filename and calibration_run_id
+    # below — so a run's CSV and the profile artifact it fed into are trivially matchable by name.
+    run_timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
+    details_path = _details_csv_path(run_timestamp)
+
     # Tasks-outer / models-inner — see calibrate_models' docstring for why the loop order is worth
     # roughly a factor of len(models) on image-pull cost. Per-model progress is on the `router`
     # logger (--log-level INFO) rather than echoed here, since the run no longer proceeds
     # model-by-model.
+    # calibrate_models writes the details CSV incrementally (one row per completed call, flushed
+    # immediately) rather than only at the end — so a still-running or interrupted run's progress
+    # is always inspectable on disk, not just held in memory until the whole run finishes.
     typer.echo(f"Grading {len(models)} models against each task (tasks-outer)...")
-    results, detail_rows = calibrate_mod.calibrate_models(models, selected, calibration_config)
+    typer.echo(f"Writing per-task-per-model details incrementally to {details_path}")
+    results, detail_rows = calibrate_mod.calibrate_models(
+        models, selected, calibration_config, details_csv_path=details_path,
+    )
     for result in results:
         stats = result.global_stats
+        model_cost = sum(row.cost_usd for row in detail_rows if row.model_id == result.model.model_id)
         typer.echo(
             f"  {result.model.model_id} ({result.model.runner}): "
             f"{stats.number_succeeded}/{stats.number_of_tasks} pass, "
-            f"smoothed_error_rate={stats.smoothed_error_rate:.3f}, excluded={stats.excluded}"
+            f"smoothed_error_rate={stats.smoothed_error_rate:.3f}, excluded={stats.excluded}, "
+            f"cost=${model_cost:.4f}"
         )
+    total_cost = sum(row.cost_usd for row in detail_rows)
+    if total_cost:
+        typer.echo(f"Total measured API cost this run: ${total_cost:.4f}")
 
-    details_path = calibrate_mod.write_calibration_details_csv(detail_rows)
-    typer.echo(f"Wrote per-task-per-model details to {details_path}")
-
-    calibration_run_id = f"cal-{datetime.now(UTC).strftime('%Y-%m-%d-%H%M%S')}"
+    calibration_run_id = f"cal-{run_timestamp}"
     artifact = profiles_mod.build_profiles_dict(
         results, cluster_map, embedding_config, calibration_config, calibration_run_id,
     )

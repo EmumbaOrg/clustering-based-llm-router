@@ -94,7 +94,7 @@ def _outcome_for(task_id: str, model_id: str) -> str:
     return "pass" if (task_id, model_id) in {("t1", "m1"), ("t2", "m2"), ("t3", "m1")} else "fail"
 
 
-def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the_next_task(monkeypatch):
+def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the_next_task(monkeypatch, tmp_path):
     # The whole point of the loop order: swe-gym/multi-swe-rl build one multi-GB image PER INSTANCE,
     # so all models must be graded while a task's image is still hot. A models-outer loop re-pulls
     # every image once per model (~5x the bytes at the configured roster size).
@@ -102,29 +102,36 @@ def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the
 
     def fake_run_and_grade(task, model, calibration_config):
         calls.append((task.task_id, model.model_id))
-        return GradeResult(outcome=_outcome_for(task.task_id, model.model_id)), ""
+        return GradeResult(outcome=_outcome_for(task.task_id, model.model_id)), "", None
 
     monkeypatch.setattr(calibrate_module, "run_and_grade", fake_run_and_grade)
     models = [_named_model("m1"), _named_model("m2")]
     selected = [_selected("t1", 0), _selected("t2", 0)]
 
-    calibrate_module.calibrate_models(models, selected, _calibration_config())
+    # details_csv_path MUST be redirected to tmp_path — the default writes to the real repo's
+    # artifacts/calibration-details.csv, which would silently clobber a real calibration run's
+    # output. Confirmed the hard way this session: running this suite overwrote a just-completed
+    # real run's CSV with this test's "m1"/"m2" fixture data.
+    calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv")
 
     assert calls == [("t1", "m1"), ("t1", "m2"), ("t2", "m1"), ("t2", "m2")]
 
 
-def test_calibrate_models_stats_are_identical_to_the_old_models_outer_aggregation(monkeypatch):
+def test_calibrate_models_stats_are_identical_to_the_old_models_outer_aggregation(monkeypatch, tmp_path):
     # Guards the "purely a reordering" claim: every statistic is computed after all grading, so
     # reordering the calls must not move a single number.
     monkeypatch.setattr(
         calibrate_module, "run_and_grade",
-        lambda task, model, cfg: (GradeResult(outcome=_outcome_for(task.task_id, model.model_id)), ""),
+        lambda task, model, cfg: (GradeResult(outcome=_outcome_for(task.task_id, model.model_id)), "", None),
     )
     models = [_named_model("m1"), _named_model("m2")]
     selected = [_selected("t1", 0), _selected("t2", 1), _selected("t3", 1)]
     config = _calibration_config()
 
-    results, _detail_rows = calibrate_module.calibrate_models(models, selected, config)
+    # See the sibling test above for why details_csv_path must be redirected to tmp_path.
+    results, _detail_rows = calibrate_module.calibrate_models(
+        models, selected, config, details_csv_path=tmp_path / "details.csv"
+    )
 
     # Rebuild each model's outcome list the OLD way (models-outer, original task order) and
     # aggregate that instead — the two must agree exactly.
@@ -168,7 +175,7 @@ def test_run_and_grade_maps_a_rate_limited_run_result_to_error_harness_not_error
         calibrate_module.runner_mod, "run_pi",
         lambda task, model, timeout_seconds: RunResult(solution=None, detail="429 Too Many Requests", rate_limited=True),
     )
-    result, _solution = run_and_grade(_task(), _pi_model(), _calibration_config())
+    result, _solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
     assert result.outcome == "error_harness"
 
 
@@ -180,7 +187,7 @@ def test_run_and_grade_maps_context_unavailable_to_error_harness(monkeypatch):
         calibrate_module.runner_mod, "run_pi",
         lambda task, model, timeout_seconds: RunResult(solution=None, detail="clone failed", context_unavailable=True),
     )
-    result, _solution = run_and_grade(_task(), _pi_model(), _calibration_config())
+    result, _solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
     assert result.outcome == "error_harness"
 
 
@@ -189,7 +196,7 @@ def test_run_and_grade_still_treats_a_genuine_no_solution_as_a_real_failure(monk
         calibrate_module.runner_mod, "run_pi",
         lambda task, model, timeout_seconds: RunResult(solution=None, detail="empty response", rate_limited=False),
     )
-    result, _solution = run_and_grade(_task(), _pi_model(), _calibration_config())
+    result, _solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
     assert result.outcome == "error_no_solution"
 
 
@@ -231,7 +238,7 @@ def test_run_and_grade_logs_expected_vs_provided_solution_at_debug(monkeypatch, 
     # only listens at the root logger, so it would see nothing once that's run earlier in the
     # suite. Naming the logger attaches caplog's handler directly to it instead.
     with caplog.at_level("DEBUG", logger="router.pipeline.calibration.calibrate"):
-        result, solution = run_and_grade(_task(), _pi_model(), _calibration_config())
+        result, solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
 
     assert result.outcome == "fail"
     assert solution == "def f():\n    return 1"

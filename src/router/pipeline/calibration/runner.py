@@ -30,6 +30,7 @@ exhausted does `RunResult.rate_limited` get set, routing calibrate.py to exclude
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 import re
 import subprocess
@@ -211,6 +212,18 @@ _CONTEXT_INSTRUCTIONS_NO_TOOLS = {
 
 
 @dataclasses.dataclass(frozen=True)
+class TokenUsage:
+    """Pi's own reported usage/cost for one `pi -p` call, read from its `--mode json` event stream
+    rather than computed from our own token estimate — Pi already prices every call against its
+    built-in model catalog (confirmed: it reports accurate cost for claude-haiku-4-5 even though
+    that model has no entry in our local ~/.pi/agent/models.json), so there's nothing for us to
+    estimate."""
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+
+
+@dataclasses.dataclass(frozen=True)
 class RunResult:
     solution: str | None  # None if the agent produced nothing usable — see grading/base.py's
     # error_no_solution outcome, which calibrate.py records directly without calling a grader.
@@ -222,6 +235,9 @@ class RunResult:
     context_unavailable: bool = False  # True if repo_context setup (clone/checkout) itself failed,
     # before pi was ever invoked — an infra problem, not the model's fault, so calibrate.py must
     # route this to `error_harness` too, the same as rate_limited.
+    usage: TokenUsage | None = None  # None when pi's stdout wasn't parseable JSON (e.g. it never
+    # ran, or emitted plain text) — a genuinely unknown cost, not a zero one; calibrate.py treats
+    # that distinction as "0 measured" for the CSV since there's nothing else to report.
 
 
 def build_prompt(task: Task, has_repo_context: bool = False, supports_tool_calls: bool = True) -> str:
@@ -247,6 +263,68 @@ def extract_solution(response: str) -> str | None:
         return extracted or None
     stripped = response.strip()
     return stripped or None
+
+
+def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None]:
+    """Parses `pi --mode json`'s newline-delimited event stream, returning the final assistant
+    message's text and the call's total usage/cost. `agent_end` is always the last event and
+    carries the full conversation, so it alone has everything needed — no need to track events as
+    they stream by.
+
+    Usage is summed across EVERY assistant message in the turn, not read off the last one alone —
+    confirmed live this session that each assistant message's `usage` is PER-TURN, not cumulative,
+    for a real tool-use conversation: a 6-turn repo-context call showed `input: 3` on every single
+    turn and a small, DIFFERENT `cost.total` on each (e.g. $0.00035, $0.00013, ..., $0.00025) — only
+    `totalTokens` (a separate, genuinely cumulative field we don't use) grows turn over turn. Taking
+    only the last message, as an earlier version of this function did, silently kept just that
+    final turn's cost and dropped the other 5 — a real ~7x undercount on that one call. A
+    single-turn, no-tool-use call (the only shape this was originally verified against) has exactly
+    one assistant message, where "sum across messages" and "last message" are the same number,
+    which is why that earlier verification didn't catch this.
+
+    Returns (None, None) on anything that isn't this NDJSON shape — e.g. a test's plain-text stdout
+    fixture, or a real failure — so callers fall back to treating `stdout` as the raw response,
+    exactly like before this format existed."""
+    agent_end = None
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("type") == "agent_end":
+            agent_end = event
+
+    if agent_end is None:
+        return None, None
+
+    assistant_messages = [m for m in agent_end.get("messages", []) if m.get("role") == "assistant"]
+    if not assistant_messages:
+        return None, None
+
+    last = assistant_messages[-1]
+    text = "".join(
+        block.get("text", "") for block in last.get("content", []) if block.get("type") == "text"
+    )
+
+    total_input = 0
+    total_output = 0
+    total_cost = 0.0
+    saw_usage = False
+    for message in assistant_messages:
+        usage_obj = message.get("usage")
+        if not usage_obj:
+            continue
+        saw_usage = True
+        total_input += usage_obj.get("input", 0)
+        total_output += usage_obj.get("output", 0)
+        total_cost += (usage_obj.get("cost") or {}).get("total", 0.0)
+
+    if not saw_usage:
+        return text, None
+    return text, TokenUsage(input_tokens=total_input, output_tokens=total_output, cost_usd=total_cost)
 
 
 def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.sleep) -> RunResult:
@@ -283,7 +361,24 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
             "--no-prompt-templates",
             "--provider", model.provider,
             "--model", model.model_id,
+            # NDJSON event stream instead of plain text — the only way to read back Pi's own
+            # per-call usage/cost (see TokenUsage/_parse_json_stream). Solution extraction still
+            # works exactly as before: _parse_json_stream falls back to (None, None) on anything
+            # that isn't this shape, and extract_solution then runs on raw stdout same as always.
+            "--mode", "json",
         ]
+        # Pi offers its own built-in read/write/bash/edit tools to every model call by default —
+        # confirmed empirically this session that this isn't harmless even for a model with
+        # correctly-working tool calls (Llama-3.1-8B-Instruct): on a self-contained task with no
+        # repo to act on (bigcodebench/ds1000), it can still attempt a tool call, and Pi's own
+        # response parser rejects the malformed attempt outright ("The model produced output that
+        # does not match the expected peg-native format", exit 1, before any real content comes
+        # back — confirmed by reproducing the exact failing call with/without `--no-tools`).
+        # Tools are only useful when BOTH a real worktree exists to act on AND the model is known
+        # to translate its tool-call attempts into the wire protocol correctly — anything else and
+        # offering them is pure downside.
+        if not (has_repo_context and model.supports_tool_calls):
+            args.append("--no-tools")
 
         for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
             _rate_limiter.wait(model.model_id, model.rate_limit_rpm)
@@ -326,15 +421,22 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
                     rate_limited=rate_limited,
                 )
 
+            final_text, usage = _parse_json_stream(proc.stdout)
+            response_text = final_text if final_text is not None else proc.stdout
+
             # A tool-using agent's actual edits (captured via `git diff`) are preferred over
             # parsing its text response — only fall back to text extraction if the worktree came
             # back clean (no repo context, or the agent responded with prose instead of using its
             # tools).
             solution = repo_context.extract_diff(worktree) if worktree is not None else None
             if solution is None:
-                solution = extract_solution(proc.stdout)
-            logger.info(f"pi call completed in {duration_s}s: {model.model_id} on task {task.task_id} (had_solution={solution is not None})")
-            return RunResult(solution=solution, raw_response=proc.stdout)
+                solution = extract_solution(response_text)
+            cost_note = f", cost=${usage.cost_usd:.5f}" if usage else ""
+            logger.info(
+                f"pi call completed in {duration_s}s: {model.model_id} on task {task.task_id} "
+                f"(had_solution={solution is not None}{cost_note})"
+            )
+            return RunResult(solution=solution, raw_response=response_text, usage=usage)
 
         raise AssertionError("unreachable — the loop always returns on its last iteration")
     finally:
