@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import csv
 import dataclasses
+import hashlib
+import json
 import logging
 import random
 import re
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
-import numpy as np
-
 from ...common.artifacts import ARTIFACTS_DIR
-from ...common.assign import ClusterMap, assign_cluster
-from ...common.config import CalibrationConfig, EmbeddingConfig, ModelConfig
-from ...common.embedding import embed_texts
+from ...common.assign import ClusterMap
+from ...common.config import CalibrationConfig, ModelConfig
 from . import runner as runner_mod
 from .grading import base as grading_base
 from .grading import bigcodebench, ds1000, multiswerl, swegym, swesmith
@@ -90,37 +90,66 @@ class SelectedTask:
 
 def select_tasks(
     calibration_config: CalibrationConfig,
-    embedding_config: EmbeddingConfig,
     cluster_map: ClusterMap,
+    task_cluster_map: dict,
 ) -> list[SelectedTask]:
-    """Stratified-by-cluster task selection, bounded to a fixed embedding cost regardless of how
-    large the underlying datasets are — see calibration.yaml's `candidate_pool_oversample` comment
-    for why this doesn't just embed every available row."""
+    """Stratified-by-cluster task selection, driven by the full task->cluster mapping computed
+    once at `build-artifact` time (`clustering/task_cluster_map.py`) rather than a per-run random
+    pre-filter followed by a fresh embedding pass. This is a deliberate replacement for an earlier
+    design that embedded a small, randomly-oversampled candidate pool per source before assigning
+    clusters — confirmed against a real run that the random pre-filter could (and did: 2 of 24
+    configured clusters ended up with zero tasks) leave a cluster completely unrepresented purely
+    by chance, before stratification ever got a chance to run. Grouping directly from a full
+    per-task mapping fixes that by construction: every gradeable task is visible before sampling
+    starts, and the only way a cluster ends up with zero selected tasks is if it genuinely has zero
+    gradeable tasks anywhere in the underlying pool (logged below, not silently dropped) — and it
+    removes the embedding step from every calibration run entirely, since the labels are already
+    known.
+
+    Raises if `task_cluster_map` wasn't built against the SAME cluster map passed in — a stale or
+    mismatched mapping would silently make cluster ids mean different things than the centroids
+    `cluster_map` carries, which must fail loudly rather than produce a quietly-wrong selection."""
+    if task_cluster_map["cluster_map_id"] != cluster_map.artifact_id:
+        raise ValueError(
+            f"task-cluster-map.json was built against cluster map {task_cluster_map['cluster_map_id']!r}, "
+            f"but the current cluster-map.json is {cluster_map.artifact_id!r} — re-run `build-artifact` "
+            "to regenerate a matching task-cluster-map.json."
+        )
+
     rng = random.Random(calibration_config.seed)
     k = cluster_map.centroids.shape[0]
-    pool_size_per_source = (
-        calibration_config.tasks_per_cluster * k * calibration_config.candidate_pool_oversample
-    )
+    gradeable_sources = set(calibration_config.gradeable_sources)
 
-    candidate_tasks: list[Task] = []
+    # Real Task objects (full row data, needed for actually running/grading) per gradeable source
+    # — task_cluster_map only ever carries task_id/source/cluster_id, never the heavy row data.
+    gradeable_by_id: dict[str, Task] = {}
     for source in calibration_config.gradeable_sources:
-        all_tasks = sorted(load_gradeable_tasks(source), key=lambda t: t.task_id)  # order-independent before shuffling
-        rng.shuffle(all_tasks)
-        pool = all_tasks[:pool_size_per_source]
-        candidate_tasks.extend(pool)
-        logger.info(f"candidate pool for {source}: {len(pool)} tasks")
-
-    candidate_tasks.sort(key=lambda t: t.task_id)  # deterministic embedding order
-    vectors = embed_texts([t.prompt for t in candidate_tasks], embedding_config)
+        for task in load_gradeable_tasks(source):
+            gradeable_by_id[task.task_id] = task
 
     by_cluster: dict[int, list[Task]] = {}
-    for task, vector in zip(candidate_tasks, vectors):
-        assignment = assign_cluster(np.asarray(vector, dtype=np.float64), cluster_map)
-        by_cluster.setdefault(assignment.cluster_id, []).append(task)
+    unmatched = 0
+    for entry in task_cluster_map["tasks"]:
+        if entry["source"] not in gradeable_sources:
+            continue
+        task = gradeable_by_id.get(entry["task_id"])
+        if task is None:
+            # Expected, not an error: a row the corpus includes but calibration's own loader
+            # excludes (e.g. a DS-1000 Matplotlib row — corpus.py doesn't apply that filter,
+            # calibration/tasks.py does) has a cluster label here but was never gradeable.
+            unmatched += 1
+            continue
+        by_cluster.setdefault(entry["cluster_id"], []).append(task)
+    if unmatched:
+        logger.info(f"{unmatched} task-cluster-map entries had no matching gradeable task, skipped")
+
+    empty_clusters = [c for c in range(k) if c not in by_cluster]
+    if empty_clusters:
+        logger.warning(f"{len(empty_clusters)} of {k} clusters have zero gradeable tasks: {empty_clusters}")
 
     selected: list[SelectedTask] = []
-    for cluster_id, tasks_in_cluster in by_cluster.items():
-        tasks_in_cluster = sorted(tasks_in_cluster, key=lambda t: t.task_id)
+    for cluster_id in sorted(by_cluster):  # explicit, not dict-insertion-order reliance
+        tasks_in_cluster = sorted(by_cluster[cluster_id], key=lambda t: t.task_id)  # order-independent before shuffling
         rng.shuffle(tasks_in_cluster)
         chosen = tasks_in_cluster[: calibration_config.tasks_per_cluster]
         holdout_count = round(len(chosen) * calibration_config.holdout_fraction)
@@ -134,6 +163,95 @@ def select_tasks(
         f"selected {len(selected)} tasks across {len(by_cluster)} clusters "
         f"({n_calibration} calibration, {n_holdout} holdout)"
     )
+    return selected
+
+
+def compute_task_selection_digest(selected: list[SelectedTask]) -> str:
+    """SHA-256 over sorted (task_id, prompt) pairs — same construction as
+    `clustering/cluster_map.py::compute_corpus_digest`, applied to the actual selected tasks'
+    prompt text rather than the whole corpus. A pinned selection (see `write_task_selection`) is
+    only as trustworthy as the guarantee that the underlying task content hasn't silently changed
+    since it was written — `load_task_selection` recomputes this and refuses to load on a
+    mismatch, rather than grading against content nobody signed off on."""
+    hasher = hashlib.sha256()
+    for selected_task in sorted(selected, key=lambda s: s.task.task_id):
+        hasher.update(selected_task.task.task_id.encode("utf-8"))
+        hasher.update(b"\0")
+        hasher.update(selected_task.task.prompt.encode("utf-8"))
+        hasher.update(b"\0")
+    return f"sha256:{hasher.hexdigest()}"
+
+
+def selected_tasks_to_dict(selected: list[SelectedTask], k: int) -> dict:
+    """Only `task_id`/`source`/`cluster_id`/`split` are kept — never the heavy `row` data, which
+    `load_task_selection` re-derives fresh from the source at load time (the same reasoning
+    `calibration/tasks.py`'s stable ids exist for: the row is a lookup away, not something worth
+    duplicating into a second file). `k`, passed by the caller rather than re-derived here, is
+    ONLY used to report which clusters got zero tasks — a genuine gap in the gradeable pool
+    (`select_tasks` already logs this; this is the file's permanent record of it)."""
+    represented = {s.cluster_id for s in selected}
+    empty_clusters = [c for c in range(k) if c not in represented]
+    now = datetime.now(UTC).isoformat()
+    digest = compute_task_selection_digest(selected)
+    return {
+        "schema_version": 1,
+        "artifact_id": f"taskselection-{now[:10]}-{digest.split(':')[1][:12]}",
+        "created_at": now,
+        "content_digest": digest,
+        "empty_clusters": empty_clusters,
+        "tasks": [
+            {"task_id": s.task.task_id, "source": s.task.source, "cluster_id": s.cluster_id, "split": s.split}
+            for s in selected
+        ],
+    }
+
+
+def write_task_selection(artifact: dict, path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(artifact, indent=2, sort_keys=True), encoding="utf-8")
+    logger.info(f"wrote task selection to {path} ({len(artifact['tasks'])} tasks)")
+    return path
+
+
+def load_task_selection(path: Path) -> list[SelectedTask]:
+    """The reverse of `selected_tasks_to_dict` — reconstructs `SelectedTask`s with fresh `row`
+    data by calling `load_gradeable_tasks` once per distinct source the pin references (the same
+    cost `select_tasks` already pays; embedding, not this, was ever the expensive step). Raises
+    (never silently drops) on either a pinned task_id no longer present in its source's gradeable
+    pool, or a content-digest mismatch — an incremental calibration run (see cli.py's `--model`)
+    depends on grading the new model against the EXACT set an existing model-profiles.json was
+    built from, so a silently-smaller or silently-changed set here would be worse than a hard
+    failure telling the caller to investigate."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+
+    sources = {entry["source"] for entry in data["tasks"]}
+    gradeable_by_id: dict[str, Task] = {}
+    for source in sources:
+        for task in load_gradeable_tasks(source):
+            gradeable_by_id[task.task_id] = task
+
+    selected: list[SelectedTask] = []
+    missing: list[str] = []
+    for entry in data["tasks"]:
+        task = gradeable_by_id.get(entry["task_id"])
+        if task is None:
+            missing.append(entry["task_id"])
+            continue
+        selected.append(SelectedTask(task=task, cluster_id=entry["cluster_id"], split=entry["split"]))
+    if missing:
+        raise ValueError(
+            f"{len(missing)} pinned task_id(s) from {path} are no longer in their source's gradeable "
+            f"pool (first few: {missing[:5]}) — the underlying dataset has likely changed since this "
+            "pin was written."
+        )
+
+    actual_digest = compute_task_selection_digest(selected)
+    if actual_digest != data["content_digest"]:
+        raise ValueError(
+            f"{path}'s content digest doesn't match its pinned tasks' current prompt text — the "
+            "underlying dataset has changed since this pin was written. Re-select tasks rather than "
+            "grade against content this pin didn't sign off on."
+        )
     return selected
 
 

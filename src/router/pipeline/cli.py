@@ -30,6 +30,7 @@ from .calibration.calibrate import SelectedTask
 from .calibration.tasks import load_gradeable_tasks
 from .clustering import cluster as cluster_mod
 from .clustering import cluster_map as cluster_map_mod
+from .clustering import task_cluster_map as task_cluster_map_mod
 
 app = typer.Typer(help="The offline pipeline: corpus -> embed -> cluster -> calibrate -> evaluate.")
 
@@ -49,6 +50,7 @@ WORK_DIR = REPO_ROOT / ".cache"
 CORPUS_PATH = WORK_DIR / "corpus.jsonl"
 EMBEDDINGS_PATH = WORK_DIR / "embeddings.npz"
 CLUSTER_MAP_PATH = cluster_map_mod.ARTIFACTS_DIR / "cluster-map.json"
+TASK_CLUSTER_MAP_PATH = cluster_map_mod.ARTIFACTS_DIR / "task-cluster-map.json"
 PROFILES_PATH = profiles_mod.ARTIFACTS_DIR / "model-profiles.json"
 CLUSTER_VISUALIZATION_PATH = cluster_map_mod.ARTIFACTS_DIR / "cluster-visualization.png"
 
@@ -167,6 +169,17 @@ def _run_build_artifact(k: int | None) -> None:
     path = cluster_map_mod.write_cluster_map(artifact)
     typer.echo(f"Wrote validated artifact to {path}")
 
+    # Full per-task cluster labels, keyed by the same stable id calibration/tasks.py uses — lets
+    # select_tasks() sample by cluster without a second, separate embedding pass. Built from
+    # `rows_by_id` (every corpus row), not `used_rows` (already filtered to ids actually found),
+    # so a task-cluster-map.json/embeddings.npz mismatch is handled by build_task_cluster_map_dict
+    # itself rather than silently misaligning ids and labels by position.
+    task_map_artifact = task_cluster_map_mod.build_task_cluster_map_dict(
+        ids, result.labels, rows_by_id, artifact["artifact_id"],
+    )
+    task_map_path = task_cluster_map_mod.write_task_cluster_map(task_map_artifact)
+    typer.echo(f"Wrote {task_map_path}")
+
 
 @app.command("build-artifact")
 def build_artifact(
@@ -229,13 +242,27 @@ def visualize_clusters(
     _run_visualize_clusters(sample_size, highlight or [], seed, output)
 
 
-def _load_selected_tasks() -> tuple[ClusterMap, EmbeddingConfig, CalibrationConfig, list[ModelConfig], list[SelectedTask]]:
+def _load_selected_tasks(
+    tasks_file: Path | None = None,
+) -> tuple[ClusterMap, EmbeddingConfig, CalibrationConfig, list[ModelConfig], list[SelectedTask]]:
     cluster_map = load_cluster_map(CLUSTER_MAP_PATH)
     embedding_config = load_embedding_config()
     calibration_config = load_calibration_config()
     models = load_models_config()
-    typer.echo(f"Selecting tasks across {cluster_map.centroids.shape[0]} clusters...")
-    selected = calibrate_mod.select_tasks(calibration_config, embedding_config, cluster_map)
+
+    if tasks_file is not None:
+        # A pinned selection needs no task-cluster-map at all — cluster_id travels with each
+        # entry already. This is what makes incremental single-model calibration (see the
+        # `calibrate` command's `--model` option) safe: the new model grades against the EXACT
+        # set an existing model-profiles.json was built from, not a freshly re-derived one.
+        typer.echo(f"Loading pinned task selection from {tasks_file}...")
+        selected = calibrate_mod.load_task_selection(tasks_file)
+    else:
+        if not TASK_CLUSTER_MAP_PATH.exists():
+            raise typer.BadParameter(f"{TASK_CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
+        task_cluster_map = task_cluster_map_mod.load_task_cluster_map(TASK_CLUSTER_MAP_PATH)
+        typer.echo(f"Selecting tasks across {cluster_map.centroids.shape[0]} clusters...")
+        selected = calibrate_mod.select_tasks(calibration_config, cluster_map, task_cluster_map)
     return cluster_map, embedding_config, calibration_config, models, selected
 
 
@@ -281,21 +308,60 @@ def validate_graders(
         )
 
 
+_MODEL_OPTION = typer.Option(
+    None, "--model", help="Calibrate only this model (repeatable). Requires --tasks-file — an "
+    "incremental run grades against the exact task set an existing model-profiles.json was built "
+    "from, and merges the result into it rather than overwriting the other models' entries."
+)
+
+
 @app.command()
-def calibrate() -> None:
+def calibrate(
+    tasks_file: Path | None = typer.Option(
+        None, "--tasks-file",
+        help="Load a pinned task selection (from a previous run's auto-written "
+        "calibration-task-selection-<run>.json) instead of selecting fresh. Required for "
+        "--model to be safe — an incremental run must grade against the exact set an existing "
+        "model-profiles.json was built from.",
+    ),
+    model: list[str] | None = _MODEL_OPTION,
+) -> None:
     """Build and validate model-profiles.json."""
     if not CLUSTER_MAP_PATH.exists():
         raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
+    if model and tasks_file is None:
+        raise typer.BadParameter(
+            "--model requires --tasks-file — an incremental run must grade against the exact "
+            "task set the existing model-profiles.json was built from, not a fresh selection."
+        )
 
-    cluster_map, embedding_config, calibration_config, models, selected = _load_selected_tasks()
+    cluster_map, embedding_config, calibration_config, models, selected = _load_selected_tasks(tasks_file)
+
+    if model:
+        by_id = {m.model_id: m for m in models}
+        unknown = [m for m in model if m not in by_id]
+        if unknown:
+            raise typer.BadParameter(f"unknown model_id(s) in config/models.yaml: {unknown}")
+        models = [by_id[m] for m in model]
+
     n_calibration = sum(1 for s in selected if s.split == "calibration")
     n_holdout = sum(1 for s in selected if s.split == "holdout")
     typer.echo(f"Selected {len(selected)} tasks: {n_calibration} calibration, {n_holdout} holdout")
 
-    # One timestamp for the whole run, shared by the details CSV filename and calibration_run_id
-    # below — so a run's CSV and the profile artifact it fed into are trivially matchable by name.
+    # One timestamp for the whole run, shared by the details CSV filename, calibration_run_id
+    # below, and the auto-written task-selection pin — so everything this run produced is
+    # trivially matchable by name.
     run_timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
     details_path = _details_csv_path(run_timestamp)
+
+    # Always written, whether this run selected fresh or loaded a pin — cheap, and it's what a
+    # LATER incremental (--model) run, or anyone auditing this one, would pin against.
+    selection_artifact = calibrate_mod.selected_tasks_to_dict(selected, k=cluster_map.centroids.shape[0])
+    selection_path = ARTIFACTS_DIR / f"calibration-task-selection-{run_timestamp}.json"
+    calibrate_mod.write_task_selection(selection_artifact, selection_path)
+    typer.echo(f"Wrote task selection to {selection_path}")
+    if selection_artifact["empty_clusters"]:
+        typer.echo(f"WARNING: {len(selection_artifact['empty_clusters'])} cluster(s) have zero gradeable tasks: {selection_artifact['empty_clusters']}")
 
     # Tasks-outer / models-inner — see calibrate_models' docstring for why the loop order is worth
     # roughly a factor of len(models) on image-pull cost. Per-model progress is on the `router`
@@ -326,20 +392,37 @@ def calibrate() -> None:
     artifact = profiles_mod.build_profiles_dict(
         results, cluster_map, embedding_config, calibration_config, calibration_run_id,
     )
+    if model:
+        if not PROFILES_PATH.exists():
+            raise typer.BadParameter(
+                f"--model was given but {PROFILES_PATH} doesn't exist yet — run a full calibration "
+                "first, then onboard additional models incrementally against it."
+            )
+        existing_artifact = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
+        artifact = profiles_mod.merge_profiles_dict(existing_artifact, artifact)
+        typer.echo(f"Merged {model} into the existing {len(existing_artifact['models'])}-model profile")
     profiles_mod.validate_profiles(artifact)
     path = profiles_mod.write_profiles(artifact)
     typer.echo(f"Wrote validated artifact to {path}")
 
 
 @app.command()
-def evaluate() -> None:
-    """Re-select the same (deterministic) task split and report the holdout resolution/cost table."""
+def evaluate(
+    tasks_file: Path | None = typer.Option(
+        None, "--tasks-file",
+        help="Reuse a pinned task selection (ideally the exact one the calibrate run this "
+        "evaluates auto-wrote) instead of re-selecting. Without it, this re-selects fresh and "
+        "relies on select_tasks() being deterministic given an unchanged config/cluster map/"
+        "task-cluster-map — a pin removes that dependency entirely.",
+    ),
+) -> None:
+    """Re-run the (same, ideally pinned) task split's holdout tasks and report the resolution/cost table."""
     if not PROFILES_PATH.exists():
         raise typer.BadParameter(f"{PROFILES_PATH} not found — run `calibrate` first.")
     if not CLUSTER_MAP_PATH.exists():
         raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
 
-    _, _, calibration_config, models, selected = _load_selected_tasks()
+    _, _, calibration_config, models, selected = _load_selected_tasks(tasks_file)
     profiles_artifact = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
     profiles_by_model = {m["model_id"]: m for m in profiles_artifact["models"]}
 

@@ -80,6 +80,58 @@ def build_profiles_dict(
     }
 
 
+# Compatibility check for merge_profiles_dict below. Deliberately excludes task_selection's own
+# `total_tasks` field: build_profiles_dict sums number_of_tasks ACROSS every model in `results`
+# (see its own computation above), so an incremental single-model run's total_tasks is never equal
+# to a multi-model existing artifact's — that's expected, not a sign the two runs used different
+# task sets. The pinned task-selection file (--tasks-file) is what actually guarantees the task
+# sets matched; these fields are secondary, config-derived confirmation of the same thing.
+_TASK_SELECTION_COMPATIBILITY_FIELDS = ("gradeable_sources", "tasks_per_cluster", "seed")
+
+
+def merge_profiles_dict(existing_artifact: dict, new_artifact: dict) -> dict:
+    """Appends/replaces `new_artifact`'s model entries into `existing_artifact` — the incremental
+    single-model calibration workflow the spec calls for ("a new model can be onboarded by running
+    only the calibration suite") and `task_selection`'s own schema description anticipates
+    ("How the calibration task pool was chosen, for reproducibility"). Both artifacts must share
+    the same cluster map and task-selection parameters — a mismatch means cluster id N wouldn't
+    mean the same thing in both, exactly the failure mode the schema's task_selection field exists
+    to let a caller detect; caught here as a hard error rather than silently producing a profiles
+    file whose entries aren't mutually comparable."""
+    if existing_artifact["cluster_map_id"] != new_artifact["cluster_map_id"]:
+        raise ValueError(
+            f"cannot merge: existing model-profiles.json was built against cluster map "
+            f"{existing_artifact['cluster_map_id']!r}, but this run used "
+            f"{new_artifact['cluster_map_id']!r} — cluster ids would not mean the same thing."
+        )
+    if existing_artifact["embedding"] != new_artifact["embedding"]:
+        raise ValueError(
+            f"cannot merge: existing model-profiles.json's embedding config "
+            f"({existing_artifact['embedding']!r}) does not match this run's "
+            f"({new_artifact['embedding']!r})."
+        )
+    for field in _TASK_SELECTION_COMPATIBILITY_FIELDS:
+        existing_value = existing_artifact["task_selection"][field]
+        new_value = new_artifact["task_selection"][field]
+        if existing_value != new_value:
+            raise ValueError(
+                f"cannot merge: existing model-profiles.json's task_selection.{field} "
+                f"({existing_value!r}) does not match this run's ({new_value!r}) — re-calibrate "
+                "every model together instead of incrementally, or use the same --tasks-file."
+            )
+
+    merged_by_id = {m["model_id"]: m for m in existing_artifact["models"]}
+    for model in new_artifact["models"]:
+        merged_by_id[model["model_id"]] = model  # replaces, if re-calibrating an existing model
+
+    now = datetime.now(UTC).isoformat()
+    merged = dict(existing_artifact)
+    merged["artifact_id"] = f"profiles-{now[:10]}-merged"
+    merged["created_at"] = now
+    merged["models"] = list(merged_by_id.values())
+    return merged
+
+
 def validate_profiles(artifact: dict) -> None:
     artifacts_mod.validate_profiles(artifact)
 

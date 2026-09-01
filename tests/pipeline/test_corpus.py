@@ -12,6 +12,7 @@ from router.pipeline.corpus import (
     _multi_swe_rl_rows_from_lines,
     dedup_exact,
     provenance_for,
+    stable_task_id,
 )
 
 
@@ -219,3 +220,92 @@ def test_multi_swe_rl_rows_from_lines_deduplicates_against_a_shared_seen_ids_set
     second = list(_multi_swe_rl_rows_from_lines([line], seen_ids))
     assert len(first) == 1
     assert len(second) == 0
+
+
+# --- stable_task_id: the id corpus.py and calibration/tasks.py now share, so a row's cluster
+# label (computed once at build-artifact time) can be joined against a calibration task_id later
+# without a second embedding pass. Each case below is checked against the EXACT field(s) the
+# corresponding loader in calibration/tasks.py reads for the same source, so a drift between the
+# two would fail here first. ------------------------------------------------------------------
+
+def test_stable_task_id_bigcodebench_uses_the_row_s_own_task_id_verbatim():
+    assert stable_task_id("bigcodebench", {"task_id": "BigCodeBench/12"}) == "BigCodeBench/12"
+
+
+def test_stable_task_id_bigcodebench_is_none_when_task_id_is_missing_or_empty():
+    assert stable_task_id("bigcodebench", {}) is None
+    assert stable_task_id("bigcodebench", {"task_id": ""}) is None
+
+
+def test_stable_task_id_ds1000_prefixes_the_metadata_problem_id():
+    assert stable_task_id("ds1000", {"metadata": {"problem_id": 42}}) == "ds1000:42"
+
+
+def test_stable_task_id_ds1000_is_none_when_metadata_or_problem_id_is_missing():
+    assert stable_task_id("ds1000", {}) is None
+    assert stable_task_id("ds1000", {"metadata": {}}) is None
+
+
+def test_stable_task_id_swesmith_and_swegym_use_the_row_s_own_instance_id():
+    assert stable_task_id("swe-smith", {"instance_id": "org__repo.abcd1234.pr_1"}) == "org__repo.abcd1234.pr_1"
+    assert stable_task_id("swe-gym", {"instance_id": "getmoto__moto-7365"}) == "getmoto__moto-7365"
+
+
+def test_stable_task_id_swesmith_and_swegym_are_none_when_instance_id_is_missing_or_empty():
+    assert stable_task_id("swe-smith", {}) is None
+    assert stable_task_id("swe-gym", {"instance_id": ""}) is None
+
+
+def test_stable_task_id_multi_swe_rl_delegates_to_the_existing_row_id_helper():
+    # No separate logic to duplicate/drift here — multi-swe-rl already had a stable id before this
+    # change (see module docstring), so this just confirms the dispatcher reaches it correctly.
+    row = {"instance_id": "org__repo-1"}
+    assert stable_task_id("multi-swe-rl", row) == _multi_swe_rl_row_id(row) == "multi-swe-rl:org__repo-1"
+
+
+def test_stable_task_id_raises_for_an_unknown_source():
+    try:
+        stable_task_id("not-a-real-source", {})
+        assert False, "expected a ValueError"
+    except ValueError:
+        pass
+
+
+class _OneRowDataset:
+    def __init__(self, row: dict):
+        self._row = row
+
+    def __iter__(self):
+        return iter([self._row])
+
+    def shuffle(self, seed):
+        return self
+
+
+def _tasks_from_single_row(monkeypatch, source: str, row: dict) -> list:
+    """Exercises the real per-source loader body against exactly one row, standing in for a real
+    `load_dataset(hf_id, split=...)` call without needing a real network call."""
+    monkeypatch.setattr(tasks_mod, "load_dataset", lambda hf_id, split: _OneRowDataset(row))
+    loader = {
+        "bigcodebench": tasks_mod._bigcodebench_tasks,
+        "ds1000": tasks_mod._ds1000_tasks,
+        "swe-smith": tasks_mod._swesmith_tasks,
+        "swe-gym": tasks_mod._swegym_tasks,
+    }[source]
+    return loader()
+
+
+def test_stable_task_id_matches_calibration_tasks_py_for_every_gradeable_source(monkeypatch):
+    # The actual guarantee this function exists to provide: for every source calibration/tasks.py
+    # loads, the id it derives from a given row must be IDENTICAL to what stable_task_id derives
+    # from the same row — otherwise a row's cluster label could never be joined against the
+    # calibration task_id calibrate.py actually selects.
+    rows_by_source = {
+        "bigcodebench": {"task_id": "BigCodeBench/7", "instruct_prompt": "p", "canonical_solution": "s"},
+        "ds1000": {"metadata": {"problem_id": 3, "library": "Numpy"}, "prompt": "p", "reference_code": "c"},
+        "swe-smith": {"instance_id": "a__b.deadbeef.pr_1", "problem_statement": "fix it"},
+        "swe-gym": {"instance_id": "getmoto__moto-1", "problem_statement": "fix it"},
+    }
+    for source, row in rows_by_source.items():
+        [task] = _tasks_from_single_row(monkeypatch, source, row)
+        assert task.task_id == stable_task_id(source, row)

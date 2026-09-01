@@ -24,6 +24,7 @@ from ..corpus import (
     _extract_multi_swe_rl_text,
     _multi_swe_rl_repo_files,
     _multi_swe_rl_row_id,
+    stable_task_id,
 )
 from .grading.base import Task
 
@@ -33,16 +34,21 @@ logger = logging.getLogger(__name__)
 def _bigcodebench_tasks() -> list[Task]:
     meta = SOURCE_METADATA["bigcodebench"]
     ds = load_dataset(meta["hf_id"], split=meta["split"])
-    return [
-        Task(
-            task_id=row["task_id"],
-            source="bigcodebench",
-            prompt=row["instruct_prompt"],
-            reference_solution=row["canonical_solution"],
-            row=dict(row),
+    tasks = []
+    for row in ds:
+        task_id = stable_task_id("bigcodebench", row)
+        if task_id is None:
+            continue
+        tasks.append(
+            Task(
+                task_id=task_id,
+                source="bigcodebench",
+                prompt=row["instruct_prompt"],
+                reference_solution=row["canonical_solution"],
+                row=dict(row),
+            )
         )
-        for row in ds
-    ]
+    return tasks
 
 
 def _ds1000_tasks() -> list[Task]:
@@ -52,11 +58,18 @@ def _ds1000_tasks() -> list[Task]:
     for row in ds:
         # Matplotlib rows grade by rendered-PNG comparison against a reference image we'd first
         # have to render ourselves — excluded here rather than half-implemented in ds1000.py.
+        # corpus.py's own loader does NOT apply this filter (a broader corpus is fine including
+        # them), so a Matplotlib row can appear in task-cluster-map.json without ever appearing in
+        # this loader's output — select_tasks() intersects against this function's actual return
+        # value rather than trusting the map wholesale, specifically to handle this.
         if row["metadata"]["library"] == "Matplotlib":
+            continue
+        task_id = stable_task_id("ds1000", row)
+        if task_id is None:
             continue
         tasks.append(
             Task(
-                task_id=f"ds1000:{row['metadata']['problem_id']}",
+                task_id=task_id,
                 source="ds1000",
                 prompt=row["prompt"],
                 reference_solution=row["reference_code"],
@@ -66,10 +79,11 @@ def _ds1000_tasks() -> list[Task]:
     return tasks
 
 
-# select_tasks only ever needs tasks_per_cluster * k * candidate_pool_oversample rows per source
-# (well under 2,000 even at the spec's full-scale k=24/tasks_per_cluster=20) — loading and
-# filtering all ~59K SWE-smith rows just to sample from them costs minutes on every
-# calibrate/evaluate/validate-graders invocation for no benefit. Shuffled first, then filtered for
+# select_tasks() calls load_gradeable_tasks(source) for every gradeable source on every
+# calibrate/evaluate/validate-graders invocation (it needs the real Task/row data — the
+# task-cluster-map only carries task_id/source/cluster_id) — loading and filtering all ~59K
+# SWE-smith rows for that costs minutes each time for no benefit, since at most
+# tasks_per_cluster * k of them will ever actually be selected. Shuffled first, then filtered for
 # a non-empty problem_statement (same order as corpus.py's own load for this dataset), so capping
 # doesn't bias toward whichever rows the filter would have skipped anyway.
 SWESMITH_TASK_POOL_CAP = 5_000
@@ -88,9 +102,12 @@ def _swesmith_tasks() -> list[Task]:
             # A meaningful fraction of rows are synthetic mutation tasks with no generated NL
             # description — see corpus.py's own filter for the same dataset.
             continue
+        task_id = stable_task_id("swe-smith", row)
+        if task_id is None:
+            continue
         tasks.append(
             Task(
-                task_id=row["instance_id"],
+                task_id=task_id,
                 source="swe-smith",
                 prompt=prompt,
                 reference_solution="",  # unused for this source: calibrate.py's "reference"/"null"
@@ -105,17 +122,22 @@ def _swesmith_tasks() -> list[Task]:
 def _swegym_tasks() -> list[Task]:
     meta = SOURCE_METADATA["swe-gym"]
     ds = load_dataset(meta["hf_id"], split=meta["split"])
-    return [
-        Task(
-            task_id=row["instance_id"],
-            source="swe-gym",
-            prompt=row["problem_statement"],
-            reference_solution="",  # unused: calibrate.py special-cases swe-gym to
-            # swegym.grade_reference/grade_null, same reasoning as swe-smith above.
-            row=dict(row),
+    tasks = []
+    for row in ds:
+        task_id = stable_task_id("swe-gym", row)
+        if task_id is None:
+            continue
+        tasks.append(
+            Task(
+                task_id=task_id,
+                source="swe-gym",
+                prompt=row["problem_statement"],
+                reference_solution="",  # unused: calibrate.py special-cases swe-gym to
+                # swegym.grade_reference/grade_null, same reasoning as swe-smith above.
+                row=dict(row),
+            )
         )
-        for row in ds
-    ]
+    return tasks
 
 
 # Multi-SWE-RL rows carry three enormous per-test execution-log fields (`fix_patch_result`,

@@ -1,8 +1,8 @@
 """Loads the corpus: SWE-smith (sampled 20,000 of ~59,136), SWE-Gym, BigCodeBench-Instruct,
 DS-1000 (all rows from each), and Multi-SWE-RL (batch 1 only, ~4,723 multilingual instances — see
-../README.md). Multi-SWE-RL spans 7 languages (C, C++, Go, Java, JS, Rust, TS); only its Go slice
-is gradeable so far (`calibration/grading/multiswerl.py`, `calibration/tasks.py`'s Go-only loader)
-— the other 6 remain corpus-only here, same as before.
+../README.md). Multi-SWE-RL spans 7 languages (C, C++, Go, Java, JS, Rust, TS); Go, JS, TS, Java,
+and Rust are gradeable (`calibration/grading/multiswerl.py`, `calibration/tasks.py`'s language
+filter) — C and C++ remain corpus-only here, same as before.
 
 Multi-SWE-RL can't use the generic `load_dataset(hf_id, split=split)` path below — its 74
 batch-1 JSONL files have per-repo-heterogeneous nested fields, and Arrow schema unification across
@@ -10,12 +10,16 @@ them fails with "Couldn't cast array of type string to null" (the same reason th
 viewer is broken for this dataset). It's fetched file-by-file via `huggingface_hub.hf_hub_download`
 and parsed with plain `json.loads` instead; see `_load_multi_swe_rl`.
 
-Row ids are pipeline-local (`<source>:<position-after-sampling>`) for every source EXCEPT
-multi-swe-rl, which uses the dataset's own stable `instance_id`. That source's files are read
-smallest-first (see `_multi_swe_rl_ordered_paths`) and that order is truncated by `--sample`, so a
-positional id would not be stable across runs — and `compute_corpus_digest`
-(clustering/cluster_map.py) sorts rows by id, so an unstable id would make the corpus digest
-non-reproducible for identical content.
+Row ids are the SAME stable, dataset-native identifier `calibration/tasks.py` uses for its
+`Task.task_id` (`stable_task_id`, single-sourced so the two can't drift apart) — not a positional
+`<source>:<index>` the way this module used to assign them. This is what lets a row's cluster
+label (computed once by `build-artifact`'s K-means fit) be joined against a calibration task by
+id later, without a second, separate embedding pass just to re-derive it (see
+`clustering/task_cluster_map.py`). A stable id was already required for multi-swe-rl regardless —
+that source's files are read smallest-first (see `_multi_swe_rl_ordered_paths`) and truncated by
+`--sample`, so a positional id would never have been stable across runs there even before this
+changed for every other source too — and `compute_corpus_digest` (clustering/cluster_map.py) sorts
+rows by id, so an unstable id would make the corpus digest non-reproducible for identical content.
 """
 from __future__ import annotations
 
@@ -150,6 +154,32 @@ def _extract_multi_swe_rl_text(record: dict) -> str | None:
     return best or None
 
 
+def stable_task_id(source: str, row: dict) -> str | None:
+    """The SAME stable, dataset-native id `calibration/tasks.py`'s per-source loaders derive —
+    kept here, single-sourced, so corpus.py's row ids and calibration's `Task.task_id`s are
+    always the same identifier for the same underlying row (previously they weren't: corpus.py
+    used a positional `f"{name}:{i}"` for every source except multi-swe-rl, which meant a full
+    per-row cluster label already computed by `build-artifact`'s K-means fit could never be joined
+    against a calibration task_id for 4 of 5 sources). `calibration/tasks.py`'s loaders call this
+    too, so the two can't drift apart again — this is the one place the mapping is defined.
+
+    Returns None for a row missing the field it needs (mirrors `_multi_swe_rl_row_id`'s own
+    None-on-missing-data convention below) — the caller skips it rather than crashing the whole
+    corpus load over one malformed row."""
+    if source == "bigcodebench":
+        task_id = row.get("task_id")
+        return str(task_id) if task_id else None
+    if source == "ds1000":
+        problem_id = (row.get("metadata") or {}).get("problem_id")
+        return f"ds1000:{problem_id}" if problem_id is not None else None
+    if source in ("swe-smith", "swe-gym"):
+        instance_id = row.get("instance_id")
+        return str(instance_id) if instance_id else None
+    if source == "multi-swe-rl":
+        return _multi_swe_rl_row_id(row)
+    raise ValueError(f"no stable id rule for source {source!r}")
+
+
 def _multi_swe_rl_row_id(record: dict) -> str | None:
     instance_id = str(record.get("instance_id") or "").strip()
     if not instance_id:
@@ -266,13 +296,22 @@ def _load_source(name: str, cap: int | None) -> list[CorpusRow]:
     # filtering would silently under-sample. This guarantees up to `effective_cap` non-empty rows
     # whenever that many exist in the dataset, at the cost of a full pass when a cap is set.
     rows: list[CorpusRow] = []
-    for i, example in enumerate(ds):
+    seen_ids: set[str] = set()
+    skipped_no_id = 0
+    for example in ds:
         if effective_cap is not None and len(rows) >= effective_cap:
             break
         text = example.get(meta["field"])
         if not text or not str(text).strip():
             continue
-        rows.append(CorpusRow(id=f"{name}:{i}", source=name, text=str(text)))
+        row_id = stable_task_id(name, example)
+        if row_id is None or row_id in seen_ids:
+            skipped_no_id += 1
+            continue
+        seen_ids.add(row_id)
+        rows.append(CorpusRow(id=row_id, source=name, text=str(text)))
+    if skipped_no_id:
+        logger.warning(f"{name}: skipped {skipped_no_id} row(s) with a missing or duplicate stable id")
     logger.info(f"loaded {len(rows)} rows from {name} ({meta['license']})")
     return rows
 

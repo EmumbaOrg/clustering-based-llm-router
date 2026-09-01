@@ -1,3 +1,6 @@
+import numpy as np
+
+from router.common.assign import ClusterMap
 from router.common.config import CalibrationConfig, ModelConfig, SmoothingConfig
 from router.pipeline.calibration import calibrate as calibrate_module
 from router.pipeline.calibration.calibrate import (
@@ -6,6 +9,7 @@ from router.pipeline.calibration.calibrate import (
     _preview,
     _stats_from_outcomes,
     run_and_grade,
+    select_tasks,
 )
 from router.pipeline.calibration.grading.base import GradeResult, Task
 from router.pipeline.calibration.runner import RunResult
@@ -67,7 +71,7 @@ def _task() -> Task:
 
 def _calibration_config() -> CalibrationConfig:
     return CalibrationConfig(
-        gradeable_sources=["bigcodebench"], tasks_per_cluster=4, candidate_pool_oversample=4,
+        gradeable_sources=["bigcodebench"], tasks_per_cluster=4,
         task_timeout_seconds=60, smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
         holdout_fraction=0.3, seed=42, lambda_sweep=[0, 0.1],
     )
@@ -78,6 +82,166 @@ def _named_model(model_id: str) -> ModelConfig:
         model_id=model_id, provider="groq", runner="pi",
         cost_input=0.00005, cost_output=0.00008, context_window=131072, max_tokens=131072, rate_limit_rpm=30,
     )
+
+
+# --- select_tasks: stratified-by-cluster selection driven by a task-cluster-map artifact rather
+# than a per-run random pre-filter + embedding pass. See select_tasks' own docstring for why the
+# old design is gone (it silently left clusters with zero tasks — confirmed against a real run). --
+
+def _cluster_map(k: int, artifact_id: str = "clustermap-x") -> ClusterMap:
+    return ClusterMap(artifact_id=artifact_id, embedding_model_id="m", dimensions=4, centroids=np.zeros((k, 4)))
+
+
+def _task_cluster_map(cluster_map_id: str, entries: list[tuple[str, str, int]]) -> dict:
+    """`entries` is a list of (task_id, source, cluster_id) triples, matching
+    task_cluster_map.py's own {"task_id", "source", "cluster_id"} shape."""
+    return {
+        "schema_version": 1, "artifact_id": "taskclustermap-x", "created_at": "2026-01-01T00:00:00Z",
+        "cluster_map_id": cluster_map_id,
+        "tasks": [{"task_id": t, "source": s, "cluster_id": c} for t, s, c in entries],
+    }
+
+
+def _gradeable_task(task_id: str, source: str = "bigcodebench") -> Task:
+    return Task(task_id=task_id, source=source, prompt=f"prompt for {task_id}", reference_solution="x", row={})
+
+
+def _stub_gradeable_tasks(monkeypatch, tasks_by_source: dict[str, list[Task]]) -> None:
+    monkeypatch.setattr(calibrate_module, "load_gradeable_tasks", lambda source: tasks_by_source.get(source, []))
+
+
+def test_select_tasks_raises_when_the_task_cluster_map_was_built_against_a_different_cluster_map(monkeypatch):
+    _stub_gradeable_tasks(monkeypatch, {})
+    cluster_map = _cluster_map(k=2, artifact_id="clustermap-current")
+    stale_map = _task_cluster_map(cluster_map_id="clustermap-OLD", entries=[])
+
+    try:
+        select_tasks(_calibration_config(), cluster_map, stale_map)
+        assert False, "expected a ValueError"
+    except ValueError as e:
+        assert "clustermap-OLD" in str(e)
+        assert "clustermap-current" in str(e)
+
+
+def test_select_tasks_groups_by_the_cluster_id_the_map_declares(monkeypatch):
+    tasks = {"bigcodebench": [_gradeable_task("t1"), _gradeable_task("t2"), _gradeable_task("t3")]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=2)
+    task_map = _task_cluster_map("clustermap-x", [("t1", "bigcodebench", 0), ("t2", "bigcodebench", 0), ("t3", "bigcodebench", 1)])
+    config = CalibrationConfig(
+        gradeable_sources=["bigcodebench"], tasks_per_cluster=10, task_timeout_seconds=60,
+        smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
+        holdout_fraction=0.0, seed=42, lambda_sweep=[0],
+    )
+
+    selected = select_tasks(config, cluster_map, task_map)
+
+    by_cluster: dict[int, set[str]] = {}
+    for s in selected:
+        by_cluster.setdefault(s.cluster_id, set()).add(s.task.task_id)
+    assert by_cluster == {0: {"t1", "t2"}, 1: {"t3"}}
+
+
+def test_select_tasks_caps_at_tasks_per_cluster(monkeypatch):
+    tasks = {"bigcodebench": [_gradeable_task(f"t{i}") for i in range(5)]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [(f"t{i}", "bigcodebench", 0) for i in range(5)])
+    config = CalibrationConfig(
+        gradeable_sources=["bigcodebench"], tasks_per_cluster=2, task_timeout_seconds=60,
+        smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
+        holdout_fraction=0.0, seed=42, lambda_sweep=[0],
+    )
+
+    selected = select_tasks(config, cluster_map, task_map)
+
+    assert len(selected) == 2
+
+
+def test_select_tasks_holdout_and_calibration_splits_are_disjoint_and_sized_by_fraction(monkeypatch):
+    tasks = {"bigcodebench": [_gradeable_task(f"t{i}") for i in range(10)]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [(f"t{i}", "bigcodebench", 0) for i in range(10)])
+    config = CalibrationConfig(
+        gradeable_sources=["bigcodebench"], tasks_per_cluster=10, task_timeout_seconds=60,
+        smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
+        holdout_fraction=0.3, seed=42, lambda_sweep=[0],
+    )
+
+    selected = select_tasks(config, cluster_map, task_map)
+
+    calibration_ids = {s.task.task_id for s in selected if s.split == "calibration"}
+    holdout_ids = {s.task.task_id for s in selected if s.split == "holdout"}
+    assert calibration_ids.isdisjoint(holdout_ids)
+    assert len(holdout_ids) == 3  # round(10 * 0.3)
+    assert len(calibration_ids) == 7
+
+
+def test_select_tasks_skips_a_mapped_task_id_the_gradeable_loader_does_not_actually_return(monkeypatch):
+    # The task-cluster-map is built from corpus.py's broader row population, which doesn't apply
+    # every filter calibration/tasks.py does (e.g. DS-1000's Matplotlib exclusion) — a mapped id
+    # with no matching gradeable task must be silently skipped, not crash or get selected anyway.
+    tasks = {"bigcodebench": [_gradeable_task("real-task")]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map(
+        "clustermap-x", [("real-task", "bigcodebench", 0), ("filtered-out-elsewhere", "bigcodebench", 0)],
+    )
+
+    selected = select_tasks(_calibration_config(), cluster_map, task_map)
+
+    assert [s.task.task_id for s in selected] == ["real-task"]
+
+
+def test_select_tasks_ignores_entries_for_a_source_not_in_gradeable_sources(monkeypatch):
+    tasks = {"bigcodebench": [_gradeable_task("t1")], "ds1000": [_gradeable_task("d1", source="ds1000")]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [("t1", "bigcodebench", 0), ("d1", "ds1000", 0)])
+    config = CalibrationConfig(  # gradeable_sources deliberately excludes ds1000
+        gradeable_sources=["bigcodebench"], tasks_per_cluster=10, task_timeout_seconds=60,
+        smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
+        holdout_fraction=0.0, seed=42, lambda_sweep=[0],
+    )
+
+    selected = select_tasks(config, cluster_map, task_map)
+
+    assert [s.task.task_id for s in selected] == ["t1"]
+
+
+def test_select_tasks_does_not_crash_when_a_cluster_has_zero_gradeable_tasks(monkeypatch):
+    # A genuine gap in the gradeable pool (not a random-draw artifact — see the function's own
+    # docstring on why this can no longer happen silently) must still produce a valid, if smaller,
+    # selection for every OTHER cluster rather than failing the whole run.
+    tasks = {"bigcodebench": [_gradeable_task("t1")]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=3)  # clusters 1 and 2 have no entries in the map at all
+    task_map = _task_cluster_map("clustermap-x", [("t1", "bigcodebench", 0)])
+
+    selected = select_tasks(_calibration_config(), cluster_map, task_map)
+
+    assert {s.cluster_id for s in selected} == {0}
+    assert [s.task.task_id for s in selected] == ["t1"]
+
+
+def test_select_tasks_is_deterministic_given_the_same_seed(monkeypatch):
+    tasks = {"bigcodebench": [_gradeable_task(f"t{i}") for i in range(10)]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [(f"t{i}", "bigcodebench", 0) for i in range(10)])
+    config = CalibrationConfig(
+        gradeable_sources=["bigcodebench"], tasks_per_cluster=4, task_timeout_seconds=60,
+        smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
+        holdout_fraction=0.25, seed=7, lambda_sweep=[0],
+    )
+
+    first = select_tasks(config, cluster_map, task_map)
+    second = select_tasks(config, cluster_map, task_map)
+
+    assert [(s.task.task_id, s.cluster_id, s.split) for s in first] == [
+        (s.task.task_id, s.cluster_id, s.split) for s in second
+    ]
 
 
 def _selected(task_id: str, cluster_id: int) -> SelectedTask:
@@ -316,3 +480,76 @@ def test_run_and_grade_logs_no_solution_extracted_when_pi_returns_none(monkeypat
     with caplog.at_level("DEBUG", logger="router.pipeline.calibration.calibrate"):
         run_and_grade(_task(), _pi_model(), _calibration_config())
     assert "provided: (no solution extracted)" in caplog.text
+
+
+# --- Pinned task selection: serialize/deserialize SelectedTask lists so a later run (in
+# particular incremental single-model calibration) can grade against the EXACT same set an
+# existing model-profiles.json was built from, instead of trusting select_tasks() to reproduce it. -
+
+def _selected_task(task_id: str, cluster_id: int, split: str = "calibration", source: str = "bigcodebench") -> SelectedTask:
+    return SelectedTask(task=_gradeable_task(task_id, source=source), cluster_id=cluster_id, split=split)
+
+
+def test_compute_task_selection_digest_is_order_independent():
+    a = [_selected_task("t1", 0), _selected_task("t2", 1)]
+    b = list(reversed(a))
+    assert calibrate_module.compute_task_selection_digest(a) == calibrate_module.compute_task_selection_digest(b)
+
+
+def test_compute_task_selection_digest_changes_when_a_task_s_prompt_changes():
+    original = [_selected_task("t1", 0)]
+    changed = [SelectedTask(task=Task(task_id="t1", source="bigcodebench", prompt="a DIFFERENT prompt", reference_solution="x", row={}), cluster_id=0, split="calibration")]
+    assert calibrate_module.compute_task_selection_digest(original) != calibrate_module.compute_task_selection_digest(changed)
+
+
+def test_selected_tasks_to_dict_records_which_clusters_got_zero_tasks():
+    selected = [_selected_task("t1", 0), _selected_task("t2", 2)]
+    artifact = calibrate_module.selected_tasks_to_dict(selected, k=4)
+    assert artifact["empty_clusters"] == [1, 3]
+
+
+def test_selected_tasks_to_dict_omits_the_heavy_row_data():
+    selected = [_selected_task("t1", 0)]
+    artifact = calibrate_module.selected_tasks_to_dict(selected, k=1)
+    assert set(artifact["tasks"][0]) == {"task_id", "source", "cluster_id", "split"}
+
+
+def test_write_then_load_task_selection_round_trips_to_identical_selected_tasks(monkeypatch, tmp_path):
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": [_gradeable_task("t1"), _gradeable_task("t2")]})
+    original = [_selected_task("t1", 0, split="calibration"), _selected_task("t2", 1, split="holdout")]
+    path = tmp_path / "pin.json"
+
+    calibrate_module.write_task_selection(calibrate_module.selected_tasks_to_dict(original, k=2), path)
+    reloaded = calibrate_module.load_task_selection(path)
+
+    assert [(s.task.task_id, s.cluster_id, s.split) for s in reloaded] == [
+        (s.task.task_id, s.cluster_id, s.split) for s in original
+    ]
+
+
+def test_load_task_selection_raises_when_a_pinned_task_id_is_no_longer_gradeable(monkeypatch, tmp_path):
+    # The source's own loader no longer returns "t1" — simulates upstream dataset drift. Must
+    # raise, not silently grade a smaller set than what was pinned.
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": []})
+    path = tmp_path / "pin.json"
+    calibrate_module.write_task_selection(calibrate_module.selected_tasks_to_dict([_selected_task("t1", 0)], k=1), path)
+
+    try:
+        calibrate_module.load_task_selection(path)
+        assert False, "expected a ValueError"
+    except ValueError as e:
+        assert "t1" in str(e)
+
+
+def test_load_task_selection_raises_when_the_pinned_content_digest_no_longer_matches(monkeypatch, tmp_path):
+    # The source's loader now returns "t1" with DIFFERENT prompt text than what was pinned —
+    # simulates the dataset row itself having changed upstream since the pin was written.
+    path = tmp_path / "pin.json"
+    calibrate_module.write_task_selection(calibrate_module.selected_tasks_to_dict([_selected_task("t1", 0)], k=1), path)
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": [Task(task_id="t1", source="bigcodebench", prompt="CHANGED", reference_solution="x", row={})]})
+
+    try:
+        calibrate_module.load_task_selection(path)
+        assert False, "expected a ValueError"
+    except ValueError as e:
+        assert "digest" in str(e)

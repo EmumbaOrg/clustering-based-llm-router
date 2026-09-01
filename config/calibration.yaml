@@ -21,15 +21,12 @@ gradeable_sources:
 # Target calibration tasks per cluster. The spec's reference figure is 20+ per cluster against a
 # 24-cluster map; keep it low here because this pass targets pipeline completeness, not
 # statistically confident error rates.
-tasks_per_cluster: 1
+tasks_per_cluster: 10
 
-# Embedding the FULL gradeable pool (~1,985 rows across bigcodebench+ds1000) just to pick a
-# stratified sample would take ~an hour at this machine's measured throughput (~2s/doc) before
-# calibration even starts. Instead, randomly sample a smaller candidate pool per source first
-# (this many multiples of tasks_per_cluster * k), embed only that, then take up to
-# tasks_per_cluster from whatever lands in each cluster. Trades guaranteed full stratification for
-# a bounded, predictable cost — consistent with this pass's completeness-over-rigor goal.
-candidate_pool_oversample: 4
+# `candidate_pool_oversample` used to live here — select_tasks() no longer embeds a per-run random
+# candidate pool at all (see calibrate.py::select_tasks's docstring for why: it silently left some
+# clusters with zero tasks). Task->cluster assignment now comes from artifacts/task-cluster-map.json,
+# computed once at `build-artifact` time.
 
 # Hard wall-clock limit, in seconds, for a `run_pi` model call AND for grading any source with no
 # entry in task_timeout_overrides below (BigCodeBench/DS-1000's sub-second in-process runs are

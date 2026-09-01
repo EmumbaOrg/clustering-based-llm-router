@@ -99,7 +99,6 @@ class SmoothingConfig:
 class CalibrationConfig:
     gradeable_sources: list[str]
     tasks_per_cluster: int
-    candidate_pool_oversample: int
     task_timeout_seconds: int
     smoothing: SmoothingConfig
     holdout_fraction: float
@@ -122,7 +121,6 @@ def load_calibration_config(path: Path | None = None) -> CalibrationConfig:
     return CalibrationConfig(
         gradeable_sources=data["gradeable_sources"],
         tasks_per_cluster=data["tasks_per_cluster"],
-        candidate_pool_oversample=data["candidate_pool_oversample"],
         task_timeout_seconds=data["task_timeout_seconds"],
         smoothing=smoothing,
         holdout_fraction=data["holdout_fraction"],
