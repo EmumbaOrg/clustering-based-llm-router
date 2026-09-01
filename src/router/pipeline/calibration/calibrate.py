@@ -4,6 +4,7 @@ import csv
 import dataclasses
 import logging
 import random
+import re
 import time
 from pathlib import Path
 
@@ -336,6 +337,29 @@ def _csv_preview(text: str) -> str:
     return text[:_CSV_SOLUTION_MAX_CHARS] + f" ...[{len(text) - _CSV_SOLUTION_MAX_CHARS} more chars]"
 
 
+_UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9_.-]")
+
+
+def _solutions_dir(details_csv_path: Path) -> Path:
+    # Keyed by the details CSV's own filename stem (which already embeds the run timestamp — see
+    # CalibrationDetailRow's docstring) so each run's persisted solutions land in their own
+    # directory, the same way the CSV itself never overwrites a different run's file.
+    return details_csv_path.parent / "solutions" / details_csv_path.stem
+
+
+def _persist_full_solution(solutions_dir: Path, task_id: str, model_id: str, solution: str) -> None:
+    """Only called when `_csv_preview` actually truncated `solution` — a short solution is already
+    complete in the CSV, so a side file for it would be pure duplication. Confirmed this session
+    why this matters: once `_csv_preview` truncates a large diff (e.g. Multi-SWE-RL's
+    `checkstyle-15001`, 613,777 chars), the original text is gone for good — it only ever existed
+    in memory for this one call — so there was no way to audit a large apply failure after the
+    fact without re-running a fresh container by hand."""
+    solutions_dir.mkdir(parents=True, exist_ok=True)
+    safe_task_id = _UNSAFE_FILENAME_CHARS.sub("_", task_id)
+    safe_model_id = _UNSAFE_FILENAME_CHARS.sub("_", model_id)
+    (solutions_dir / f"{safe_task_id}__{safe_model_id}.diff").write_text(solution, encoding="utf-8")
+
+
 class _CalibrationDetailsWriter:
     """Writes calibration-details.csv incrementally — one row per (task, model) call, flushed to
     disk immediately — rather than accumulating everything in memory and writing once at the end.
@@ -405,7 +429,9 @@ def calibrate_models(
     )
     outcomes_by_model: dict[str, list[tuple[SelectedTask, GradeResult]]] = {m.model_id: [] for m in models}
     detail_rows: list[CalibrationDetailRow] = []
-    writer = _CalibrationDetailsWriter(details_csv_path or (ARTIFACTS_DIR / "calibration-details.csv"))
+    resolved_csv_path = details_csv_path or (ARTIFACTS_DIR / "calibration-details.csv")
+    solutions_dir = _solutions_dir(resolved_csv_path)
+    writer = _CalibrationDetailsWriter(resolved_csv_path)
     index = 0
     try:
         for st in calibration_only:
@@ -413,6 +439,9 @@ def calibrate_models(
                 index += 1
                 record = run_and_log(st.task, model, calibration_config, index, total)
                 outcomes_by_model[model.model_id].append((st, record.result))
+                full_solution = record.solution or ""
+                if len(full_solution) > _CSV_SOLUTION_MAX_CHARS:
+                    _persist_full_solution(solutions_dir, st.task.task_id, model.model_id, full_solution)
                 row = CalibrationDetailRow(
                     task_id=st.task.task_id,
                     source=st.task.source,
@@ -422,7 +451,7 @@ def calibrate_models(
                     provider=model.provider,
                     outcome=record.result.outcome,
                     detail=record.result.detail,
-                    solution=_csv_preview(record.solution or ""),
+                    solution=_csv_preview(full_solution),
                     duration_ms=record.duration_ms,
                     input_tokens=record.usage.input_tokens if record.usage else 0,
                     output_tokens=record.usage.output_tokens if record.usage else 0,

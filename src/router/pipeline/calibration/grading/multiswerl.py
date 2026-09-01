@@ -312,6 +312,22 @@ def _top_level_names(row: dict, key: str) -> set[str]:
     return {name.split("/", 1)[0] for name in (row.get(key) or {})}
 
 
+def _is_n2p_only_discriminating_set(task: Task) -> bool:
+    """True when the discriminating set is entirely `n2p_tests` — brand-new tests the fix itself
+    introduces, with no `f2p_tests`/`s2p_tests` at all. Already a documented, accepted quirk for
+    `null-baseline` (those tests genuinely don't exist in source without the fix, so "0 tests
+    matched" is expected there) — confirmed this session that the same shape also explains most
+    REAL candidates' "no discriminating tests matched" misses on this class of task: a candidate's
+    different (even correct) fix essentially never reproduces the exact same newly-authored test
+    name the gold fix added, so the discriminating check can't find it either. Used only to label
+    that expected case distinctly from a genuine harness gap in the reported detail — the outcome
+    itself stays `error_harness` either way, still correctly excluded from error rates."""
+    f2p = task.row.get("f2p_tests") or {}
+    s2p = task.row.get("s2p_tests") or {}
+    n2p = task.row.get("n2p_tests") or {}
+    return not f2p and not s2p and bool(n2p)
+
+
 def _discriminating_test_names(task: Task) -> list[str]:
     """The small set that actually proves whether a fix works: existing tests that should flip
     from failing to passing (`f2p_tests`), brand-new tests the fix introduces (`n2p_tests`), and
@@ -394,7 +410,9 @@ def _rust_test_names(task: Task, keys: tuple[str, ...]) -> list[str]:
     return sorted(names)
 
 
-def _cargo_test_stage(task: Task, nonce: str, names: list[str], label: str, on_pass: str) -> str:
+def _cargo_test_stage(
+    task: Task, nonce: str, names: list[str], label: str, on_pass: str, harness_detail_suffix: str = ""
+) -> str:
     """Rust's equivalent of `_run_test_stage`. `cargo test -- --exact <name1> <name2> ...` runs
     exactly and only the named tests, OR'd — confirmed live against a real container (two real
     test names ran and passed, correctly filtered out of every other test binary in the crate) —
@@ -405,14 +423,20 @@ def _cargo_test_stage(task: Task, nonce: str, names: list[str], label: str, on_p
     (confirmed live: a bogus name and a real name checked before its introducing patch was applied
     both produced `0 passed; 0 failed` across every test binary, exit 0) — so this sums `N passed`/
     `M failed` across every `test result:` line the run prints (`cargo test` runs one such line per
-    test binary/crate target) rather than trusting the exit code alone."""
+    test binary/crate target) rather than trusting the exit code alone.
+
+    `harness_detail_suffix` (only ever non-empty for the discriminating stage — see
+    `_discriminating_stage_script`) distinguishes the expected n2p-only case from a genuine
+    harness gap in the reported detail; outcome classification is unaffected either way."""
     repo_dir = _repo_dir(task)
     names_text = "\n".join(names)
     safe_label = label.replace("-", "_")
     names_file, log_file = f"/tmp/{safe_label}_names.txt", f"/tmp/cargo_test_{safe_label}.log"
     exit_var, count_var = f"EXIT_{safe_label.upper()}", f"RUN_COUNT_{safe_label.upper()}"
     fail_cmd = dockerexec.report_cmd(nonce, "FAIL", f"{label} tests failed")
-    harness_cmd = dockerexec.report_cmd(nonce, "HARNESS", f"no {label} tests matched the expected names")
+    harness_cmd = dockerexec.report_cmd(
+        nonce, "HARNESS", f"no {label} tests matched the expected names{harness_detail_suffix}"
+    )
     return (
         f"{dockerexec.write_file_cmd(names_text, names_file)}\n"
         f"cd {repo_dir} && cargo test -- --exact $(cat {names_file}) > {log_file} 2>&1\n"
@@ -534,18 +558,37 @@ def _volumes(task: Task) -> dict[str, str] | None:
 def _setup_script(task: Task, nonce: str) -> str:
     """Shared by all three modes: apply the test changes every mode needs to exercise the four
     test-outcome dicts. A failure here is always `error_harness` — it's the dataset's own
-    test_patch against its own prebuilt image, never the candidate's fault."""
+    test_patch against its own prebuilt image, never the candidate's fault.
+
+    The `git config --global` here is scoped to this disposable `--rm` container's own throwaway
+    `~/.gitconfig` — discarded the moment the container exits, never touching the host's git
+    identity. It's needed because some repos' own test suites shell out to `git commit` internally
+    (confirmed for `jesseduffield/lazygit`'s `TestIntegration`, which panics without one, taking
+    down sibling subtests that never get to print their own PASS/FAIL line — see
+    `_run_test_stage`'s docstring). We don't control those internal invocations to scope an
+    identity to just them the way `repo_context.py`'s `_inject_swesmith_bug` does for commits we
+    make ourselves, so it has to be global within the container instead."""
     repo_dir = _repo_dir(task)
     harness_no_repo = dockerexec.report_cmd(nonce, "HARNESS", f"missing {repo_dir}")
     harness_test_patch_apply = dockerexec.report_cmd(nonce, "HARNESS", "test_patch failed to apply")
     return (
+        'git config --global user.name "router" && '
+        'git config --global user.email "router@localhost"\n'
         f"cd {repo_dir} || {{ {harness_no_repo}; }}\n"
         f"{dockerexec.write_file_cmd(task.row['test_patch'], '/tmp/test.patch')}\n"
         f"git apply /tmp/test.patch || {{ {harness_test_patch_apply}; }}\n"
     )
 
 
-def _run_test_stage(task: Task, nonce: str, run_names: list[str], check_names: list[str], label: str, on_pass: str) -> str:
+def _run_test_stage(
+    task: Task,
+    nonce: str,
+    run_names: list[str],
+    check_names: list[str],
+    label: str,
+    on_pass: str,
+    harness_detail_suffix: str = "",
+) -> str:
     """Runs `run_names` (top-level, regex-safe truncated names) via `-run`, then decides
     PASS/FAIL/HARNESS from each of `check_names`' (the ORIGINAL, untruncated) own `--- PASS:`/
     `--- FAIL:` line in `go test -v`'s output — never from the overall exit code or a blanket
@@ -569,7 +612,12 @@ def _run_test_stage(task: Task, nonce: str, run_names: list[str], check_names: l
     entirely, the same reasoning `write_file_cmd` already exists for. `go test -run` still exits 0
     even if the pattern matches ZERO tests anywhere (confirmed directly, unlike pytest which errors
     loudly on an unknown node id — see module docstring point 5), which is exactly the case the
-    "not every check_name got a PASS" branch below reports as HARNESS."""
+    "not every check_name got a PASS" branch below reports as HARNESS.
+
+    `harness_detail_suffix` (only ever non-empty for the discriminating stage — see
+    `_discriminating_stage_script`) distinguishes the expected n2p-only case from a genuine
+    harness gap (e.g. lazygit's missing-git-identity panic, mentioned above) in the reported
+    detail; outcome classification is unaffected either way."""
     repo_dir = _repo_dir(task)
     pattern = "^(" + "|".join(run_names) + ")$"
     safe_label = label.replace("-", "_")
@@ -579,7 +627,9 @@ def _run_test_stage(task: Task, nonce: str, run_names: list[str], check_names: l
     fail_patterns_file = f"/tmp/{safe_label}_fail_patterns.txt"
     pass_var, fail_var, total_var = f"PASS_{safe_label.upper()}", f"FAIL_{safe_label.upper()}", f"TOTAL_{safe_label.upper()}"
     fail_cmd = dockerexec.report_cmd(nonce, "FAIL", f"{label} tests failed")
-    harness_cmd = dockerexec.report_cmd(nonce, "HARNESS", f"no {label} tests matched the expected names")
+    harness_cmd = dockerexec.report_cmd(
+        nonce, "HARNESS", f"no {label} tests matched the expected names{harness_detail_suffix}"
+    )
 
     # Trailing newline on every line (including the last) so `wc -l` counts correctly regardless
     # of how many names there are — a file with content but no trailing newline undercounts by one.
@@ -613,11 +663,13 @@ def _run_test_stage(task: Task, nonce: str, run_names: list[str], check_names: l
 
 
 def _discriminating_stage_script(task: Task, nonce: str, on_pass: str) -> str:
+    n2p_suffix = " (n2p-only — expected unless this is the gold fix)" if _is_n2p_only_discriminating_set(task) else ""
+
     if _is_rust(task):
         names = _rust_test_names(task, _DISCRIMINATING_TEST_KEYS)
         if not names:
             return dockerexec.report_cmd(nonce, "HARNESS", "no discriminating tests found on this row")
-        return _cargo_test_stage(task, nonce, names, "discriminating", on_pass)
+        return _cargo_test_stage(task, nonce, names, "discriminating", on_pass, harness_detail_suffix=n2p_suffix)
 
     names = _discriminating_test_names(task)
     if not names:
@@ -626,7 +678,7 @@ def _discriminating_stage_script(task: Task, nonce: str, on_pass: str) -> str:
         # here is a dataset/harness problem worth surfacing, not a silent pass-through.
         return dockerexec.report_cmd(nonce, "HARNESS", "no discriminating tests found on this row")
     check_names = _discriminating_full_test_names(task)
-    return _run_test_stage(task, nonce, names, check_names, "discriminating", on_pass)
+    return _run_test_stage(task, nonce, names, check_names, "discriminating", on_pass, harness_detail_suffix=n2p_suffix)
 
 
 def _regression_guard_stage_script(task: Task, nonce: str, on_pass: str) -> str:
@@ -754,12 +806,11 @@ def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECON
 
     image = _image(task)
     nonce = uuid.uuid4().hex
-    fail_candidate_apply = dockerexec.report_cmd(nonce, "FAIL", "candidate patch failed to apply")
     pass_cmd = dockerexec.report_cmd(nonce, "PASS")
     script = (
         _setup_script(task, nonce)
         + f"{dockerexec.write_file_cmd(solution, '/tmp/candidate.patch')}\n"
-        + f"git apply /tmp/candidate.patch || {{ {fail_candidate_apply}; }}\n"
+        + dockerexec.apply_patch_or_fail_cmd(nonce, "/tmp/candidate.patch")
         + _test_stage_script(task, nonce, on_pass=pass_cmd)
     )
     try:

@@ -1,3 +1,5 @@
+import base64
+
 from router.pipeline.calibration.grading import dockerexec, swesmith
 from router.pipeline.calibration.grading.base import GradeResult, Task
 
@@ -13,10 +15,23 @@ def _task(**row_overrides) -> Task:
     return Task(task_id="swesmith:0", source="swe-smith", prompt="fix the bug", reference_solution="", row=row)
 
 
-def test_node_ids_are_shell_quoted():
-    node_ids = swesmith._node_ids(_task())
-    assert "'tests/test with space.py::test_three'" in node_ids
-    assert "tests/test_x.py::test_one" in node_ids
+def _decoded_ids_file_content(script: str) -> str:
+    """See test_dockerexec.py's identical helper — node ids are written via `write_file_cmd`'s
+    base64 transport, never embedded raw in the script."""
+    for line in script.splitlines():
+        if line.startswith("echo ") and "base64 -d > /tmp/node_ids.txt" in line:
+            encoded = line.split(" ", 2)[1]
+            return base64.b64decode(encoded).decode("utf-8")
+    raise AssertionError("no base64 write of /tmp/node_ids.txt found in script")
+
+
+def test_pytest_script_passes_every_declared_node_id_to_the_shared_collect_then_run_helper():
+    # Space-containing-id safety is covered directly at the shared helper in test_dockerexec.py —
+    # this just confirms the right ids/repo_dir/conda env are threaded through from a real row.
+    script = swesmith._pytest_script(_task(), "nonce")
+    assert _decoded_ids_file_content(script) == (
+        "tests/test_x.py::test_one\ntests/test_x.py::test_two\ntests/test with space.py::test_three\n"
+    )
 
 
 def test_grade_returns_fail_without_touching_docker_for_an_empty_solution(monkeypatch):
@@ -100,5 +115,17 @@ def test_grade_reference_reports_harness_for_a_failed_reverse_apply(monkeypatch)
 def test_pytest_script_reports_pass_and_fail_off_the_same_exit_code_check():
     script = swesmith._pytest_script(_task(), "nonce")
     assert "python -m pytest -q" in script
-    assert dockerexec.report_cmd("nonce", "PASS") in script
-    assert dockerexec.report_cmd("nonce", "FAIL", "pytest reported failures") in script
+    assert f"{dockerexec.sentinel('nonce')}PASS" in script
+    assert "pytest reported failures" in script
+
+
+def test_pytest_script_reports_harness_for_uncollectable_node_ids():
+    # Regression test: confirmed live this session (a comma-truncated FAIL_TO_PASS/PASS_TO_PASS
+    # id on real SWE-Gym rows, same node-id shape this module shares) that pytest's exit codes 4
+    # (usage error) / 5 (no tests collected) must map to HARNESS, not FAIL, so a dataset id this
+    # module can't collect as given can't spuriously count against a candidate. Mirrors
+    # swegym.py's identical regression test.
+    script = swesmith._pytest_script(_task(), "nonce")
+    assert dockerexec.report_cmd("nonce", "HARNESS", "pytest could not collect the specified test ids") in script
+    assert "PYTEST_EXIT -eq 4" in script
+    assert "PYTEST_EXIT -eq 5" in script

@@ -51,7 +51,6 @@ for reusing `dockerexec.py`'s sentinel/classify protocol unchanged.
 """
 from __future__ import annotations
 
-import shlex
 import uuid
 
 from . import dockerexec
@@ -64,11 +63,6 @@ CONDA_ACTIVATE = "source /opt/miniconda3/bin/activate && conda activate testbed"
 
 def _image(task: Task) -> str:
     return f"xingyaoww/sweb.eval.x86_64.{task.row['instance_id'].replace('__', '_s_')}:latest".lower()
-
-
-def _node_ids(task: Task) -> str:
-    ids = task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"]
-    return " ".join(shlex.quote(t) for t in ids)
 
 
 def _setup_script(task: Task, nonce: str) -> str:
@@ -85,31 +79,26 @@ def _setup_script(task: Task, nonce: str) -> str:
 
 
 def _pytest_script(task: Task, nonce: str) -> str:
-    """Run the test suite and report PASS/FAIL off its exit code — identical across all three
-    modes, since by this point setup has already succeeded and a nonzero exit here is USUALLY a
-    genuine test outcome, not a harness problem.
+    """Run the test suite and report PASS/FAIL off its exit code.
 
     One confirmed exception, exit codes 4/5 (pytest's own "usage error" / "no tests collected"):
-    a small fraction of rows (~2.8% of the dataset, confirmed by direct count) record a
-    `FAIL_TO_PASS`/`PASS_TO_PASS` node id containing a non-ASCII character (e.g. an emoji in a
-    parametrize case) using the LITERAL character, while the pytest version actually installed in
-    the corresponding grading image escapes non-ASCII parametrize ids when generating its own node
-    ids (confirmed directly: `--collect-only` reports `[the-unicode-\\U0001f4a9-key]`, not the
-    dataset's literal `[the-unicode-💩-key]`) — a dataset-collection-time vs. grading-image
-    pytest-version mismatch, not a candidate's fault. Exit 4/5 means pytest couldn't even find/run
-    the specified ids, as opposed to running them and reporting a real failure (exit 1) — routed to
-    HARNESS so this narrow, dataset-side mismatch can't spuriously count against any candidate
-    (including the `reference` control, which would otherwise show a false failure on exactly these
-    rows)."""
-    pass_cmd = dockerexec.report_cmd(nonce, "PASS")
-    fail_cmd = dockerexec.report_cmd(nonce, "FAIL", "pytest reported failures")
-    harness_cmd = dockerexec.report_cmd(nonce, "HARNESS", "pytest could not collect the specified test ids")
-    return (
-        f"{CONDA_ACTIVATE} && cd {REPO_DIR} && python -m pytest -q {_node_ids(task)}\n"
-        "PYTEST_EXIT=$?\n"
-        f"if [ $PYTEST_EXIT -eq 0 ]; then {pass_cmd}; "
-        f"elif [ $PYTEST_EXIT -eq 4 ] || [ $PYTEST_EXIT -eq 5 ]; then {harness_cmd}; "
-        f"else {fail_cmd}; fi\n"
+    a small fraction of rows record a `FAIL_TO_PASS`/`PASS_TO_PASS` node id pytest can't collect
+    as given — confirmed live this session as TWO distinct causes, not just one: the originally
+    identified ~2.8%-of-dataset non-ASCII-parametrize mismatch (a literal emoji recorded at
+    dataset-collection time vs. the grading image's installed pytest escaping it when generating
+    its own node ids), AND, found investigating `pandas-56051`/`pandas-56594`/`pandas-56522`/
+    `getmoto-6107`, ids truncated mid-value at an embedded comma (e.g.
+    `test_groups_repr_truncates[4-{0:` — missing its closing `]`), a dataset-construction bug
+    unrelated to character encoding. Either way it's a dataset-side mismatch, not a candidate's
+    fault — `dockerexec.pytest_collect_then_run` handles both, and additionally recovers the
+    other, perfectly valid ids in the same batch instead of losing the whole task's signal to one
+    bad id (confirmed live: `pandas-56051` lost all 122 ids over just 4 bad ones)."""
+    return dockerexec.pytest_collect_then_run(
+        node_ids=task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"],
+        nonce=nonce,
+        repo_dir=REPO_DIR,
+        conda_activate=CONDA_ACTIVATE,
+        fail_detail="pytest reported failures",
     )
 
 
@@ -122,11 +111,10 @@ def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECON
 
     image = _image(task)
     nonce = uuid.uuid4().hex
-    fail_candidate_apply = dockerexec.report_cmd(nonce, "FAIL", "candidate patch failed to apply")
     script = (
         _setup_script(task, nonce)
         + f"{dockerexec.write_file_cmd(solution, '/tmp/candidate.patch')}\n"
-        + f"git apply /tmp/candidate.patch || {{ {fail_candidate_apply}; }}\n"
+        + dockerexec.apply_patch_or_fail_cmd(nonce, "/tmp/candidate.patch")
         + _pytest_script(task, nonce)
     )
     try:

@@ -1,3 +1,4 @@
+import base64
 import subprocess
 from collections import OrderedDict
 
@@ -5,8 +6,10 @@ import pytest
 
 from router.pipeline.calibration.grading import dockerexec
 from router.pipeline.calibration.grading.dockerexec import (
+    apply_patch_or_fail_cmd,
     classify,
     cleanup_image,
+    pytest_collect_then_run,
     report_cmd,
     run,
     sentinel,
@@ -264,3 +267,91 @@ def test_touch_image_refreshes_recency_so_a_re_touched_image_is_not_the_one_evic
 
     # image-1, not image-0, is now the least-recently-used and gets evicted.
     assert cleaned_up == ["image-1"]
+
+
+def _decoded_ids_file_content(script: str) -> str:
+    """`pytest_collect_then_run` writes node ids via `write_file_cmd`'s base64 transport (never
+    embedded raw in the script — same reasoning `test_write_file_cmd_round_trips...` covers), so a
+    test needs to find and decode that blob to inspect what was actually written."""
+    for line in script.splitlines():
+        if line.startswith("echo ") and "base64 -d > /tmp/node_ids.txt" in line:
+            encoded = line.split(" ", 2)[1]
+            return base64.b64decode(encoded).decode("utf-8")
+    raise AssertionError("no base64 write of /tmp/node_ids.txt found in script")
+
+
+def test_pytest_collect_then_run_writes_every_node_id_one_per_line_not_shell_embedded():
+    # Regression coverage for the property `swegym.py`'s old `_node_ids` used to guarantee via
+    # shell-quoting: an id containing a space (a real, confirmed shape in this dataset) must
+    # survive intact, not get split into two ids. The new mechanism (a file, one id per line, read
+    # back with `readarray`) sidesteps shell-quoting entirely instead of relying on it.
+    node_ids = ["tests/test_x.py::test_one", "tests/test with space.py::test_two"]
+    script = pytest_collect_then_run(node_ids, NONCE, "/testbed", "conda activate testbed")
+
+    assert _decoded_ids_file_content(script) == "tests/test_x.py::test_one\ntests/test with space.py::test_two\n"
+    assert node_ids[0] not in script  # never embedded raw — only via the base64 blob
+    assert node_ids[1] not in script
+
+
+def test_pytest_collect_then_run_collects_before_executing():
+    script = pytest_collect_then_run(["tests/test_x.py::test_one"], NONCE, "/testbed", "conda activate testbed")
+
+    collect_index = script.index("--collect-only")
+    execute_index = script.index('python -m pytest -q "${VALID[@]}"')
+    assert collect_index < execute_index
+    # Both passes must run in the same cwd/env — a mismatch would make the collect-only pass's
+    # "not found" lines use a different absolute path than step 2 expects, silently excluding
+    # every id (confirmed live: pytest resolves relative node ids against getcwd()).
+    assert script.count("conda activate testbed && cd /testbed") == 2
+
+
+def test_pytest_collect_then_run_reports_harness_immediately_when_every_id_is_excluded():
+    script = pytest_collect_then_run(["tests/test_x.py::test_one"], NONCE, "/testbed", "conda activate testbed")
+
+    assert report_cmd(NONCE, "HARNESS", "pytest could not collect the specified test ids") in script
+    # The real (potentially slow) execution pass must be skipped entirely in this branch.
+    harness_report_index = script.index(report_cmd(NONCE, "HARNESS", "pytest could not collect the specified test ids"))
+    execute_index = script.index('python -m pytest -q "${VALID[@]}"')
+    assert harness_report_index < execute_index  # HARNESS branch precedes (and short-circuits before) it
+
+
+def test_pytest_collect_then_run_checks_both_of_pytests_not_found_message_shapes():
+    # Regression test: confirmed live this session that pytest reports an unresolvable id one of
+    # two ways depending on whether the FILE itself exists — "not found: <repo_dir>/<id>"
+    # (absolute path, file exists but the specific test/class doesn't) or "file or directory not
+    # found: <id>" (relative, id exactly as given, file doesn't exist at all). A synthetic
+    # nonexistent-file id hit only the second form and was silently kept as "valid" when only the
+    # first was checked.
+    script = pytest_collect_then_run(["tests/test_x.py::test_one"], NONCE, "/testbed", "conda activate testbed")
+    assert 'grep -qxF "ERROR: not found: /testbed/$id"' in script
+    assert 'grep -qxF "ERROR: file or directory not found: $id"' in script
+
+
+def test_pytest_collect_then_run_folds_excluded_count_into_fail_and_pass_detail():
+    script = pytest_collect_then_run(
+        ["tests/test_x.py::test_one"], NONCE, "/testbed", "conda activate testbed", fail_detail="pytest reported failures"
+    )
+
+    assert "id(s) excluded as uncollectable" in script
+    assert f'{sentinel(NONCE)}FAIL:pytest reported failures ($EXCL_NOTE)' in script
+    assert f'{sentinel(NONCE)}PASS:$EXCL_NOTE' in script
+
+
+def test_apply_patch_or_fail_cmd_folds_gits_real_stderr_into_the_fail_detail():
+    # Previously a static "candidate patch failed to apply" discarded git's own error message
+    # entirely — confirmed this session investigating Luna's Multi-SWE-RL failures that there was
+    # no way to tell "malformed diff" from "diff doesn't match this baseline" from anything else
+    # after the fact without re-running a fresh container by hand.
+    script = apply_patch_or_fail_cmd(NONCE, "/tmp/candidate.patch", fail_detail="candidate patch failed to apply")
+
+    assert "git apply /tmp/candidate.patch 2>/tmp/apply_err.txt ||" in script
+    assert f'echo "{sentinel(NONCE)}FAIL:candidate patch failed to apply: $ERR"' in script
+
+
+def test_apply_patch_or_fail_cmd_never_reports_on_the_success_path():
+    # The FAIL report must live entirely inside the `|| { ... }` block — a successful `git apply`
+    # must fall through to whatever the caller appends next (the test stage), not report anything.
+    script = apply_patch_or_fail_cmd(NONCE, "/tmp/candidate.patch")
+    fail_line_index = script.index("echo")
+    apply_line_index = script.index("git apply")
+    assert apply_line_index < fail_line_index  # the echo is inside the || block, after the apply attempt

@@ -158,7 +158,9 @@ _CONTEXT_INSTRUCTIONS = {
         "issue, and make the necessary changes directly using your edit/write tools — actually "
         "modify the files; do not just describe or show the fix in your response. Your final "
         "message does not need to include any code or diff — the changes you make to the files "
-        "are the submission."
+        "are the submission. Keep your change as small and targeted as possible — modify only "
+        "what's strictly necessary to fix the described issue; do not update changelogs, CI "
+        "configuration, documentation, or unrelated code as part of this fix."
     ),
     "swe-gym": (
         "The repository is checked out in your current working directory, at the state before "
@@ -166,7 +168,9 @@ _CONTEXT_INSTRUCTIONS = {
         "issue, and make the necessary changes directly using your edit/write tools — actually "
         "modify the files; do not just describe or show the fix in your response. Your final "
         "message does not need to include any code or diff — the changes you make to the files "
-        "are the submission."
+        "are the submission. Keep your change as small and targeted as possible — modify only "
+        "what's strictly necessary to fix the described issue; do not update changelogs, CI "
+        "configuration, documentation, or unrelated code as part of this fix."
     ),
     "multi-swe-rl": (
         "The repository is checked out in your current working directory, at the state before "
@@ -174,7 +178,9 @@ _CONTEXT_INSTRUCTIONS = {
         "issue, and make the necessary changes directly using your edit/write tools — actually "
         "modify the files; do not just describe or show the fix in your response. Your final "
         "message does not need to include any code or diff — the changes you make to the files "
-        "are the submission."
+        "are the submission. Keep your change as small and targeted as possible — modify only "
+        "what's strictly necessary to fix the described issue; do not update changelogs, CI "
+        "configuration, documentation, or unrelated code as part of this fix."
     ),
 }
 

@@ -117,6 +117,43 @@ def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the
     assert calls == [("t1", "m1"), ("t1", "m2"), ("t2", "m1"), ("t2", "m2")]
 
 
+def test_calibrate_models_persists_the_full_solution_when_the_csv_preview_would_truncate_it(monkeypatch, tmp_path):
+    # Regression test: confirmed this session investigating Luna's Multi-SWE-RL failures that a
+    # solution over the CSV preview cap (e.g. `checkstyle-15001`, 613,777 chars) is gone for good
+    # once truncated — it only ever existed in memory for that one call, with no way to audit a
+    # large apply failure after the fact without re-running a fresh container by hand.
+    huge_solution = "x" * (calibrate_module._CSV_SOLUTION_MAX_CHARS + 500)
+    monkeypatch.setattr(
+        calibrate_module, "run_and_grade",
+        lambda task, model, cfg: (GradeResult(outcome="fail"), huge_solution, None),
+    )
+    models = [_named_model("m1")]
+    selected = [_selected("t1", 0)]
+    details_path = tmp_path / "details.csv"
+
+    _results, detail_rows = calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=details_path)
+
+    assert len(detail_rows[0].solution) < len(huge_solution)  # the CSV row itself still just has the preview
+    persisted = tmp_path / "solutions" / "details" / "t1__m1.diff"
+    assert persisted.read_text(encoding="utf-8") == huge_solution
+
+
+def test_calibrate_models_does_not_persist_a_side_file_for_a_solution_that_already_fits(monkeypatch, tmp_path):
+    # A short solution is already complete in the CSV — a side file for it would be pure
+    # duplication, and every (task, model) pair in a real run would get one otherwise.
+    monkeypatch.setattr(
+        calibrate_module, "run_and_grade",
+        lambda task, model, cfg: (GradeResult(outcome="pass"), "short diff", None),
+    )
+    models = [_named_model("m1")]
+    selected = [_selected("t1", 0)]
+    details_path = tmp_path / "details.csv"
+
+    calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=details_path)
+
+    assert not (tmp_path / "solutions").exists()
+
+
 def test_calibrate_models_stats_are_identical_to_the_old_models_outer_aggregation(monkeypatch, tmp_path):
     # Guards the "purely a reordering" claim: every statistic is computed after all grading, so
     # reordering the calls must not move a single number.

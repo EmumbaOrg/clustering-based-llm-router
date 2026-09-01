@@ -1,5 +1,17 @@
+import base64
+
 from router.pipeline.calibration.grading import dockerexec, swegym
 from router.pipeline.calibration.grading.base import GradeResult, Task
+
+
+def _decoded_ids_file_content(script: str) -> str:
+    """See test_dockerexec.py's identical helper — node ids are written via `write_file_cmd`'s
+    base64 transport, never embedded raw in the script."""
+    for line in script.splitlines():
+        if line.startswith("echo ") and "base64 -d > /tmp/node_ids.txt" in line:
+            encoded = line.split(" ", 2)[1]
+            return base64.b64decode(encoded).decode("utf-8")
+    raise AssertionError("no base64 write of /tmp/node_ids.txt found in script")
 
 
 def _task(**row_overrides) -> Task:
@@ -26,10 +38,15 @@ def test_image_lowercases_mixed_case_instance_ids():
     assert image == "xingyaoww/sweb.eval.x86_64.project-monai_s_monai-3837:latest"
 
 
-def test_node_ids_are_shell_quoted():
-    node_ids = swegym._node_ids(_task())
-    assert "'tests/test with space.py::test_three'" in node_ids
-    assert "tests/test_x.py::test_one" in node_ids
+def test_pytest_script_passes_every_declared_node_id_to_the_shared_collect_then_run_helper():
+    # Space-containing-id safety (the property `_node_ids` used to guarantee via shell-quoting,
+    # before it was replaced by dockerexec.pytest_collect_then_run's file-based mechanism) is
+    # covered directly at that shared helper in test_dockerexec.py — this just confirms the right
+    # ids/repo_dir/conda env are threaded through from a real task row.
+    script = swegym._pytest_script(_task(), "nonce")
+    assert _decoded_ids_file_content(script) == (
+        "tests/test_x.py::test_one\ntests/test_x.py::test_two\ntests/test with space.py::test_three\n"
+    )
 
 
 def test_grade_returns_fail_without_touching_docker_for_an_empty_solution(monkeypatch):
@@ -126,15 +143,17 @@ def test_pytest_script_reports_pass_and_fail_off_the_same_exit_code_check():
     script = swegym._pytest_script(_task(), "nonce")
     assert "python -m pytest -q" in script
     assert swegym.CONDA_ACTIVATE in script
-    assert dockerexec.report_cmd("nonce", "PASS") in script
-    assert dockerexec.report_cmd("nonce", "FAIL", "pytest reported failures") in script
+    assert f"{dockerexec.sentinel('nonce')}PASS" in script
+    assert "pytest reported failures" in script
 
 
 def test_pytest_script_reports_harness_for_uncollectable_node_ids(monkeypatch):
     # Regression test: a real validate-graders run against getmoto__moto-6308 found a
     # PASS_TO_PASS id with a literal emoji that pytest (in that image) can't collect as given —
     # pytest's own exit codes 4 (usage error) / 5 (no tests collected) must map to HARNESS, not
-    # FAIL, so a dataset/pytest-version mismatch can't spuriously count against a candidate.
+    # FAIL, so a dataset/pytest-version mismatch can't spuriously count against a candidate. Now
+    # handled by the shared dockerexec.pytest_collect_then_run (see test_dockerexec.py for the
+    # collect-then-exclude mechanism itself) — this just confirms swegym.py wires into it.
     script = swegym._pytest_script(_task(), "nonce")
     assert dockerexec.report_cmd("nonce", "HARNESS", "pytest could not collect the specified test ids") in script
     assert "PYTEST_EXIT -eq 4" in script

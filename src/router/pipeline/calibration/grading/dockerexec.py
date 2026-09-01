@@ -77,6 +77,112 @@ def write_file_cmd(text: str, dest: str) -> str:
     return f"echo {encoded} | base64 -d > {shlex.quote(dest)}"
 
 
+def pytest_collect_then_run(
+    node_ids: list[str],
+    nonce: str,
+    repo_dir: str,
+    conda_activate: str,
+    fail_detail: str = "pytest reported failures",
+) -> str:
+    """Shared by swegym.py and swesmith.py's `_pytest_script` — both pass every declared
+    FAIL_TO_PASS/PASS_TO_PASS node id to pytest in a single batch, and pytest fails the WHOLE
+    invocation (exit 4 "usage error" / 5 "no tests collected") if even one id can't be collected.
+    Confirmed live this session against real SWE-Gym rows: `pandas-56051` lost all 122
+    discriminating tests over 4 bad ids, `dvc-4011` lost all 30 over 1 — a single malformed id
+    (non-ASCII, or truncated mid-value at an embedded comma) costing an otherwise-fully-gradeable
+    task its entire signal.
+
+    Splits into an explicit collect-then-execute shape instead of "run for real, retry on
+    failure" so the potentially-slow execution step runs AT MOST ONCE, by construction — a
+    `--collect-only` pass can never execute a test body, so it's unconditionally cheap regardless
+    of suite size (confirmed live: 0.04s against a real 3,272-id pandas suite) — rather than
+    depending on an assumption about pytest's own internal error-ordering:
+
+    1. `--collect-only` against every declared id.
+    2. Check each id individually against that pass's own `ERROR: not found: <repo_dir>/<id>`
+       lines (confirmed exact format live) — an EXACT full-line match (`grep -x`), not a substring
+       one, since a substring match would let one valid id be wrongly excluded just for being a
+       literal prefix of a different, genuinely-bad id's line (the same class of collision
+       `multiswerl.py`'s Go test-name matching was anchored against earlier this session).
+    3. If every id turns out uncollectable, report HARNESS immediately — no point invoking pytest
+       again on an empty set.
+    4. Otherwise run the REAL pytest pass exactly once, against only the survivors. Its own exit
+       code still gets the same 0 / 4-or-5 / else handling as a safety net for a collection
+       failure step 2 didn't happen to explain per-id (e.g. a session-wide conftest import error),
+       and the excluded-id count (if any) is folded into the reported detail so it's visible
+       without re-deriving it from a discarded log."""
+    ids_file, collect_log, valid_file = "/tmp/node_ids.txt", "/tmp/collect.log", "/tmp/valid_ids.txt"
+    prefix = sentinel(nonce)
+    harness_uncollectable = report_cmd(nonce, "HARNESS", "pytest could not collect the specified test ids")
+    ids_text = "\n".join(node_ids) + "\n"
+    return (
+        f"{write_file_cmd(ids_text, ids_file)}\n"
+        f"readarray -t IDS < {ids_file}\n"
+        # Collection must run from the SAME cwd (repo_dir) and env (conda_activate) as the real
+        # execution pass below — pytest resolves relative node-id args against getcwd() into the
+        # absolute form its own "ERROR: not found: <path>" line reports (confirmed live: the
+        # printed path was `/testbed/...` when collected from inside `/testbed`), so a mismatched
+        # cwd here would make every id in step 2 below fail to match, silently excluding
+        # everything.
+        f'{conda_activate} && cd {repo_dir} && python -m pytest --collect-only -q "${{IDS[@]}}" > {collect_log} 2>&1\n'
+        f"> {valid_file}\n"
+        f'for id in "${{IDS[@]}}"; do\n'
+        # pytest reports an unresolvable id one of two ways, confirmed live for both: "not found:
+        # <repo_dir>/<id>" (absolute path — the FILE exists, the specific test/class within it
+        # doesn't) or "file or directory not found: <id>" (relative, id exactly as given — the
+        # file itself doesn't exist). Both must be checked; the first synthetic test of this
+        # helper (a made-up file path) hit only the second form and would have silently kept a
+        # genuinely uncollectable id as "valid" if only the first were checked.
+        f'  if grep -qxF "ERROR: not found: {repo_dir}/$id" {collect_log} || '
+        f'grep -qxF "ERROR: file or directory not found: $id" {collect_log}; then :; '
+        f'else echo "$id" >> {valid_file}; fi\n'
+        "done\n"
+        f"EXCLUDED=$(( $(wc -l < {ids_file}) - $(wc -l < {valid_file}) ))\n"
+        f"if [ ! -s {valid_file} ]; then\n"
+        f"  {harness_uncollectable}\n"
+        "else\n"
+        f"  readarray -t VALID < {valid_file}\n"
+        f'  {conda_activate} && cd {repo_dir} && python -m pytest -q "${{VALID[@]}}"\n'
+        "  PYTEST_EXIT=$?\n"
+        '  if [ "$EXCLUDED" -gt 0 ]; then EXCL_NOTE="$EXCLUDED id(s) excluded as uncollectable"; else EXCL_NOTE=""; fi\n'
+        "  if [ $PYTEST_EXIT -eq 0 ]; then\n"
+        f'    if [ -n "$EXCL_NOTE" ]; then echo "{prefix}PASS:$EXCL_NOTE"; else echo "{prefix}PASS"; fi\n'
+        "  elif [ $PYTEST_EXIT -eq 4 ] || [ $PYTEST_EXIT -eq 5 ]; then\n"
+        f'    echo "{prefix}HARNESS:pytest could not collect the specified test ids"\n'
+        "  else\n"
+        f'    if [ -n "$EXCL_NOTE" ]; then echo "{prefix}FAIL:{fail_detail} ($EXCL_NOTE)"; else echo "{prefix}FAIL:{fail_detail}"; fi\n'
+        "  fi\n"
+        "  exit 0\n"
+        "fi\n"
+    )
+
+
+def apply_patch_or_fail_cmd(nonce: str, patch_path: str, fail_detail: str = "candidate patch failed to apply") -> str:
+    """`git apply <patch_path> || FAIL`, folding git's own real error message into the detail
+    instead of discarding it for a static string. Used for the CANDIDATE's own patch only —
+    test_patch/bug_patch/gold-patch applies stay on their existing static HARNESS messages (a
+    dataset/harness problem by definition regardless of git's specific error there, not something
+    worth the extra detail for). A candidate's apply failure previously gave no way to tell "the
+    diff is malformed" from "the diff doesn't match this baseline" from any other cause after the
+    fact — confirmed this session investigating Luna's Multi-SWE-RL failures that the stored
+    `solution` alone (even before it hits the CSV's own truncation cap) isn't enough to diagnose
+    why without re-running a fresh container by hand.
+
+    `2>{err_file}` isolates git's stderr from the rest of the script's own stdout — `tr`+`cut`
+    collapses it to one line and caps it at 500 chars, matching `report_cmd`'s own single-line
+    convention (an embedded newline would otherwise look like additional, unrelated output lines
+    to `classify`'s line-by-line scan)."""
+    err_file = "/tmp/apply_err.txt"
+    prefix = sentinel(nonce)
+    return (
+        f"git apply {patch_path} 2>{err_file} || {{\n"
+        f"  ERR=$(tr '\\n' ' ' < {err_file} | cut -c1-500)\n"
+        f'  echo "{prefix}FAIL:{fail_detail}: $ERR"\n'
+        "  exit 0\n"
+        "}\n"
+    )
+
+
 def classify(nonce: str, returncode: int, stdout: str, stderr: str) -> GradeResult:
     """PURE — no subprocess calls, so this is the part regression tests exercise directly."""
     prefix = sentinel(nonce)

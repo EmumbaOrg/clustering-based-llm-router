@@ -203,6 +203,42 @@ def test_discriminating_stage_reports_harness_when_no_discriminating_tests_exist
     assert "UNREACHABLE" not in script  # never falls through on the empty-set case
 
 
+def test_is_n2p_only_discriminating_set():
+    assert not multiswerl._is_n2p_only_discriminating_set(_task())  # default fixture has f2p_tests
+    assert not multiswerl._is_n2p_only_discriminating_set(_task(f2p_tests={}, n2p_tests={}, s2p_tests={}))  # nothing at all
+    n2p_only = _task(f2p_tests={}, s2p_tests={}, n2p_tests={"TestNew": {"fix": "PASS", "test": "FAIL", "run": "NONE"}})
+    assert multiswerl._is_n2p_only_discriminating_set(n2p_only)
+
+
+def test_discriminating_stage_script_labels_the_n2p_only_case_distinctly_for_go():
+    # Confirmed live this session (istio, hugo, clap, etc.): most REAL candidates' "no
+    # discriminating tests matched" misses trace to this n2p-only shape, not a genuine harness
+    # gap — labeling it distinctly makes that visible in the CSV without re-deriving it by hand.
+    # Outcome classification (still error_harness) is unaffected — only the detail string changes.
+    task = _task(f2p_tests={}, s2p_tests={}, n2p_tests={"TestNew": {"fix": "PASS", "test": "FAIL", "run": "NONE"}})
+    script = multiswerl._discriminating_stage_script(task, "nonce", on_pass="NEXT\n")
+    assert (
+        dockerexec.report_cmd(
+            "nonce", "HARNESS", "no discriminating tests matched the expected names (n2p-only — expected unless this is the gold fix)"
+        )
+        in script
+    )
+
+
+def test_discriminating_stage_script_does_not_label_when_f2p_or_s2p_tests_are_present():
+    # Regression guard: the default fixture has a real f2p_tests entry, so this must stay
+    # unlabeled — confirms the n2p-only detection doesn't fire on a genuine harness gap.
+    script = multiswerl._discriminating_stage_script(_task(), "nonce", on_pass="NEXT\n")
+    assert dockerexec.report_cmd("nonce", "HARNESS", "no discriminating tests matched the expected names") in script
+    assert "n2p-only" not in script
+
+
+def test_discriminating_stage_script_labels_the_n2p_only_case_for_rust():
+    # _rust_task() (defined further down) is already n2p-only by construction.
+    script = multiswerl._discriminating_stage_script(_rust_task(), "nonce", on_pass="NEXT\n")
+    assert "n2p-only" in script
+
+
 def test_regression_guard_stage_falls_straight_through_when_p2p_is_empty():
     # Unlike the discriminating stage, an empty regression-guard set is normal (some rows have
     # none) — nothing to check, so it must be a silent pass-through, not a HARNESS.

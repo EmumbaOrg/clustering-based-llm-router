@@ -29,7 +29,6 @@ actual test run's exit code (0 vs. nonzero) maps to pass/fail identically across
 """
 from __future__ import annotations
 
-import shlex
 import uuid
 
 from . import dockerexec
@@ -38,11 +37,6 @@ from .base import GradeResult, Task
 DOCKER_TIMEOUT_SECONDS = dockerexec.DOCKER_TIMEOUT_SECONDS
 REPO_DIR = "/testbed"  # confirmed against the one instance checked above
 CONDA_ACTIVATE = "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed"
-
-
-def _node_ids(task: Task) -> str:
-    ids = task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"]
-    return " ".join(shlex.quote(t) for t in ids)
 
 
 def _setup_script(task: Task, nonce: str) -> str:
@@ -59,14 +53,25 @@ def _setup_script(task: Task, nonce: str) -> str:
 
 
 def _pytest_script(task: Task, nonce: str) -> str:
-    """Run the test suite and report PASS/FAIL off its exit code — identical across all three
-    modes, since by this point setup has already succeeded and a nonzero exit here is a genuine
-    test outcome, not a harness problem."""
-    pass_cmd = dockerexec.report_cmd(nonce, "PASS")
-    fail_cmd = dockerexec.report_cmd(nonce, "FAIL", "pytest reported failures")
-    return (
-        f"{CONDA_ACTIVATE} && cd {REPO_DIR} && python -m pytest -q {_node_ids(task)}\n"
-        f"if [ $? -eq 0 ]; then {pass_cmd}; else {fail_cmd}; fi\n"
+    """Run the test suite and report PASS/FAIL off its exit code.
+
+    One exception, exit codes 4/5 (pytest's own "usage error" / "no tests collected"): a
+    FAIL_TO_PASS/PASS_TO_PASS node id that pytest can't collect as given — same class of issue
+    documented at length in swegym.py's `_pytest_script` (a dataset-recorded id not matching what
+    the installed pytest actually generates, whether from a non-ASCII parametrize case or an id
+    truncated mid-value at an embedded comma, both confirmed live against real SWE-Gym rows this
+    session). This module shares swegym.py's `FAIL_TO_PASS`/`PASS_TO_PASS` node-id shape and the
+    same single-batch invocation, so it's exposed to the identical failure mode — previously
+    unhandled here, which silently miscounted an infra/dataset problem as a genuine model `FAIL`.
+    `dockerexec.pytest_collect_then_run` routes it to HARNESS instead, and additionally recovers
+    whichever other ids in the same batch ARE collectible rather than losing the whole task's
+    signal to one bad id."""
+    return dockerexec.pytest_collect_then_run(
+        node_ids=task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"],
+        nonce=nonce,
+        repo_dir=REPO_DIR,
+        conda_activate=CONDA_ACTIVATE,
+        fail_detail="pytest reported failures",
     )
 
 
@@ -79,11 +84,10 @@ def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECON
 
     image = task.row["image_name"]
     nonce = uuid.uuid4().hex
-    fail_candidate_apply = dockerexec.report_cmd(nonce, "FAIL", "candidate patch failed to apply")
     script = (
         _setup_script(task, nonce)
         + f"{dockerexec.write_file_cmd(solution, '/tmp/candidate.patch')}\n"
-        + f"git apply /tmp/candidate.patch || {{ {fail_candidate_apply}; }}\n"
+        + dockerexec.apply_patch_or_fail_cmd(nonce, "/tmp/candidate.patch")
         + _pytest_script(task, nonce)
     )
     try:
