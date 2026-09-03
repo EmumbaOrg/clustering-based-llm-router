@@ -1,8 +1,5 @@
-# K-means configuration, per the routing spec's §4.2 starting point. Candidate K values are all
-# computed and reported with diagnostics by `router-pipeline cluster`; promoting one to the final
-# artifact is a human decision via `router-pipeline build-artifact --k <value>`, not automated.
+# K-means configuration, per the routing spec's §4.2 starting point.
 
-k_candidates: [16, 24, 32]
 default_k: 24
 
 seed: 42

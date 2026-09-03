@@ -1,10 +1,5 @@
-"""K-means clustering over corpus embeddings.
-
-K selection is human-reviewed via diagnostics, not automated: `run_candidates` computes every
-candidate k from config/clustering.yaml and reports inertia + cluster-size spread for each, and a
-person promotes one via `build-artifact --k <value>`. Fully automating "best k" is a harder
-problem than this pass needs.
-"""
+"""K-means clustering over corpus embeddings. k is config/clustering.yaml's default_k unless
+`build-artifact --k <value>` overrides it."""
 from __future__ import annotations
 
 import dataclasses
@@ -12,8 +7,6 @@ import logging
 
 import numpy as np
 from sklearn.cluster import KMeans
-
-from ...common.config import ClusteringConfig
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +53,6 @@ def run_kmeans(vectors: np.ndarray, k: int, seed: int, n_init: int) -> ClusterRe
         f"cluster sizes min={diagnostics.min_size} max={diagnostics.max_size} mean={diagnostics.mean_size:.1f}"
     )
     return ClusterResult(k=k, labels=labels, centroids=centroids, diagnostics=diagnostics)
-
-
-def run_candidates(vectors: np.ndarray, config: ClusteringConfig) -> dict[int, ClusterResult]:
-    return {k: run_kmeans(vectors, k, config.seed, config.n_init) for k in config.k_candidates}
 
 
 def format_diagnostics(diag: ClusterDiagnostics, corpus_size: int) -> str:

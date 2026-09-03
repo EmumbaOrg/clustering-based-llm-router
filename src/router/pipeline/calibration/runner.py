@@ -11,8 +11,6 @@ first fenced code block, falling back to the whole response if none is fenced. F
 working tree and its own edit/write tools, and the solution is captured via `git diff` — text
 extraction stays only as the fallback for a response with no repo context or no tool use.
 
-Every call is paced by `RateLimiter` against the candidate's `rate_limit_rpm`. See
-docs/engineering-notes.md, "Groq TPM vs RPM" for why RPM pacing alone isn't sufficient for Groq.
 """
 from __future__ import annotations
 
@@ -31,62 +29,6 @@ from .grading.base import Task
 logger = logging.getLogger(__name__)
 
 _CODE_BLOCK_RE = re.compile(r"```(?:\w+)?\n(.*?)```", re.DOTALL)
-
-# Substrings looked for (case-insensitively) in a failed pi call's stderr to detect a rate limit.
-# Deliberately loose — a false positive only costs one exclusion; a false negative would inflate a
-# model's measured error rate.
-_RATE_LIMIT_MARKERS = ("429", "rate limit", "rate_limit", "too many requests")
-
-# Groq's rate-limit error names the exact cooldown, e.g. "Please try again in 20.19s" or
-# "in 780ms" — parsed so a rejection can be retried after precisely that long instead of guessing.
-_RETRY_AFTER_RE = re.compile(r"try again in\s+([\d.]+)\s*(ms|s)\b", re.IGNORECASE)
-
-MAX_RATE_LIMIT_RETRIES = 2
-# Never wait longer than this for one retry even if the server asks for more — a free-tier window
-# occasionally asks for 30s+; better to exclude the task than block a whole calibration run on it.
-MAX_RATE_LIMIT_WAIT_SECONDS = 45.0
-
-
-def _parse_retry_after_seconds(stderr: str) -> float | None:
-    match = _RETRY_AFTER_RE.search(stderr)
-    if not match:
-        return None
-    value = float(match.group(1))
-    return value / 1000.0 if match.group(2).lower() == "ms" else value
-
-
-class RateLimiter:
-    """Paces successive calls per model_id to at most `rpm` per minute (see config/models.yaml). A
-    SAFETY_MARGIN runs slightly under the documented cap since our clock and the provider's
-    rate-limit window aren't perfectly aligned. `clock`/`sleep` are injectable for tests."""
-
-    SAFETY_MARGIN = 1.15
-
-    def __init__(self, clock=time.monotonic, sleep=time.sleep):
-        self._clock = clock
-        self._sleep = sleep
-        self._last_call_at: dict[str, float] = {}
-
-    def wait(self, key: str, rpm: int | None) -> None:
-        if not rpm:
-            return
-        min_interval = (60.0 / rpm) * self.SAFETY_MARGIN
-        last = self._last_call_at.get(key)
-        now = self._clock()
-        if last is not None:
-            remaining = min_interval - (now - last)
-            if remaining > 0:
-                self._sleep(remaining)
-                now = self._clock()
-        self._last_call_at[key] = now
-
-
-_rate_limiter = RateLimiter()
-
-
-def _looks_rate_limited(stderr: str) -> bool:
-    lowered = stderr.lower()
-    return any(marker in lowered for marker in _RATE_LIMIT_MARKERS)
 
 # Per-source instructions appended to the task's own natural-language prompt, telling the agent
 # what SHAPE of answer each grader expects (see the grading/*.py module docstrings for why each
@@ -202,9 +144,8 @@ class RunResult:
     # error_no_solution outcome, which calibrate.py records directly without calling a grader.
     detail: str = ""
     raw_response: str = ""
-    rate_limited: bool = False  # 429 after retries exhausted — routes calibrate.py to error_harness.
     context_unavailable: bool = False  # repo_context clone/checkout failed before pi ran — routes
-    # to error_harness, same as rate_limited.
+    # to error_harness.
     harness_error: bool = False  # provider rejected the call — see docs/engineering-notes.md,
     # "Pi exits 0 on a provider-level error". `detail` carries the provider's error message.
     timed_out: bool = False  # OUR subprocess timeout fired, distinct from a grader's own
@@ -302,7 +243,7 @@ def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None, str 
     return text, usage, error_message
 
 
-def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.sleep) -> RunResult:
+def run_pi(task: Task, model: ModelConfig, timeout_seconds: int) -> RunResult:
     if model.is_control:
         raise ValueError(f"run_pi called with a control model ({model.model_id}) — controls are synthesized, not run")
 
@@ -346,73 +287,52 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
         if not (has_repo_context and model.supports_tool_calls):
             args.append("--no-tools")
 
-        for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
-            _rate_limiter.wait(model.model_id, model.rate_limit_rpm)
-
-            logger.info(f"pi call started: {model.model_id} on task {task.task_id} (timeout={timeout_seconds}s)")
-            started = time.monotonic()
-            try:
-                proc = subprocess.run(
-                    args, capture_output=True, text=True, timeout=timeout_seconds, check=False, cwd=worktree,
-                )
-            except subprocess.TimeoutExpired:
-                logger.warning(f"pi call timed out after {timeout_seconds}s: {model.model_id} on task {task.task_id}")
-                return RunResult(solution=None, detail=f"pi timed out after {timeout_seconds}s", timed_out=True)
-            except FileNotFoundError:
-                logger.error(f"pi binary not found on PATH ({model.model_id} on task {task.task_id})")
-                return RunResult(solution=None, detail="pi binary not found on PATH")
-
-            duration_s = round(time.monotonic() - started, 2)
-            if proc.returncode != 0:
-                rate_limited = _looks_rate_limited(proc.stderr)
-                if rate_limited and attempt < MAX_RATE_LIMIT_RETRIES:
-                    wait_s = _parse_retry_after_seconds(proc.stderr)
-                    wait_s = min(wait_s if wait_s is not None else 10.0, MAX_RATE_LIMIT_WAIT_SECONDS) + 0.5
-                    logger.warning(
-                        f"rate limited after {duration_s}s, retrying in {wait_s:.1f}s "
-                        f"(attempt {attempt + 1}/{MAX_RATE_LIMIT_RETRIES}): {model.model_id} on task {task.task_id}"
-                    )
-                    sleep(wait_s)
-                    continue
-
-                level = logger.warning if not rate_limited else logger.error
-                level(
-                    f"pi call failed (exit {proc.returncode}, rate_limited={rate_limited}) after {duration_s}s: "
-                    f"{model.model_id} on task {task.task_id} — {proc.stderr[-300:].strip()}"
-                )
-                return RunResult(
-                    solution=None,
-                    detail=f"pi exit {proc.returncode}: {proc.stderr[-500:]}",
-                    raw_response=proc.stdout,
-                    rate_limited=rate_limited,
-                )
-
-            final_text, usage, error_message = _parse_json_stream(proc.stdout)
-            if error_message is not None:
-                # See RunResult.harness_error above for why this must not be scored as error_no_solution.
-                logger.error(
-                    f"provider rejected the call (pi exited 0 but reported an error): "
-                    f"{model.model_id} on task {task.task_id} — {error_message}"
-                )
-                return RunResult(solution=None, detail=error_message, raw_response=proc.stdout, harness_error=True)
-
-            response_text = final_text if final_text is not None else proc.stdout
-
-            # A tool-using agent's actual edits (captured via `git diff`) are preferred over
-            # parsing its text response — only fall back to text extraction if the worktree came
-            # back clean (no repo context, or the agent responded with prose instead of using its
-            # tools).
-            solution = repo_context.extract_diff(worktree) if worktree is not None else None
-            if solution is None:
-                solution = extract_solution(response_text)
-            cost_note = f", cost=${usage.cost_usd:.5f}" if usage else ""
-            logger.info(
-                f"pi call completed in {duration_s}s: {model.model_id} on task {task.task_id} "
-                f"(had_solution={solution is not None}{cost_note})"
+        logger.info(f"pi call started: {model.model_id} on task {task.task_id} (timeout={timeout_seconds}s)")
+        started = time.monotonic()
+        try:
+            proc = subprocess.run(
+                args, capture_output=True, text=True, timeout=timeout_seconds, check=False, cwd=worktree,
             )
-            return RunResult(solution=solution, raw_response=response_text, usage=usage)
+        except subprocess.TimeoutExpired:
+            logger.warning(f"pi call timed out after {timeout_seconds}s: {model.model_id} on task {task.task_id}")
+            return RunResult(solution=None, detail=f"pi timed out after {timeout_seconds}s", timed_out=True)
+        except FileNotFoundError:
+            logger.error(f"pi binary not found on PATH ({model.model_id} on task {task.task_id})")
+            return RunResult(solution=None, detail="pi binary not found on PATH")
 
-        raise AssertionError("unreachable — the loop always returns on its last iteration")
+        duration_s = round(time.monotonic() - started, 2)
+        if proc.returncode != 0:
+            logger.warning(
+                f"pi call failed (exit {proc.returncode}) after {duration_s}s: "
+                f"{model.model_id} on task {task.task_id} — {proc.stderr[-300:].strip()}"
+            )
+            return RunResult(
+                solution=None, detail=f"pi exit {proc.returncode}: {proc.stderr[-500:]}", raw_response=proc.stdout,
+            )
+
+        final_text, usage, error_message = _parse_json_stream(proc.stdout)
+        if error_message is not None:
+            # See RunResult.harness_error above for why this must not be scored as error_no_solution.
+            logger.error(
+                f"provider rejected the call (pi exited 0 but reported an error): "
+                f"{model.model_id} on task {task.task_id} — {error_message}"
+            )
+            return RunResult(solution=None, detail=error_message, raw_response=proc.stdout, harness_error=True)
+
+        response_text = final_text if final_text is not None else proc.stdout
+
+        # A tool-using agent's actual edits (captured via `git diff`) are preferred over parsing
+        # its text response — only fall back to text extraction if the worktree came back clean
+        # (no repo context, or the agent responded with prose instead of using its tools).
+        solution = repo_context.extract_diff(worktree) if worktree is not None else None
+        if solution is None:
+            solution = extract_solution(response_text)
+        cost_note = f", cost=${usage.cost_usd:.5f}" if usage else ""
+        logger.info(
+            f"pi call completed in {duration_s}s: {model.model_id} on task {task.task_id} "
+            f"(had_solution={solution is not None}{cost_note})"
+        )
+        return RunResult(solution=solution, raw_response=response_text, usage=usage)
     finally:
         if worktree is not None:
             repo_context.remove_worktree(cached_clone, worktree)

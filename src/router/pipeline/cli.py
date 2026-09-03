@@ -32,7 +32,7 @@ from .clustering import cluster as cluster_mod
 from .clustering import cluster_map as cluster_map_mod
 from .clustering import task_cluster_map as task_cluster_map_mod
 
-app = typer.Typer(help="The offline pipeline: corpus -> embed -> cluster -> calibrate -> evaluate.")
+app = typer.Typer(help="The offline pipeline: corpus -> embed -> build-artifact -> calibrate -> evaluate.")
 
 
 @app.callback()
@@ -120,22 +120,6 @@ def embed(
     _run_embed(sample, per_source_sample, seed)
 
 
-def _run_cluster() -> None:
-    if not EMBEDDINGS_PATH.exists():
-        raise typer.BadParameter(f"{EMBEDDINGS_PATH} not found — run `embed` first.")
-    _, vectors = embed_mod.load_embeddings(EMBEDDINGS_PATH)
-    config = load_clustering_config()
-    results = cluster_mod.run_candidates(vectors, config)
-    for k in sorted(results):
-        typer.echo(cluster_mod.format_diagnostics(results[k].diagnostics, len(vectors)))
-
-
-@app.command()
-def cluster() -> None:
-    """Print K-means diagnostics for every candidate k in config/clustering.yaml."""
-    _run_cluster()
-
-
 def _run_build_artifact(k: int | None) -> None:
     if not EMBEDDINGS_PATH.exists():
         raise typer.BadParameter(f"{EMBEDDINGS_PATH} not found — run `embed` first.")
@@ -192,7 +176,6 @@ def run_all(
 ) -> None:
     _run_corpus(sample)
     _run_embed(None)  # corpus already applied the sample cap; don't cap twice
-    _run_cluster()
     _run_build_artifact(k)
 
 

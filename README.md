@@ -23,7 +23,7 @@ using per-cluster error rates measured by calibration. Two parts, both pure Pyth
   Hugging Face on first use — the full corpus pull alone is a one-time ~4GB download (mostly
   Multi-SWE-RL; see "What the pipeline does" below), cached under `~/.cache/huggingface/hub`.
 
-**Can be skipped initially** — none of this is needed to run `corpus` → `embed` → `cluster` →
+**Can be skipped initially** — none of this is needed to run `corpus` → `embed` →
 `build-artifact`, or to run the test suite. It's only needed once you get to
 `validate-graders`/`calibrate`/`evaluate`:
 
@@ -31,7 +31,6 @@ using per-cluster error rates measured by calibration. Two parts, both pure Pyth
   [Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) CLI
   (`npm install -g @earendil-works/pi-coding-agent`, engine requirement per its own
   `package.json`) — see "Aligning `config/models.yaml` with the Pi coding agent" below.
-- **A Groq API key** (the free tier is enough) — see "Calibrating against Groq" below.
 - **Docker** — required for `swe-smith` and `swe-gym`, both `gradeable_sources` now enabled in
   `config/calibration.yaml` (`bigcodebench`/`ds1000` alone don't need it — they're self-contained).
   `docker info` must succeed on whichever host runs `validate-graders`/`calibrate`/`evaluate`; no
@@ -98,8 +97,8 @@ uv run router runtime decide --prompt "..." --lambda 0.05
    network/model access.
 2. **Live, against real pipeline-produced artifacts** — `validate` and `decide` both run
    successfully against a real (if tiny, k=5) `cluster-map.json`/`model-profiles.json` pair with
-   the real embedding model and real Groq-calibrated candidates. Confirmed the lambda sweep
-   actually changes the selected model on real calibration numbers, not just fixture math.
+   the real embedding model and real calibrated candidates. Confirmed the lambda sweep actually
+   changes the selected model on real calibration numbers, not just fixture math.
 
 One caveat this exposed: each `decide` **invocation** pays one cold encoder load (~13s) since the
 in-process cache in `common/embedding.py` doesn't survive across separate CLI processes. Nothing
@@ -120,16 +119,15 @@ pulls a full CUDA stack (multiple GB) that this pipeline doesn't need.
 # ~4GB — but that also means a capped multi-swe-rl sample is biased toward small repos, not random.
 uv run router pipeline corpus --sample 200
 uv run router pipeline embed
-uv run router pipeline cluster
+uv run router pipeline build-artifact
 
 # Full run
 uv run router pipeline corpus            # ~29,301 rows before dedup (~4GB one-time download for
                                           # multi-swe-rl, cached under ~/.cache/huggingface/hub)
 uv run router pipeline embed
-uv run router pipeline cluster           # review diagnostics for k=16/24/32
 uv run router pipeline build-artifact --k 24
 
-# Or all four steps in one shot
+# Or all three steps in one shot
 uv run router pipeline run-all --k 24
 ```
 
@@ -161,22 +159,20 @@ Every `runner: pi` candidate is invoked through the
 `provider`/`model_id` pair needs a matching entry in your own Pi provider config
 (`~/.pi/agent/models.json`, or `$PI_CODING_AGENT_DIR/models.json` if you've overridden that).
 
-Minimal example matching this repo's Groq candidates:
+Minimal example matching this repo's OpenAI candidates:
 
 ```json
 {
   "providers": {
-    "groq": {
-      "baseUrl": "https://api.groq.com/openai/v1",
-      "api": "openai-completions",
-      "apiKey": "<your Groq API key>",
+    "openai": {
+      "apiKey": "<your OpenAI API key>",
       "models": [
         {
-          "id": "llama-3.1-8b-instant",
-          "name": "Llama 3.1 8B Instant",
-          "contextWindow": 131072,
-          "maxTokens": 2048,
-          "cost": { "input": 0.05, "output": 0.08, "cacheRead": 0, "cacheWrite": 0 }
+          "id": "gpt-5-nano",
+          "name": "GPT-5 Nano",
+          "contextWindow": 400000,
+          "maxTokens": 128000,
+          "cost": { "input": 0.05, "output": 0.40, "cacheRead": 0, "cacheWrite": 0 }
         }
       ]
     }
@@ -186,42 +182,14 @@ Minimal example matching this repo's Groq candidates:
 
 | `config/models.yaml` | Pi provider config | Note |
 |---|---|---|
-| `provider` | `providers.<name>` key | Must match exactly — `provider: groq` needs a `providers.groq` entry. |
+| `provider` | `providers.<name>` key | Must match exactly — `provider: openai` needs a `providers.openai` entry. |
 | `model_id` | `providers.<name>.models[].id` | Must match exactly — this is the `--model` value `run_pi` passes. |
 | `context_window` | `models[].contextWindow` | Informational on both sides; neither enforces it against the other. |
-| `max_tokens` | `models[].maxTokens` | Keep this modest (e.g. 2048, not a model's full output ceiling) — see "Calibrating against Groq" below for why. |
+| `max_tokens` | `models[].maxTokens` | Keep this in line with what a real completion for these prompts actually needs. |
 | `cost_input` / `cost_output` | `models[].cost.input` / `.output` | **Different units** — `config/models.yaml` is $ per 1k tokens, Pi's config is $ per 1M tokens; multiply by 1000 going from ours to theirs. |
-| `rate_limit_rpm` | *(no Pi equivalent)* | Paced entirely on this repo's side by `runner.py`'s `RateLimiter`, before the `pi` subprocess is ever invoked. |
 
 `reference`/`null`-runner candidates (the grader-validation controls) never go through this path
 at all — they're synthesized directly in `calibrate.py`, not run through `pi`.
-
-### Calibrating against Groq
-
-The three real candidates in `config/models.yaml` (`llama-3.1-8b-instant`, `openai/gpt-oss-120b`,
-`llama-3.3-70b-versatile`) run on [Groq](https://groq.com)'s free tier — no local model this pass.
-
-**Free-tier rate limits** (per Groq's own docs, `console.groq.com/docs/rate-limits`, checked
-August 2026): each of these three models allows 30 requests/minute on the free tier, with daily
-request caps from 1,000–14,400 and **tokens-per-minute (TPM) caps of 6,000–12,000** depending on
-the model. In practice **TPM binds long before RPM or the daily cap do** — Groq reserves a
-request's prompt + `max_tokens` against your TPM budget up front, so a single coding-task prompt
-plus a few thousand completion tokens can exhaust a 6,000 TPM budget in one or two calls.
-`pipeline/calibration/runner.py`'s `RateLimiter` paces every call's *request rate* against
-`rate_limit_rpm` in `config/models.yaml`, but that alone won't prevent a TPM rejection. When Groq
-rejects a call this way, its error names an exact cooldown ("Please try again in Ns") — `runner.py`
-parses that and retries after precisely that long (`MAX_RATE_LIMIT_RETRIES` times, each capped at
-`MAX_RATE_LIMIT_WAIT_SECONDS`) rather than giving up immediately. Only once retries are exhausted
-is the task excluded from that model's error rate (`error_harness`) rather than counted as a wrong
-answer. Keep `maxTokens` in your Pi provider config modest (e.g. 2048, not a model's full output
-ceiling) — these calibration prompts explicitly ask for just a function body or code snippet, and
-a needlessly large `max_tokens` reserves far more of your TPM budget than any real completion here
-will use.
-
-**Cost fields are not $0.** `config/models.yaml`'s `cost_input`/`cost_output` record Groq's real
-published per-token prices, not what we're actually paying on the free tier — if every candidate
-were priced at $0, `normalise_costs` would collapse to all-zero and the lambda sweep would have
-nothing to trade accuracy against.
 
 ## What the pipeline does
 
@@ -268,15 +236,12 @@ nothing to trade accuracy against.
    (`jinaai/jina-embeddings-v2-base-code`, 768-dim, CPU) per the rule declared in
    `config/embedding.yaml`. No server, no HTTP call.
 
-3. **`cluster`** — runs K-means for every candidate `k` in `config/clustering.yaml` and reports
-   diagnostics (inertia, cluster-size spread). **Choosing which `k` to promote is a human decision**,
-   not automated.
+3. **`build-artifact`** — runs K-means at `config/clustering.yaml`'s `default_k` (override with
+   `--k`), prints diagnostics (inertia, cluster-size spread), assembles `cluster-map.json`,
+   validates it against the schema, and writes it to `artifacts/` (git-ignored — outputs are
+   local-only for now, regenerable by re-running the pipeline).
 
-4. **`build-artifact`** — assembles `cluster-map.json` at the chosen `k`, validates it against the
-   schema, and writes it to `artifacts/` (git-ignored — outputs are local-only for now,
-   regenerable by re-running the pipeline).
-
-5. **`validate-graders`** — GATE, run before trusting anything downstream. Runs each gradeable
+4. **`validate-graders`** — GATE, run before trusting anything downstream. Runs each gradeable
    source's own reference (gold) solution and an empty (null) solution through its grader with no
    model involved. Reference must score ~100% pass, null ~0% — this is what proves the grader
    itself discriminates correct from incorrect code, independent of any model's actual ability. Any
@@ -286,12 +251,12 @@ nothing to trade accuracy against.
    `--source swe-smith`), and the sample is drawn with `random.sample` rather than the first N
    rows, so a source grouped by repo (like swe-smith's 128) doesn't always gate the same handful.
 
-6. **`calibrate`** — selects tasks stratified across `cluster-map.json`'s clusters (from
+5. **`calibrate`** — selects tasks stratified across `cluster-map.json`'s clusters (from
    `config/calibration.yaml`'s gradeable sources), runs every model in `config/models.yaml`
    (including the `reference`/`null` controls) against them, and writes the smoothed per-cluster
    error rates to `model-profiles.json`.
 
-7. **`evaluate`** — re-selects the same deterministic split, runs the *held-out* tasks against
+6. **`evaluate`** — re-selects the same deterministic split, runs the *held-out* tasks against
    every model, and reports resolution rate / mean cost / model-selection distribution across
    `config/calibration.yaml`'s `lambda_sweep`, plus always-strongest / always-cheapest / oracle
    baselines. Routing decisions use only the calibration profiles, never anything from the holdout
@@ -309,8 +274,8 @@ with prose instead of using its tools. A clone/checkout failure is recorded as `
 bigcodebench/ds1000 are unaffected — they're self-contained snippet tasks with no repo to clone.
 
 **Calibration's target is pipeline completeness, not research-grade numbers.** The tiny task
-volume this pass runs at (`tasks_per_cluster: 4`) is chosen to exercise the full pipeline cheaply
-on Groq's free tier, not to produce statistically confident error rates — see
+volume this pass runs at (`tasks_per_cluster` in `config/calibration.yaml`) is chosen to exercise
+the full pipeline cheaply, not to produce statistically confident error rates — see
 `config/calibration.yaml`'s comments and `runner.py`'s docstring for the `reference`/`null`/`pi`
 backend split that lets the grader itself be proven correct independent of any model's actual
 coding ability.

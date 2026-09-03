@@ -35,45 +35,6 @@ models:
     context_window: 0
     max_tokens: 0
 
-  # ── Groq-hosted candidates, free tier ──────────────────────────────────────────────────────
-  # `provider: groq` must have a matching entry in your own Pi provider config (e.g.
-  # ~/.pi/agent/models.json) with a Groq API key — that setup is outside this repo. See
-  # ../README.md's "Calibrating against Groq" section for free-tier limits and rate-limiting.
-  #
-  # cost_input/cost_output are Groq's real published per-token prices (console.groq.com/docs/models,
-  # verified against groq.com pricing, Aug 2026), NOT $0 — using the free tier is how WE run
-  # calibration cheaply, it isn't the model's actual economic cost, and marking every candidate
-  # $0 would make normalise_costs collapse to all-zero and give the lambda sweep nothing to trade
-  # off. rate_limit_rpm is Groq's documented free-tier requests-per-minute cap for that model;
-  # runner.py's RateLimiter paces real calls against it (with its own safety margin) so
-  # calibration/evaluation don't 429 partway through a run.
-  # - model_id: llama-3.1-8b-instant
-  #   provider: groq
-  #   runner: pi
-  #   cost_input: 0.00005
-  #   cost_output: 0.00008
-  #   context_window: 131072
-  #   max_tokens: 131072
-  #   rate_limit_rpm: 30
-
-  # - model_id: openai/gpt-oss-120b
-  #   provider: groq
-  #   runner: pi
-  #   cost_input: 0.00015
-  #   cost_output: 0.00060
-  #   context_window: 131072
-  #   max_tokens: 65536
-  #   rate_limit_rpm: 30
-
-  # - model_id: llama-3.3-70b-versatile
-  #   provider: groq
-  #   runner: pi
-  #   cost_input: 0.00059
-  #   cost_output: 0.00079
-  #   context_window: 131072
-  #   max_tokens: 32768
-  #   rate_limit_rpm: 30
-
   # ── Local llama.cpp candidates (dev/testing only — see README "Aligning config/models.yaml" ─
   # section). Each provider below needs a matching `~/.pi/agent/models.json` entry with a
   # baseUrl pointing at a local `llama serve` instance already running and holding that model

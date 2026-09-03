@@ -365,9 +365,6 @@ def run_and_grade(
         if run_result.context_unavailable:
             # Repo clone/checkout failed before pi was ever invoked.
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
-        elif run_result.rate_limited:
-            # Provider quota rejection, retried and still failing.
-            result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.harness_error:
             # Pi exits 0 even on a provider-level error — see docs/engineering-notes.md,
             # "Pi exits 0 on a provider-level error".

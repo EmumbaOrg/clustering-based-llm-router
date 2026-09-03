@@ -50,7 +50,6 @@ def load_embedding_config(path: Path | None = None) -> EmbeddingConfig:
 
 @dataclasses.dataclass(frozen=True)
 class ClusteringConfig:
-    k_candidates: list[int]
     default_k: int
     seed: int
     n_init: int
@@ -70,7 +69,6 @@ class ModelConfig:
     cost_output: float
     context_window: int
     max_tokens: int
-    rate_limit_rpm: int | None = None  # provider's free-tier requests/minute cap, or None if unlimited (local, controls); paced by runner.py's RateLimiter
     supports_tool_calls: bool = True  # False for local llama.cpp providers — see docs/engineering-notes.md, "No tool calls on local (llama.cpp) models"
 
     @property

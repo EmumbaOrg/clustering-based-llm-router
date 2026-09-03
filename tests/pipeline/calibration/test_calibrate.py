@@ -60,8 +60,8 @@ def test_empty_outcomes_list_does_not_divide_by_zero():
 
 def _pi_model() -> ModelConfig:
     return ModelConfig(
-        model_id="llama-3.1-8b-instant", provider="groq", runner="pi",
-        cost_input=0.00005, cost_output=0.00008, context_window=131072, max_tokens=131072, rate_limit_rpm=30,
+        model_id="llama-3.1-8b-instant", provider="openai", runner="pi",
+        cost_input=0.00005, cost_output=0.00008, context_window=131072, max_tokens=131072,
     )
 
 
@@ -79,8 +79,8 @@ def _calibration_config() -> CalibrationConfig:
 
 def _named_model(model_id: str) -> ModelConfig:
     return ModelConfig(
-        model_id=model_id, provider="groq", runner="pi",
-        cost_input=0.00005, cost_output=0.00008, context_window=131072, max_tokens=131072, rate_limit_rpm=30,
+        model_id=model_id, provider="openai", runner="pi",
+        cost_input=0.00005, cost_output=0.00008, context_window=131072, max_tokens=131072,
     )
 
 
@@ -616,17 +616,6 @@ def test_image_affinity_key_falls_back_to_repo_then_task_id():
     assert calibrate_module.image_affinity_key(bare) == ("ds1000", "ds1000:7")
 
 
-def test_run_and_grade_maps_a_rate_limited_run_result_to_error_harness_not_error_no_solution(monkeypatch):
-    # A 429 is an infra/quota rejection, not the model failing to answer — it must be excluded
-    # from the model's error rate (error_harness), not counted as a wrong answer (error_no_solution).
-    monkeypatch.setattr(
-        calibrate_module.runner_mod, "run_pi",
-        lambda task, model, timeout_seconds: RunResult(solution=None, detail="429 Too Many Requests", rate_limited=True),
-    )
-    result, _solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
-    assert result.outcome == "error_harness"
-
-
 def test_run_and_grade_maps_context_unavailable_to_error_harness(monkeypatch):
     # A repo clone/checkout failure happens before pi is ever invoked — an infra problem, and per
     # the spec's fairness requirement a task that can't be set up consistently for every model
@@ -642,7 +631,7 @@ def test_run_and_grade_maps_context_unavailable_to_error_harness(monkeypatch):
 def test_run_and_grade_still_treats_a_genuine_no_solution_as_a_real_failure(monkeypatch):
     monkeypatch.setattr(
         calibrate_module.runner_mod, "run_pi",
-        lambda task, model, timeout_seconds: RunResult(solution=None, detail="empty response", rate_limited=False),
+        lambda task, model, timeout_seconds: RunResult(solution=None, detail="empty response"),
     )
     result, _solution, _usage = run_and_grade(_task(), _pi_model(), _calibration_config())
     assert result.outcome == "error_no_solution"
@@ -697,7 +686,7 @@ def test_preview_leaves_short_text_untouched():
 def test_run_and_grade_logs_expected_vs_provided_solution_at_debug(monkeypatch, caplog):
     monkeypatch.setattr(
         calibrate_module.runner_mod, "run_pi",
-        lambda task, model, timeout_seconds: RunResult(solution="def f():\n    return 1", detail="", rate_limited=False),
+        lambda task, model, timeout_seconds: RunResult(solution="def f():\n    return 1", detail=""),
     )
     monkeypatch.setitem(
         calibrate_module._GRADERS, "bigcodebench",
@@ -721,7 +710,7 @@ def test_run_and_grade_logs_expected_vs_provided_solution_at_debug(monkeypatch, 
 def test_run_and_grade_logs_no_solution_extracted_when_pi_returns_none(monkeypatch, caplog):
     monkeypatch.setattr(
         calibrate_module.runner_mod, "run_pi",
-        lambda task, model, timeout_seconds: RunResult(solution=None, detail="empty response", rate_limited=False),
+        lambda task, model, timeout_seconds: RunResult(solution=None, detail="empty response"),
     )
     with caplog.at_level("DEBUG", logger="router.pipeline.calibration.calibrate"):
         run_and_grade(_task(), _pi_model(), _calibration_config())
