@@ -227,6 +227,9 @@ class TokenUsage:
     input_tokens: int
     output_tokens: int
     cost_usd: float
+    turn_count: int  # number of assistant messages in agent_end's conversation — i.e. how many
+    # turns the agent took to reach a final answer. Same source as the usage totals above (see
+    # _parse_json_stream: each assistant message is one turn), so it comes for free alongside them.
 
 
 @dataclasses.dataclass(frozen=True)
@@ -353,7 +356,13 @@ def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None, str 
         total_output += usage_obj.get("output", 0)
         total_cost += (usage_obj.get("cost") or {}).get("total", 0.0)
 
-    usage = TokenUsage(input_tokens=total_input, output_tokens=total_output, cost_usd=total_cost) if saw_usage else None
+    usage = (
+        TokenUsage(
+            input_tokens=total_input, output_tokens=total_output, cost_usd=total_cost,
+            turn_count=len(assistant_messages),
+        )
+        if saw_usage else None
+    )
     return text, usage, error_message
 
 

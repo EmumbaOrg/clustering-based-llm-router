@@ -12,7 +12,7 @@ from router.pipeline.calibration.calibrate import (
     select_tasks,
 )
 from router.pipeline.calibration.grading.base import GradeResult, Task
-from router.pipeline.calibration.runner import RunResult
+from router.pipeline.calibration.runner import RunResult, TokenUsage
 
 
 def test_global_scope_smoothed_rate_equals_raw_rate():
@@ -73,7 +73,7 @@ def _calibration_config() -> CalibrationConfig:
     return CalibrationConfig(
         gradeable_sources=["bigcodebench"], tasks_per_cluster=4,
         task_timeout_seconds=60, smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.3, seed=42, lambda_sweep=[0, 0.1],
+        seed=42, lambda_sweep=[0, 0.1],
     )
 
 
@@ -131,7 +131,7 @@ def test_select_tasks_groups_by_the_cluster_id_the_map_declares(monkeypatch):
     config = CalibrationConfig(
         gradeable_sources=["bigcodebench"], tasks_per_cluster=10, task_timeout_seconds=60,
         smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.0, seed=42, lambda_sweep=[0],
+        seed=42, lambda_sweep=[0],
     )
 
     selected = select_tasks(config, cluster_map, task_map)
@@ -150,7 +150,7 @@ def test_select_tasks_caps_at_tasks_per_cluster(monkeypatch):
     config = CalibrationConfig(
         gradeable_sources=["bigcodebench"], tasks_per_cluster=2, task_timeout_seconds=60,
         smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.0, seed=42, lambda_sweep=[0],
+        seed=42, lambda_sweep=[0],
     )
 
     selected = select_tasks(config, cluster_map, task_map)
@@ -158,7 +158,9 @@ def test_select_tasks_caps_at_tasks_per_cluster(monkeypatch):
     assert len(selected) == 2
 
 
-def test_select_tasks_holdout_and_calibration_splits_are_disjoint_and_sized_by_fraction(monkeypatch):
+def test_select_tasks_puts_every_selected_task_in_the_calibration_split(monkeypatch):
+    # select_tasks() no longer carves out a "holdout" split (see config/calibration.yaml's comment
+    # on the removed holdout_fraction) — every selected task must come back as "calibration".
     tasks = {"bigcodebench": [_gradeable_task(f"t{i}") for i in range(10)]}
     _stub_gradeable_tasks(monkeypatch, tasks)
     cluster_map = _cluster_map(k=1)
@@ -166,16 +168,13 @@ def test_select_tasks_holdout_and_calibration_splits_are_disjoint_and_sized_by_f
     config = CalibrationConfig(
         gradeable_sources=["bigcodebench"], tasks_per_cluster=10, task_timeout_seconds=60,
         smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.3, seed=42, lambda_sweep=[0],
+        seed=42, lambda_sweep=[0],
     )
 
     selected = select_tasks(config, cluster_map, task_map)
 
-    calibration_ids = {s.task.task_id for s in selected if s.split == "calibration"}
-    holdout_ids = {s.task.task_id for s in selected if s.split == "holdout"}
-    assert calibration_ids.isdisjoint(holdout_ids)
-    assert len(holdout_ids) == 3  # round(10 * 0.3)
-    assert len(calibration_ids) == 7
+    assert len(selected) == 10
+    assert {s.split for s in selected} == {"calibration"}
 
 
 def test_select_tasks_skips_a_mapped_task_id_the_gradeable_loader_does_not_actually_return(monkeypatch):
@@ -202,7 +201,7 @@ def test_select_tasks_ignores_entries_for_a_source_not_in_gradeable_sources(monk
     config = CalibrationConfig(  # gradeable_sources deliberately excludes ds1000
         gradeable_sources=["bigcodebench"], tasks_per_cluster=10, task_timeout_seconds=60,
         smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.0, seed=42, lambda_sweep=[0],
+        seed=42, lambda_sweep=[0],
     )
 
     selected = select_tasks(config, cluster_map, task_map)
@@ -233,7 +232,7 @@ def test_select_tasks_is_deterministic_given_the_same_seed(monkeypatch):
     config = CalibrationConfig(
         gradeable_sources=["bigcodebench"], tasks_per_cluster=4, task_timeout_seconds=60,
         smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.25, seed=7, lambda_sweep=[0],
+        seed=7, lambda_sweep=[0],
     )
 
     first = select_tasks(config, cluster_map, task_map)
@@ -242,6 +241,99 @@ def test_select_tasks_is_deterministic_given_the_same_seed(monkeypatch):
     assert [(s.task.task_id, s.cluster_id, s.split) for s in first] == [
         (s.task.task_id, s.cluster_id, s.split) for s in second
     ]
+
+
+# --- category_mix: spec §5.1's "aim for the following distribution" (repo_python/multilingual/
+# standalone), applied within each cluster's tasks_per_cluster budget. See calibrate.py's
+# CATEGORY_SOURCES for the fixed source->category mapping this all keys off. --------------------
+
+def _config_with_category_mix(category_mix: dict, tasks_per_cluster: int = 10, gradeable_sources=None) -> CalibrationConfig:
+    return CalibrationConfig(
+        gradeable_sources=gradeable_sources or ["bigcodebench", "ds1000", "swe-smith", "swe-gym", "multi-swe-rl"],
+        tasks_per_cluster=tasks_per_cluster, task_timeout_seconds=60,
+        smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
+        seed=42, lambda_sweep=[0], category_mix=category_mix,
+    )
+
+
+def test_validate_category_mix_rejects_an_unknown_category():
+    try:
+        calibrate_module._validate_category_mix({"bogus": 1.0})
+        assert False, "expected a ValueError"
+    except ValueError as e:
+        assert "bogus" in str(e)
+
+
+def test_validate_category_mix_rejects_ratios_that_do_not_sum_to_one():
+    try:
+        calibrate_module._validate_category_mix({"repo_python": 0.5, "multilingual": 0.3, "standalone": 0.1})
+        assert False, "expected a ValueError"
+    except ValueError as e:
+        assert "sum" in str(e)
+
+
+def test_select_tasks_splits_a_cluster_s_budget_by_category_when_every_category_has_enough_tasks(monkeypatch):
+    tasks = {
+        "bigcodebench": [_gradeable_task(f"bcb{i}", source="bigcodebench") for i in range(5)],
+        "ds1000": [_gradeable_task(f"ds{i}", source="ds1000") for i in range(5)],
+        "swe-smith": [_gradeable_task(f"ss{i}", source="swe-smith") for i in range(10)],
+        "swe-gym": [_gradeable_task(f"sg{i}", source="swe-gym") for i in range(10)],
+        "multi-swe-rl": [_gradeable_task(f"ms{i}", source="multi-swe-rl") for i in range(10)],
+    }
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    entries = [(t.task_id, t.source, 0) for source_tasks in tasks.values() for t in source_tasks]
+    task_map = _task_cluster_map("clustermap-x", entries)
+    config = _config_with_category_mix({"repo_python": 0.60, "multilingual": 0.25, "standalone": 0.15})
+
+    selected = select_tasks(config, cluster_map, task_map)
+
+    by_category = {}
+    for s in selected:
+        by_category.setdefault(calibrate_module._SOURCE_CATEGORY[s.task.source], 0)
+        by_category[calibrate_module._SOURCE_CATEGORY[s.task.source]] += 1
+    assert len(selected) == 10
+    assert by_category == {"repo_python": 6, "multilingual": 2, "standalone": 2}
+
+
+def test_select_tasks_backfills_a_category_shortfall_from_other_categories_in_the_same_cluster(monkeypatch):
+    # This cluster has ONLY standalone tasks — no repo_python or multilingual tasks exist in it at
+    # all (a real, observed shape: some clusters are 100% one source). The 60/25/15 quota can't be
+    # met for two of the three categories, but the cluster's tasks_per_cluster budget should still
+    # be filled from what IS available, not silently left under-filled.
+    tasks = {"bigcodebench": [_gradeable_task(f"bcb{i}", source="bigcodebench") for i in range(10)]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [(f"bcb{i}", "bigcodebench", 0) for i in range(10)])
+    config = _config_with_category_mix(
+        {"repo_python": 0.60, "multilingual": 0.25, "standalone": 0.15}, gradeable_sources=["bigcodebench"],
+    )
+
+    selected = select_tasks(config, cluster_map, task_map)
+
+    assert len(selected) == 10  # fully backfilled from the only category with any tasks
+    assert {s.task.source for s in selected} == {"bigcodebench"}
+
+
+def test_select_tasks_is_deterministic_with_category_mix(monkeypatch):
+    tasks = {
+        "bigcodebench": [_gradeable_task(f"bcb{i}", source="bigcodebench") for i in range(5)],
+        "swe-smith": [_gradeable_task(f"ss{i}", source="swe-smith") for i in range(10)],
+        "multi-swe-rl": [_gradeable_task(f"ms{i}", source="multi-swe-rl") for i in range(10)],
+    }
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    entries = [(t.task_id, t.source, 0) for source_tasks in tasks.values() for t in source_tasks]
+    task_map = _task_cluster_map("clustermap-x", entries)
+    config = _config_with_category_mix(
+        {"repo_python": 0.60, "multilingual": 0.25, "standalone": 0.15},
+        gradeable_sources=["bigcodebench", "swe-smith", "multi-swe-rl"],
+    )
+
+    first = select_tasks(config, cluster_map, task_map)
+    second = select_tasks(config, cluster_map, task_map)
+
+    assert [s.task.task_id for s in first] == [s.task.task_id for s in second]
 
 
 def _selected(task_id: str, cluster_id: int) -> SelectedTask:
@@ -281,6 +373,136 @@ def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the
     assert calls == [("t1", "m1"), ("t1", "m2"), ("t2", "m1"), ("t2", "m2")]
 
 
+# --- skip real models on a task whose ground truth (reference-oracle/null-baseline, already part
+# of the normal roster — no new grading calls) turns out to be bad. See _ground_truth_invalid. ----
+
+def _control_model(runner: str, model_id: str) -> ModelConfig:
+    return ModelConfig(
+        model_id=model_id, provider="stub", runner=runner, cost_input=0, cost_output=0, context_window=0, max_tokens=0,
+    )
+
+
+def test_ground_truth_invalid_requires_both_controls_to_have_actually_run():
+    assert calibrate_module._ground_truth_invalid(None, "fail") is False
+    assert calibrate_module._ground_truth_invalid("pass", None) is False
+    assert calibrate_module._ground_truth_invalid(None, None) is False
+
+
+def test_ground_truth_invalid_true_when_reference_fails():
+    assert calibrate_module._ground_truth_invalid("fail", "fail") is True
+
+
+def test_ground_truth_invalid_true_when_null_passes():
+    assert calibrate_module._ground_truth_invalid("pass", "pass") is True
+
+
+def test_ground_truth_invalid_false_when_reference_passes_and_null_fails():
+    assert calibrate_module._ground_truth_invalid("pass", "fail") is False
+
+
+def test_calibrate_models_skips_real_models_when_reference_fails(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run_and_grade(task, model, cfg):
+        calls.append(model.model_id)
+        return GradeResult(outcome="fail"), "", None  # reference fails -> bad ground truth
+
+    monkeypatch.setattr(calibrate_module, "run_and_grade", fake_run_and_grade)
+    models = [_named_model("real"), _control_model("reference", "reference-oracle"), _control_model("null", "null-baseline")]
+    selected = [_selected("t1", 0)]
+
+    _results, detail_rows = calibrate_module.calibrate_models(
+        models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv",
+    )
+
+    assert "real" not in calls  # never actually called
+    real_row = next(r for r in detail_rows if r.model_id == "real")
+    assert real_row.outcome == "error_harness"
+    assert "ground truth" in real_row.detail
+    assert real_row.duration_ms == 0
+
+
+def test_calibrate_models_skips_real_models_when_null_solution_passes(monkeypatch, tmp_path):
+    def fake_run_and_grade(task, model, cfg):
+        if model.runner == "reference":
+            return GradeResult(outcome="pass"), "", None
+        if model.runner == "null":
+            return GradeResult(outcome="pass"), "", None  # empty solution incorrectly passes
+        raise AssertionError("real model must not be called")
+
+    monkeypatch.setattr(calibrate_module, "run_and_grade", fake_run_and_grade)
+    models = [_named_model("real"), _control_model("reference", "reference-oracle"), _control_model("null", "null-baseline")]
+    selected = [_selected("t1", 0)]
+
+    _results, detail_rows = calibrate_module.calibrate_models(
+        models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv",
+    )
+
+    real_row = next(r for r in detail_rows if r.model_id == "real")
+    assert real_row.outcome == "error_harness"
+
+
+def test_calibrate_models_runs_real_models_normally_when_ground_truth_is_valid(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run_and_grade(task, model, cfg):
+        calls.append(model.model_id)
+        if model.runner == "reference":
+            return GradeResult(outcome="pass"), "", None
+        if model.runner == "null":
+            return GradeResult(outcome="fail"), "", None
+        return GradeResult(outcome="pass"), "solution", None
+
+    monkeypatch.setattr(calibrate_module, "run_and_grade", fake_run_and_grade)
+    models = [_named_model("real"), _control_model("reference", "reference-oracle"), _control_model("null", "null-baseline")]
+    selected = [_selected("t1", 0)]
+
+    _results, detail_rows = calibrate_module.calibrate_models(
+        models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv",
+    )
+
+    assert "real" in calls
+    real_row = next(r for r in detail_rows if r.model_id == "real")
+    assert real_row.outcome == "pass"
+
+
+def test_calibrate_models_does_not_skip_when_controls_are_absent_from_the_roster(monkeypatch, tmp_path):
+    # Mirrors a --model-scoped incremental run: no reference-oracle/null-baseline in the roster at
+    # all, so there's nothing to check against — real models must run exactly as before this existed.
+    calls = []
+
+    def fake_run_and_grade(task, model, cfg):
+        calls.append(model.model_id)
+        return GradeResult(outcome="pass"), "solution", None
+
+    monkeypatch.setattr(calibrate_module, "run_and_grade", fake_run_and_grade)
+    models = [_named_model("real")]
+    selected = [_selected("t1", 0)]
+
+    calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv")
+
+    assert calls == ["real"]
+
+
+def test_calibrate_models_grades_controls_before_real_models_even_if_listed_after(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run_and_grade(task, model, cfg):
+        calls.append(model.model_id)
+        # Valid ground truth: reference passes, null fails — real model must actually run.
+        outcome = "fail" if model.runner == "null" else "pass"
+        return GradeResult(outcome=outcome), "", None
+
+    monkeypatch.setattr(calibrate_module, "run_and_grade", fake_run_and_grade)
+    # Real model listed FIRST in input order — calibrate_models must still grade controls first.
+    models = [_named_model("real"), _control_model("reference", "reference-oracle"), _control_model("null", "null-baseline")]
+    selected = [_selected("t1", 0)]
+
+    calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv")
+
+    assert calls == ["reference-oracle", "null-baseline", "real"]
+
+
 def test_calibrate_models_persists_the_full_solution_when_the_csv_preview_would_truncate_it(monkeypatch, tmp_path):
     # Regression test: confirmed this session investigating Luna's Multi-SWE-RL failures that a
     # solution over the CSV preview cap (e.g. `checkstyle-15001`, 613,777 chars) is gone for good
@@ -316,6 +538,37 @@ def test_calibrate_models_does_not_persist_a_side_file_for_a_solution_that_alrea
     calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=details_path)
 
     assert not (tmp_path / "solutions").exists()
+
+
+def test_calibrate_models_records_turn_count_from_usage_in_the_details_csv(monkeypatch, tmp_path):
+    usage = TokenUsage(input_tokens=100, output_tokens=50, cost_usd=0.01, turn_count=4)
+    monkeypatch.setattr(
+        calibrate_module, "run_and_grade",
+        lambda task, model, cfg: (GradeResult(outcome="pass"), "solution", usage),
+    )
+    models = [_named_model("m1")]
+    selected = [_selected("t1", 0)]
+
+    _results, detail_rows = calibrate_module.calibrate_models(
+        models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv",
+    )
+
+    assert detail_rows[0].turns == 4
+
+
+def test_calibrate_models_defaults_turns_to_zero_when_usage_is_unavailable(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        calibrate_module, "run_and_grade",
+        lambda task, model, cfg: (GradeResult(outcome="pass"), "solution", None),
+    )
+    models = [_named_model("m1")]
+    selected = [_selected("t1", 0)]
+
+    _results, detail_rows = calibrate_module.calibrate_models(
+        models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv",
+    )
+
+    assert detail_rows[0].turns == 0
 
 
 def test_calibrate_models_stats_are_identical_to_the_old_models_outer_aggregation(monkeypatch, tmp_path):

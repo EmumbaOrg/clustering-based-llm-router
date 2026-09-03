@@ -103,13 +103,15 @@ models:
   # baseUrl/apiKey config on our side at all, unlike every other provider in this file.
   # cost_input/cost_output converted from Anthropic's published $1.00 / $5.00 per 1M tokens
   # (this file's convention is $ per 1k) — real, metered spend, unlike the local candidates above.
-  - model_id: claude-haiku-4-5
-    provider: anthropic
-    runner: pi
-    cost_input: 0.001
-    cost_output: 0.005
-    context_window: 200000
-    max_tokens: 2048
+  # Disabled (2026-08-25) in favor of gpt-5-nano for this round of calibration — re-enable by
+  # uncommenting.
+  # - model_id: claude-haiku-4-5
+  #   provider: anthropic
+  #   runner: pi
+  #   cost_input: 0.001
+  #   cost_output: 0.005
+  #   context_window: 200000
+  #   max_tokens: 2048
 
   # ── OpenAI, via Pi's plain `openai` provider ────────────────────────────────────────────────
   # `pi --list-models luna` resolves this exact (provider, model_id) pair against Pi's own model
@@ -133,16 +135,21 @@ models:
     context_window: 272000
     max_tokens: 128000
 
+  # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
+  # Cheapest model in OpenAI's entire current lineup — verified live via `pi --list-models nano`:
+  # provider=openai, context=400K, max-out=128K, matching the values below exactly (unlike Luna,
+  # no correction needed here). cost_input/cost_output are OpenAI's own published $0.05/$0.40 per
+  # 1M tokens, checked live against developers.openai.com/api/docs/pricing.
+  - model_id: gpt-5-nano
+    provider: openai
+    runner: pi
+    cost_input: 0.00005
+    cost_output: 0.0004
+    context_window: 400000
+    max_tokens: 128000
+
   # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
   # Commented out so calibration doesn't attempt them. Uncomment as keys become available.
-  # - model_id: gpt-5-nano
-  #   provider: openai
-  #   runner: pi
-  #   cost_input: 0.00005
-  #   cost_output: 0.0004
-  #   context_window: 400000
-  #   max_tokens: 128000
-  #
   # - model_id: gpt-5.4-nano
   #   provider: openai
   #   runner: pi

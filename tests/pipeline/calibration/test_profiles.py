@@ -40,7 +40,7 @@ def _calibration_config() -> CalibrationConfig:
     return CalibrationConfig(
         gradeable_sources=["bigcodebench"], tasks_per_cluster=4,
         task_timeout_seconds=60, smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.3, seed=42, lambda_sweep=[0, 0.1],
+        seed=42, lambda_sweep=[0, 0.1],
     )
 
 
@@ -152,7 +152,7 @@ def test_merge_profiles_dict_rejects_a_mismatched_tasks_per_cluster():
     different_config = CalibrationConfig(
         gradeable_sources=["bigcodebench"], tasks_per_cluster=999,  # different from _calibration_config()'s 4
         task_timeout_seconds=60, smoothing=SmoothingConfig(method="shrink_to_model_global", prior_weight=5),
-        holdout_fraction=0.3, seed=42, lambda_sweep=[0, 0.1],
+        seed=42, lambda_sweep=[0, 0.1],
     )
     incoming = build_profiles_dict([_result("m2")], _cluster_map(), _embedding_config(), different_config, "cal-2")
 

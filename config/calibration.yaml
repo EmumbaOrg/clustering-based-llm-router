@@ -23,6 +23,23 @@ gradeable_sources:
 # statistically confident error rates.
 tasks_per_cluster: 10
 
+# Category mix target (spec §5.1's "aim for the following distribution"), applied WITHIN each
+# cluster's tasks_per_cluster budget above — the two knobs work together: tasks_per_cluster sets
+# the per-cluster total, category_mix sets how that total is split by category. Source->category
+# mapping is fixed in code (calibrate.py's CATEGORY_SOURCES), not configurable here, since it
+# reflects what each dataset actually is (e.g. multi-swe-rl is always "multilingual"), not a
+# tunable. Values must sum to ~1.0. Leave this empty/absent to fall back to flat stratified-by-
+# cluster sampling (no category targeting) — select_tasks() checks `if category_mix:` to decide.
+# A cluster that's naturally dominated by one source (several are — e.g. one cluster in the last
+# real run was 100% bigcodebench) can't hit every category's quota no matter what; select_tasks()
+# backfills the shortfall from that cluster's other categories rather than under-filling it, and
+# logs which clusters needed backfilling plus the ACHIEVED global mix (spec says "approximately",
+# not "exactly" — do not expect a perfect 60/25/15 split of the total selection).
+category_mix:
+  repo_python: 0.60   # swe-smith, swe-gym
+  multilingual: 0.25  # multi-swe-rl
+  standalone: 0.15    # bigcodebench, ds1000
+
 # `candidate_pool_oversample` used to live here — select_tasks() no longer embeds a per-run random
 # candidate pool at all (see calibrate.py::select_tasks's docstring for why: it silently left some
 # clusters with zero tasks). Task->cluster assignment now comes from artifacts/task-cluster-map.json,
@@ -60,11 +77,15 @@ smoothing:
   method: shrink_to_model_global
   prior_weight: 5
 
-# Fraction of the selected task pool held back for evaluation, disjoint from calibration.
-# Evaluation must never score against tasks a model was calibrated on.
-holdout_fraction: 0.3
+# `holdout_fraction` used to live here — select_tasks() no longer carves a held-back split out of
+# the calibration corpus. Per spec (docs/routing-poc-background-research.md §7), evaluation is
+# meant to use a genuinely separate benchmark (SWE-bench Verified/Multilingual/Live), not a slice
+# of the same corpus used for calibration/clustering — a within-corpus holdout was never what the
+# spec called for, so it's removed for now rather than kept as machinery with no real purpose.
+# evaluate.py's holdout-based replay is dormant until it's wired up against a real external
+# benchmark instead.
 
-# Deterministic task selection and holdout split.
+# Deterministic task selection.
 seed: 42
 
 # Lambda values swept during evaluation (spec §6). Deliberately a sweep, not a single value —

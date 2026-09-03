@@ -85,7 +85,107 @@ def _expected_solution(task: Task) -> str:
 class SelectedTask:
     task: Task
     cluster_id: int
-    split: str  # "calibration" | "holdout"
+    split: str  # always "calibration" for now — select_tasks() no longer carves out a "holdout"
+    # split (see config/calibration.yaml's comment on the removed holdout_fraction for why). Kept
+    # as a field rather than dropped outright since calibrate_models/evaluate.py/the pinned-file
+    # schema all key off it, and it's the natural place to reintroduce a real split later.
+
+
+# Fixed source->category mapping for spec §5.1's "aim for the following distribution" (repository-
+# level Python / multilingual repository / standalone implementation+library-use), matching §4.1's
+# own corpus table exactly: swe-smith/swe-gym are both repo-level Python SWE tasks, multi-swe-rl is
+# the multilingual issue-resolution source, bigcodebench/ds1000 are both standalone. This is a
+# property of what each dataset actually IS, not a tunable — config only controls the target
+# *ratios* (CalibrationConfig.category_mix), never which source belongs to which category.
+CATEGORY_SOURCES: dict[str, list[str]] = {
+    "repo_python": ["swe-smith", "swe-gym"],
+    "multilingual": ["multi-swe-rl"],
+    "standalone": ["bigcodebench", "ds1000"],
+}
+_SOURCE_CATEGORY: dict[str, str] = {s: cat for cat, sources in CATEGORY_SOURCES.items() for s in sources}
+
+# "aim for" (spec's own word), not "require exactly" — a ratio config that's off by more than this
+# is almost certainly a typo (e.g. forgetting a category, or a percentage entered as 60 not 0.60)
+# rather than an intentional near-100% target, so it's rejected rather than silently normalized.
+_CATEGORY_MIX_SUM_TOLERANCE = 0.01
+
+
+def _validate_category_mix(category_mix: dict[str, float]) -> None:
+    unknown = sorted(set(category_mix) - set(CATEGORY_SOURCES))
+    if unknown:
+        raise ValueError(
+            f"config/calibration.yaml's category_mix has unknown categor{'y' if len(unknown) == 1 else 'ies'} "
+            f"{unknown} — known categories are {sorted(CATEGORY_SOURCES)}."
+        )
+    total = sum(category_mix.values())
+    if abs(total - 1.0) > _CATEGORY_MIX_SUM_TOLERANCE:
+        raise ValueError(
+            f"config/calibration.yaml's category_mix values sum to {total}, not ~1.0 "
+            f"({category_mix!r}) — fix the ratios before calibrating."
+        )
+
+
+def _select_with_category_mix(
+    tasks_in_cluster: list[Task], budget: int, category_mix: dict[str, float], rng: random.Random,
+) -> tuple[list[Task], dict[str, int]]:
+    """Splits `budget` (a cluster's `tasks_per_cluster` allocation) across categories by
+    `category_mix`'s ratios, then backfills any category's shortfall (fewer tasks available in this
+    cluster than its quota) from OTHER categories' surplus in the same cluster — spec's own
+    "approximately" language means a per-cluster miss is expected wherever a cluster is naturally
+    dominated by one source (e.g. a cluster that's 100% bigcodebench has zero repo_python tasks to
+    give, no matter the quota), not a reason to under-fill the cluster below `budget` when other
+    categories have spare tasks to give instead. Returns (chosen, shortfalls) — shortfalls maps
+    category -> how many of its quota went unfilled by that category itself, purely for logging;
+    the returned `chosen` may still total less than `budget` if EVERY category in this cluster is
+    already exhausted, exactly like the plain (no category_mix) path can under-fill a thin cluster."""
+    by_category: dict[str, list[Task]] = {}
+    for task in tasks_in_cluster:
+        category = _SOURCE_CATEGORY.get(task.source)
+        if category is None:
+            raise ValueError(
+                f"gradeable source {task.source!r} has no entry in CATEGORY_SOURCES — add it there "
+                "before using category_mix with this source enabled."
+            )
+        by_category.setdefault(category, []).append(task)
+    for cat_tasks in by_category.values():
+        cat_tasks.sort(key=lambda t: t.task_id)  # order-independent before shuffling
+        rng.shuffle(cat_tasks)
+
+    categories = list(category_mix)  # config's own order — the last one absorbs the rounding
+    # remainder below so quotas always sum to exactly `budget`, never budget +/- 1 from independent
+    # per-category rounding.
+    quotas: dict[str, int] = {}
+    allocated = 0
+    for i, category in enumerate(categories):
+        if i == len(categories) - 1:
+            quotas[category] = max(budget - allocated, 0)
+        else:
+            quotas[category] = round(budget * category_mix[category])
+            allocated += quotas[category]
+
+    chosen: list[Task] = []
+    shortfalls: dict[str, int] = {}
+    remaining_budget = 0
+    for category in categories:
+        available = by_category.get(category, [])
+        quota = quotas[category]
+        take = available[:quota]
+        chosen.extend(take)
+        shortfall = quota - len(take)
+        if shortfall > 0:
+            shortfalls[category] = shortfall
+            remaining_budget += shortfall
+
+    if remaining_budget > 0:
+        for category in categories:
+            if remaining_budget <= 0:
+                break
+            surplus = by_category.get(category, [])[quotas[category]:]  # not already taken above
+            take_extra = surplus[:remaining_budget]
+            chosen.extend(take_extra)
+            remaining_budget -= len(take_extra)
+
+    return chosen, shortfalls
 
 
 def select_tasks(
@@ -106,6 +206,11 @@ def select_tasks(
     removes the embedding step from every calibration run entirely, since the labels are already
     known.
 
+    When `calibration_config.category_mix` is set, each cluster's `tasks_per_cluster` budget is
+    further split by category (see `_select_with_category_mix`) — implementing spec §5.1's "aim
+    for the following distribution" — instead of one flat shuffle-and-cap over the whole cluster.
+    Left empty (the default), behavior is unchanged from before category_mix existed.
+
     Raises if `task_cluster_map` wasn't built against the SAME cluster map passed in — a stale or
     mismatched mapping would silently make cluster ids mean different things than the centroids
     `cluster_map` carries, which must fail loudly rather than produce a quietly-wrong selection."""
@@ -115,6 +220,8 @@ def select_tasks(
             f"but the current cluster-map.json is {cluster_map.artifact_id!r} — re-run `build-artifact` "
             "to regenerate a matching task-cluster-map.json."
         )
+    if calibration_config.category_mix:
+        _validate_category_mix(calibration_config.category_mix)
 
     rng = random.Random(calibration_config.seed)
     k = cluster_map.centroids.shape[0]
@@ -148,21 +255,35 @@ def select_tasks(
         logger.warning(f"{len(empty_clusters)} of {k} clusters have zero gradeable tasks: {empty_clusters}")
 
     selected: list[SelectedTask] = []
+    clusters_with_shortfall = 0
     for cluster_id in sorted(by_cluster):  # explicit, not dict-insertion-order reliance
-        tasks_in_cluster = sorted(by_cluster[cluster_id], key=lambda t: t.task_id)  # order-independent before shuffling
-        rng.shuffle(tasks_in_cluster)
-        chosen = tasks_in_cluster[: calibration_config.tasks_per_cluster]
-        holdout_count = round(len(chosen) * calibration_config.holdout_fraction)
-        for i, task in enumerate(chosen):
-            split = "holdout" if i < holdout_count else "calibration"
-            selected.append(SelectedTask(task=task, cluster_id=cluster_id, split=split))
+        tasks_in_cluster = by_cluster[cluster_id]
+        if calibration_config.category_mix:
+            chosen, shortfalls = _select_with_category_mix(
+                tasks_in_cluster, calibration_config.tasks_per_cluster, calibration_config.category_mix, rng,
+            )
+            if shortfalls:
+                clusters_with_shortfall += 1
+                logger.info(f"cluster {cluster_id}: category quota shortfall (backfilled where possible): {shortfalls}")
+        else:
+            tasks_sorted = sorted(tasks_in_cluster, key=lambda t: t.task_id)  # order-independent before shuffling
+            rng.shuffle(tasks_sorted)
+            chosen = tasks_sorted[: calibration_config.tasks_per_cluster]
 
-    n_calibration = sum(1 for s in selected if s.split == "calibration")
-    n_holdout = sum(1 for s in selected if s.split == "holdout")
-    logger.info(
-        f"selected {len(selected)} tasks across {len(by_cluster)} clusters "
-        f"({n_calibration} calibration, {n_holdout} holdout)"
-    )
+        for task in chosen:
+            selected.append(SelectedTask(task=task, cluster_id=cluster_id, split="calibration"))
+
+    if calibration_config.category_mix:
+        achieved = {cat: sum(1 for s in selected if _SOURCE_CATEGORY[s.task.source] == cat) for cat in calibration_config.category_mix}
+        total = len(selected) or 1
+        achieved_pct = {cat: round(100 * n / total, 1) for cat, n in achieved.items()}
+        logger.info(
+            f"selected {len(selected)} tasks across {len(by_cluster)} clusters — category mix achieved: "
+            f"{achieved_pct} (target: {calibration_config.category_mix}, {clusters_with_shortfall} "
+            f"cluster(s) had a quota shortfall)"
+        )
+    else:
+        logger.info(f"selected {len(selected)} tasks across {len(by_cluster)} clusters")
     return selected
 
 
@@ -426,11 +547,14 @@ class CalibrationDetailRow:
     cost_usd: float = 0.0  # Pi's own reported cost for this call (see TokenUsage) — 0 for the
     # reference/null controls (synthesized, no real call) and for a call whose usage genuinely
     # couldn't be read back, not a claim that the call was free.
+    turns: int = 0  # Number of agent turns Pi took to reach a final answer (see TokenUsage.
+    # turn_count) — 0 for the same cases cost_usd is 0: controls, and calls whose usage couldn't
+    # be read back.
 
 
 _CSV_FIELDNAMES = [
     "task_id", "source", "cluster_id", "split", "model_id", "provider",
-    "outcome", "detail", "solution", "duration_ms", "input_tokens", "output_tokens", "cost_usd",
+    "outcome", "detail", "solution", "duration_ms", "input_tokens", "output_tokens", "cost_usd", "turns",
 ]
 
 
@@ -438,7 +562,7 @@ def _csv_row_values(row: CalibrationDetailRow) -> list:
     return [
         row.task_id, row.source, row.cluster_id, row.split, row.model_id,
         row.provider, row.outcome, row.detail, row.solution, row.duration_ms,
-        row.input_tokens, row.output_tokens, row.cost_usd,
+        row.input_tokens, row.output_tokens, row.cost_usd, row.turns,
     ]
 
 
@@ -514,6 +638,17 @@ def write_calibration_details_csv(rows: list[CalibrationDetailRow], path: Path |
     return target
 
 
+def _ground_truth_invalid(reference_outcome: str | None, null_outcome: str | None) -> bool:
+    """True once BOTH controls have actually run for this task and either says the ground truth is
+    bad: the gold solution didn't pass (`reference_outcome != "pass"`) or an empty solution
+    incorrectly did (`null_outcome == "pass"`). Either argument still `None` (a control wasn't in
+    this run's roster at all — e.g. a `--model`-scoped incremental run drops both) means "can't
+    tell," not "invalid" — real models still run in that case, same as before this existed."""
+    if reference_outcome is None or null_outcome is None:
+        return False
+    return reference_outcome != "pass" or null_outcome == "pass"
+
+
 def calibrate_models(
     models: list[ModelConfig], selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
     details_csv_path: Path | None = None,
@@ -532,14 +667,26 @@ def calibrate_models(
     finished with the moment its inner loop ends, and it fixes the same thrash for
     `repo_context.py`'s bare-clone cache.
 
-    Purely a reordering: outcomes are per (model, task) pair and every statistic is computed after
-    the fact by `_aggregate_outcomes`, so results are identical to the previous order. Task
-    selection (and therefore the RNG) has already happened in `select_tasks` by this point, so
-    determinism is unaffected too."""
+    Within a task's inner loop, controls (`reference-oracle`/`null-baseline`, if both are in
+    `models`) are graded FIRST — no new grading calls, they're already part of the normal roster —
+    and if together they show this task's ground truth is bad (see `_ground_truth_invalid`), every
+    REAL model for that task is skipped entirely: no `run_and_grade` call, a synthesized
+    `error_harness` result instead (already excluded from error-rate math, same bucket a harness
+    failure lands in). Confirmed against a real run that ~20% of tasks fail this check — those calls
+    were previously real, paid/timed attempts at a task no model could ever pass. `index`/`total`
+    still count a skipped call, so `[i/total]` progress stays consistent with the logged total.
+
+    Otherwise purely a reordering: outcomes are per (model, task) pair and every statistic is
+    computed after the fact by `_aggregate_outcomes`, so a task with valid ground truth produces
+    identical results to before. Task selection (and therefore the RNG) has already happened in
+    `select_tasks` by this point, so determinism is unaffected too."""
     calibration_only = sorted(
         (st for st in selected_tasks if st.split == "calibration"),
         key=lambda st: image_affinity_key(st.task),
     )
+    # Controls before real models for every task — see _ground_truth_invalid above, which needs
+    # their outcome before deciding whether to run the real models at all.
+    models = [m for m in models if m.is_control] + [m for m in models if not m.is_control]
     total = len(calibration_only) * len(models)
     logger.info(
         f"calibration started: {len(calibration_only)} tasks x {len(models)} models = {total} calls "
@@ -553,9 +700,23 @@ def calibrate_models(
     index = 0
     try:
         for st in calibration_only:
+            reference_outcome: str | None = None
+            null_outcome: str | None = None
             for model in models:
                 index += 1
-                record = run_and_log(st.task, model, calibration_config, index, total)
+                if not model.is_control and _ground_truth_invalid(reference_outcome, null_outcome):
+                    logger.info(f"[{index}/{total}] {model.model_id} task {st.task.task_id} skipped: bad ground truth (reference={reference_outcome}, null={null_outcome})")
+                    result = GradeResult(
+                        outcome="error_harness",
+                        detail=f"skipped: ground truth check failed (reference={reference_outcome}, null={null_outcome})",
+                    )
+                    record = TaskRunRecord(result=result, solution=None, duration_ms=0)
+                else:
+                    record = run_and_log(st.task, model, calibration_config, index, total)
+                    if model.runner == "reference":
+                        reference_outcome = record.result.outcome
+                    elif model.runner == "null":
+                        null_outcome = record.result.outcome
                 outcomes_by_model[model.model_id].append((st, record.result))
                 full_solution = record.solution or ""
                 if len(full_solution) > _CSV_SOLUTION_MAX_CHARS:
@@ -574,6 +735,7 @@ def calibrate_models(
                     input_tokens=record.usage.input_tokens if record.usage else 0,
                     output_tokens=record.usage.output_tokens if record.usage else 0,
                     cost_usd=record.usage.cost_usd if record.usage else 0.0,
+                    turns=record.usage.turn_count if record.usage else 0,
                 )
                 detail_rows.append(row)
                 writer.write(row)  # flushed immediately — see _CalibrationDetailsWriter's docstring

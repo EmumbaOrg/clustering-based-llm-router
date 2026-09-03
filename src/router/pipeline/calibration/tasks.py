@@ -82,11 +82,15 @@ def _ds1000_tasks() -> list[Task]:
 # select_tasks() calls load_gradeable_tasks(source) for every gradeable source on every
 # calibrate/evaluate/validate-graders invocation (it needs the real Task/row data — the
 # task-cluster-map only carries task_id/source/cluster_id) — loading and filtering all ~59K
-# SWE-smith rows for that costs minutes each time for no benefit, since at most
-# tasks_per_cluster * k of them will ever actually be selected. Shuffled first, then filtered for
-# a non-empty problem_statement (same order as corpus.py's own load for this dataset), so capping
-# doesn't bias toward whichever rows the filter would have skipped anyway.
-SWESMITH_TASK_POOL_CAP = 5_000
+# SWE-smith rows for that costs real time each run, so this is capped well below the full dataset.
+# Matches corpus.py's own SWE_SMITH_SAMPLE_SIZE (also 20,000, also seeded 42, also filtering the
+# same non-empty-problem_statement condition) DELIBERATELY: same seed + same dataset + same filter
+# means this walks the identical shuffled sequence corpus.py used to build task-cluster-map.json's
+# swe-smith cluster labels, so raising this to match closes the gap between them — previously
+# capped lower (5,000) than the corpus's own 20,000, which meant most cluster-labeled swe-smith
+# rows had no matching gradeable task at all (confirmed live: ~15,000 of the ~15,940
+# "no matching gradeable task" entries in a real run traced to exactly this mismatch).
+SWESMITH_TASK_POOL_CAP = 20_000
 _SWESMITH_POOL_SEED = 42
 
 

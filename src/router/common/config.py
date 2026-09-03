@@ -101,7 +101,6 @@ class CalibrationConfig:
     tasks_per_cluster: int
     task_timeout_seconds: int
     smoothing: SmoothingConfig
-    holdout_fraction: float
     seed: int
     lambda_sweep: list[float]
     # Additive, backward-compatible: absent/empty means every source grades under the plain
@@ -110,6 +109,14 @@ class CalibrationConfig:
     # always uses task_timeout_seconds directly, so a slow grader can't also give a hung LLM call
     # the same long leash.
     task_timeout_overrides: dict[str, int] = dataclasses.field(default_factory=dict)
+    # Additive, backward-compatible: absent/empty means select_tasks() keeps today's flat
+    # stratified-by-cluster sampling. When set, {category: fraction} targets spec §5.1's "aim for
+    # the following distribution" (e.g. 60% repo-level Python / 25% multilingual / 15% standalone),
+    # applied within each cluster's tasks_per_cluster budget — see calibrate.py's CATEGORY_SOURCES
+    # for the (fixed, code-level) source->category mapping and select_tasks() for how a category
+    # shortfall in a given cluster is backfilled from the cluster's other categories. Validated in
+    # select_tasks() itself, not here — this module stays "dumb" per its own docstring.
+    category_mix: dict[str, float] = dataclasses.field(default_factory=dict)
 
     def grading_timeout_for(self, source: str) -> int:
         return self.task_timeout_overrides.get(source, self.task_timeout_seconds)
@@ -123,10 +130,10 @@ def load_calibration_config(path: Path | None = None) -> CalibrationConfig:
         tasks_per_cluster=data["tasks_per_cluster"],
         task_timeout_seconds=data["task_timeout_seconds"],
         smoothing=smoothing,
-        holdout_fraction=data["holdout_fraction"],
         seed=data["seed"],
         lambda_sweep=data["lambda_sweep"],
         task_timeout_overrides=data.get("task_timeout_overrides", {}),
+        category_mix=data.get("category_mix", {}),
     )
 
 

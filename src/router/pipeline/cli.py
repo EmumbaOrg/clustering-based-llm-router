@@ -344,9 +344,7 @@ def calibrate(
             raise typer.BadParameter(f"unknown model_id(s) in config/models.yaml: {unknown}")
         models = [by_id[m] for m in model]
 
-    n_calibration = sum(1 for s in selected if s.split == "calibration")
-    n_holdout = sum(1 for s in selected if s.split == "holdout")
-    typer.echo(f"Selected {len(selected)} tasks: {n_calibration} calibration, {n_holdout} holdout")
+    typer.echo(f"Selected {len(selected)} tasks")
 
     # One timestamp for the whole run, shared by the details CSV filename, calibration_run_id
     # below, and the auto-written task-selection pin — so everything this run produced is
@@ -357,7 +355,7 @@ def calibrate(
     # Always written, whether this run selected fresh or loaded a pin — cheap, and it's what a
     # LATER incremental (--model) run, or anyone auditing this one, would pin against.
     selection_artifact = calibrate_mod.selected_tasks_to_dict(selected, k=cluster_map.centroids.shape[0])
-    selection_path = ARTIFACTS_DIR / f"calibration-task-selection-{run_timestamp}.json"
+    selection_path = profiles_mod.ARTIFACTS_DIR / f"calibration-task-selection-{run_timestamp}.json"
     calibrate_mod.write_task_selection(selection_artifact, selection_path)
     typer.echo(f"Wrote task selection to {selection_path}")
     if selection_artifact["empty_clusters"]:

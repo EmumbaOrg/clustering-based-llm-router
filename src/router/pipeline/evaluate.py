@@ -8,6 +8,11 @@ against). Routing decisions themselves use ONLY the calibration profiles (predic
 a model — never anything computed from the holdout run — matching how the live router would only
 ever have calibration data to route on, not a peek at how things turn out.
 
+Currently dormant: select_tasks() no longer produces a "holdout" split (see
+config/calibration.yaml's comment on the removed holdout_fraction), so `holdout` below is always
+empty and every metric in this module reports 0/empty until this is rewired against a real,
+separate evaluation benchmark per spec §7.
+
 With a single non-control candidate model (this pass's dry-run state), every baseline and every
 lambda collapses to that one model by construction — the point is that the machinery runs and the
 numbers reconcile, not that the curves are informative yet.

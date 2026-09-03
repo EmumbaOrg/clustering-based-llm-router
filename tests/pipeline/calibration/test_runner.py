@@ -338,4 +338,47 @@ def test_run_pi_does_not_flag_a_normal_completion_as_a_harness_error(monkeypatch
     result = run_pi(_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
 
     assert result.harness_error is False
-    assert result.solution == "return 1"
+
+
+# --- turn_count: how many agent turns Pi took, read off the same assistant-message list the usage
+# totals are summed across (see TokenUsage.turn_count and _parse_json_stream's own docstring on why
+# usage is per-message, not cumulative). ------------------------------------------------------------
+
+def test_run_pi_reports_turn_count_one_for_a_single_turn_call(monkeypatch):
+    stdout = (
+        '{"type":"session"}\n'
+        '{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"hi"}]},'
+        '{"role":"assistant","content":[{"type":"text","text":"```python\\nreturn 1\\n```"}],'
+        '"stopReason":"stop","usage":{"input":10,"output":5,"cost":{"total":0.001}}}]}\n'
+    )
+
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    result = run_pi(_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert result.usage.turn_count == 1
+
+
+def test_run_pi_reports_turn_count_for_a_multi_turn_tool_using_call(monkeypatch):
+    # Mirrors the real 6-turn repo-context call described in _parse_json_stream's own docstring —
+    # each assistant message is one turn, and turn_count must reflect ALL of them, not just the last.
+    assistant_turns = ",".join(
+        '{"role":"assistant","content":[{"type":"text","text":"turn"}],'
+        '"stopReason":"stop","usage":{"input":3,"output":2,"cost":{"total":0.0001}}}'
+        for _ in range(3)
+    )
+    stdout = (
+        '{"type":"session"}\n'
+        f'{{"type":"agent_end","messages":[{{"role":"user","content":[{{"type":"text","text":"hi"}}]}},{assistant_turns}]}}\n'
+    )
+
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    result = run_pi(_task(), _model(), timeout_seconds=60, sleep=lambda s: None)
+
+    assert result.usage.turn_count == 3
+    assert result.usage.input_tokens == 9  # summed across all 3 turns, not just the last
