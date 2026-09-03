@@ -56,10 +56,7 @@ CLUSTER_VISUALIZATION_PATH = cluster_map_mod.ARTIFACTS_DIR / "cluster-visualizat
 
 
 def _details_csv_path(run_timestamp: str) -> Path:
-    # Timestamp lives in the FILENAME, not a per-row column — this is what actually stops one
-    # calibrate run (or a test run using the wrong path) from silently overwriting another's CSV,
-    # which a per-row timestamp inside a single shared file never did (see CalibrationDetailRow's
-    # docstring for the incident that motivated this).
+    # Timestamp in the FILENAME (not a per-row column) so concurrent runs never share/overwrite one CSV.
     return profiles_mod.ARTIFACTS_DIR / f"calibration-details-{run_timestamp}.csv"
 
 
@@ -169,11 +166,8 @@ def _run_build_artifact(k: int | None) -> None:
     path = cluster_map_mod.write_cluster_map(artifact)
     typer.echo(f"Wrote validated artifact to {path}")
 
-    # Full per-task cluster labels, keyed by the same stable id calibration/tasks.py uses — lets
-    # select_tasks() sample by cluster without a second, separate embedding pass. Built from
-    # `rows_by_id` (every corpus row), not `used_rows` (already filtered to ids actually found),
-    # so a task-cluster-map.json/embeddings.npz mismatch is handled by build_task_cluster_map_dict
-    # itself rather than silently misaligning ids and labels by position.
+    # Full per-task cluster labels, keyed by the same stable id calibration/tasks.py uses, so
+    # select_tasks() can sample by cluster without a second embedding pass.
     task_map_artifact = task_cluster_map_mod.build_task_cluster_map_dict(
         ids, result.labels, rows_by_id, artifact["artifact_id"],
     )
@@ -220,7 +214,7 @@ def _run_visualize_clusters(sample_size: int, highlight: list[str], seed: int, o
     typer.echo(f"Wrote cluster visualization ({sample_size} sampled tasks) to {result_path}")
 
 
-# Same reasoning as _SOURCE_OPTION above — a module-level singleton so ruff's B008 doesn't flag the
+# Same reasoning as _SOURCE_OPTION below — a module-level singleton so ruff's B008 doesn't flag the
 # list-typed Option default, while still supporting a repeatable `--highlight` flag.
 _HIGHLIGHT_OPTION = typer.Option(
     None, "--highlight", help="task_id to annotate on the plot (repeatable), e.g. "
@@ -286,8 +280,7 @@ def validate_graders(
     gate fails, nothing downstream (calibration, evaluation) means anything.
 
     Uses `calibrate.py`'s `grade_reference`/`grade_null` — the SAME dispatch calibration itself
-    uses — so an unwired source raises immediately instead of being silently skipped, and this
-    gate can never drift from what a real calibration run actually does."""
+    uses — so an unwired source raises immediately instead of being silently skipped."""
     calibration_config = load_calibration_config()
     sources = source or calibration_config.gradeable_sources
     # random.sample, not [:n] — a source grouped by repo/instance (e.g. swe-smith's 128 repos)
@@ -361,13 +354,7 @@ def calibrate(
     if selection_artifact["empty_clusters"]:
         typer.echo(f"WARNING: {len(selection_artifact['empty_clusters'])} cluster(s) have zero gradeable tasks: {selection_artifact['empty_clusters']}")
 
-    # Tasks-outer / models-inner — see calibrate_models' docstring for why the loop order is worth
-    # roughly a factor of len(models) on image-pull cost. Per-model progress is on the `router`
-    # logger (--log-level INFO) rather than echoed here, since the run no longer proceeds
-    # model-by-model.
-    # calibrate_models writes the details CSV incrementally (one row per completed call, flushed
-    # immediately) rather than only at the end — so a still-running or interrupted run's progress
-    # is always inspectable on disk, not just held in memory until the whole run finishes.
+    # Tasks-outer / models-inner — see calibrate_models()'s own docstring.
     typer.echo(f"Grading {len(models)} models against each task (tasks-outer)...")
     typer.echo(f"Writing per-task-per-model details incrementally to {details_path}")
     results, detail_rows = calibrate_mod.calibrate_models(

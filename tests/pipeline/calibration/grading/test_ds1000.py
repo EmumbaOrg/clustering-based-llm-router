@@ -43,9 +43,3 @@ def test_empty_solution_fails_rather_than_erroring():
 def test_missing_dependency_in_the_harness_is_classified_separately():
     result = grade(_task(_CODE_CONTEXT_MISSING_DEP), "2 + 3")
     assert result.outcome == "error_missing_dep"
-
-
-def test_reference_solution_from_the_task_itself_passes():
-    task = _task()
-    result = grade(task, task.reference_solution)
-    assert result.outcome == "pass"

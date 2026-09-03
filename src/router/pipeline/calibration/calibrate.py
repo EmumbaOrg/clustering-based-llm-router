@@ -30,10 +30,8 @@ _GRADERS = {
     "multi-swe-rl": multiswerl.grade,
 }
 
-# Patch-based sources leave `reference_solution` empty (see tasks.py) and grade the gold/empty
-# patch through a dedicated entry point instead of the generic `grader(task, solution)` shape —
-# see grade_reference/grade_null below, which are the single source of truth cli.py's
-# validate-graders gate and run_and_grade's reference/null branches both call through.
+# Patch-based sources grade the gold/empty patch through a dedicated entry point instead of the
+# generic `grader(task, solution)` shape; single source of truth for the reference/null branches.
 _REFERENCE_GRADERS = {
     "swe-smith": swesmith.grade_reference,
     "swe-gym": swegym.grade_reference,
@@ -60,10 +58,8 @@ def grade_null(task: Task, timeout_seconds: int) -> GradeResult:
     return _GRADERS[task.source](task, "", timeout_seconds=timeout_seconds)
 
 
-# Debug-only preview length for expected-vs-provided logging (see run_and_grade's pi branch).
-# Long enough to see the shape of a real answer; short enough that a 1.4MB swe-gym patch doesn't
-# flood the log. --log-level DEBUG is scoped to the `router` logger only (logging_config.py), so
-# this never mixes with third-party DEBUG noise from datasets/huggingface_hub/sentence-transformers.
+# Debug-only preview length for expected-vs-provided logging (see run_and_grade's pi branch) —
+# long enough to see the shape of an answer, short enough not to flood the log with a huge patch.
 _LOG_PREVIEW_CHARS = 1000
 
 
@@ -75,9 +71,8 @@ def _preview(text: str) -> str:
 
 
 def _expected_solution(task: Task) -> str:
-    # bigcodebench/ds1000 carry the gold answer directly in reference_solution. Patch-based
-    # sources (swe-smith/swe-gym) leave it empty on purpose (see tasks.py) — their gold fix is
-    # task.row["patch"] instead, which run_and_grade's reference/null branches use directly.
+    # bigcodebench/ds1000 carry the gold answer in reference_solution; patch-based sources leave it
+    # empty (see tasks.py) and use task.row["patch"] instead.
     return task.reference_solution or str(task.row.get("patch", ""))
 
 
@@ -85,18 +80,12 @@ def _expected_solution(task: Task) -> str:
 class SelectedTask:
     task: Task
     cluster_id: int
-    split: str  # always "calibration" for now — select_tasks() no longer carves out a "holdout"
-    # split (see config/calibration.yaml's comment on the removed holdout_fraction for why). Kept
-    # as a field rather than dropped outright since calibrate_models/evaluate.py/the pinned-file
-    # schema all key off it, and it's the natural place to reintroduce a real split later.
+    split: str  # always "calibration" for now, kept for schema/consumer compatibility — see
+    # docs/engineering-notes.md, "Holdout split removed"
 
 
-# Fixed source->category mapping for spec §5.1's "aim for the following distribution" (repository-
-# level Python / multilingual repository / standalone implementation+library-use), matching §4.1's
-# own corpus table exactly: swe-smith/swe-gym are both repo-level Python SWE tasks, multi-swe-rl is
-# the multilingual issue-resolution source, bigcodebench/ds1000 are both standalone. This is a
-# property of what each dataset actually IS, not a tunable — config only controls the target
-# *ratios* (CalibrationConfig.category_mix), never which source belongs to which category.
+# Fixed source->category mapping for spec §5.1's "aim for the following distribution" — a property
+# of what each dataset IS, not a tunable; config only controls the target ratios (category_mix).
 CATEGORY_SOURCES: dict[str, list[str]] = {
     "repo_python": ["swe-smith", "swe-gym"],
     "multilingual": ["multi-swe-rl"],
@@ -104,9 +93,8 @@ CATEGORY_SOURCES: dict[str, list[str]] = {
 }
 _SOURCE_CATEGORY: dict[str, str] = {s: cat for cat, sources in CATEGORY_SOURCES.items() for s in sources}
 
-# "aim for" (spec's own word), not "require exactly" — a ratio config that's off by more than this
-# is almost certainly a typo (e.g. forgetting a category, or a percentage entered as 60 not 0.60)
-# rather than an intentional near-100% target, so it's rejected rather than silently normalized.
+# "aim for" (spec's own word), not "require exactly" — but a sum off by more than this is almost
+# certainly a typo, so it's rejected rather than silently normalized.
 _CATEGORY_MIX_SUM_TOLERANCE = 0.01
 
 
@@ -128,16 +116,11 @@ def _validate_category_mix(category_mix: dict[str, float]) -> None:
 def _select_with_category_mix(
     tasks_in_cluster: list[Task], budget: int, category_mix: dict[str, float], rng: random.Random,
 ) -> tuple[list[Task], dict[str, int]]:
-    """Splits `budget` (a cluster's `tasks_per_cluster` allocation) across categories by
-    `category_mix`'s ratios, then backfills any category's shortfall (fewer tasks available in this
-    cluster than its quota) from OTHER categories' surplus in the same cluster — spec's own
-    "approximately" language means a per-cluster miss is expected wherever a cluster is naturally
-    dominated by one source (e.g. a cluster that's 100% bigcodebench has zero repo_python tasks to
-    give, no matter the quota), not a reason to under-fill the cluster below `budget` when other
-    categories have spare tasks to give instead. Returns (chosen, shortfalls) — shortfalls maps
-    category -> how many of its quota went unfilled by that category itself, purely for logging;
-    the returned `chosen` may still total less than `budget` if EVERY category in this cluster is
-    already exhausted, exactly like the plain (no category_mix) path can under-fill a thin cluster."""
+    """Splits `budget` across categories by `category_mix`'s ratios, then backfills any category's
+    shortfall from other categories' surplus in the same cluster (a cluster naturally dominated by
+    one source may have nothing to give another). Returns (chosen, shortfalls) — shortfalls maps
+    category -> how much of its quota went unfilled, for logging; `chosen` can still total less
+    than `budget` if every category in this cluster is already exhausted."""
     by_category: dict[str, list[Task]] = {}
     for task in tasks_in_cluster:
         category = _SOURCE_CATEGORY.get(task.source)
@@ -193,23 +176,12 @@ def select_tasks(
     cluster_map: ClusterMap,
     task_cluster_map: dict,
 ) -> list[SelectedTask]:
-    """Stratified-by-cluster task selection, driven by the full task->cluster mapping computed
-    once at `build-artifact` time (`clustering/task_cluster_map.py`) rather than a per-run random
-    pre-filter followed by a fresh embedding pass. This is a deliberate replacement for an earlier
-    design that embedded a small, randomly-oversampled candidate pool per source before assigning
-    clusters — confirmed against a real run that the random pre-filter could (and did: 2 of 24
-    configured clusters ended up with zero tasks) leave a cluster completely unrepresented purely
-    by chance, before stratification ever got a chance to run. Grouping directly from a full
-    per-task mapping fixes that by construction: every gradeable task is visible before sampling
-    starts, and the only way a cluster ends up with zero selected tasks is if it genuinely has zero
-    gradeable tasks anywhere in the underlying pool (logged below, not silently dropped) — and it
-    removes the embedding step from every calibration run entirely, since the labels are already
-    known.
-
-    When `calibration_config.category_mix` is set, each cluster's `tasks_per_cluster` budget is
-    further split by category (see `_select_with_category_mix`) — implementing spec §5.1's "aim
-    for the following distribution" — instead of one flat shuffle-and-cap over the whole cluster.
-    Left empty (the default), behavior is unchanged from before category_mix existed.
+    """Stratified-by-cluster task selection, driven by the full task->cluster mapping computed once
+    at `build-artifact` time (`clustering/task_cluster_map.py`) rather than a per-run random
+    pre-filter — see docs/engineering-notes.md, "Task-cluster mapping replaced a per-run random
+    pre-filter" for why. When `calibration_config.category_mix` is set, each cluster's
+    `tasks_per_cluster` budget is further split by category (see `_select_with_category_mix`) per
+    spec §5.1; left empty (the default), behavior is a flat shuffle-and-cap per cluster.
 
     Raises if `task_cluster_map` wasn't built against the SAME cluster map passed in — a stale or
     mismatched mapping would silently make cluster ids mean different things than the centroids
@@ -227,8 +199,7 @@ def select_tasks(
     k = cluster_map.centroids.shape[0]
     gradeable_sources = set(calibration_config.gradeable_sources)
 
-    # Real Task objects (full row data, needed for actually running/grading) per gradeable source
-    # — task_cluster_map only ever carries task_id/source/cluster_id, never the heavy row data.
+    # Full row data per gradeable source — task_cluster_map only carries task_id/source/cluster_id.
     gradeable_by_id: dict[str, Task] = {}
     for source in calibration_config.gradeable_sources:
         for task in load_gradeable_tasks(source):
@@ -241,9 +212,8 @@ def select_tasks(
             continue
         task = gradeable_by_id.get(entry["task_id"])
         if task is None:
-            # Expected, not an error: a row the corpus includes but calibration's own loader
-            # excludes (e.g. a DS-1000 Matplotlib row — corpus.py doesn't apply that filter,
-            # calibration/tasks.py does) has a cluster label here but was never gradeable.
+            # Expected, not an error: a row the corpus includes but calibration's loader excludes
+            # (e.g. a DS-1000 Matplotlib row) has a cluster label but was never gradeable.
             unmatched += 1
             continue
         by_cluster.setdefault(entry["cluster_id"], []).append(task)
@@ -289,11 +259,8 @@ def select_tasks(
 
 def compute_task_selection_digest(selected: list[SelectedTask]) -> str:
     """SHA-256 over sorted (task_id, prompt) pairs — same construction as
-    `clustering/cluster_map.py::compute_corpus_digest`, applied to the actual selected tasks'
-    prompt text rather than the whole corpus. A pinned selection (see `write_task_selection`) is
-    only as trustworthy as the guarantee that the underlying task content hasn't silently changed
-    since it was written — `load_task_selection` recomputes this and refuses to load on a
-    mismatch, rather than grading against content nobody signed off on."""
+    `clustering/cluster_map.py::compute_corpus_digest`, applied to the selected tasks' prompt text.
+    `load_task_selection` recomputes this and refuses to load on a mismatch."""
     hasher = hashlib.sha256()
     for selected_task in sorted(selected, key=lambda s: s.task.task_id):
         hasher.update(selected_task.task.task_id.encode("utf-8"))
@@ -304,12 +271,9 @@ def compute_task_selection_digest(selected: list[SelectedTask]) -> str:
 
 
 def selected_tasks_to_dict(selected: list[SelectedTask], k: int) -> dict:
-    """Only `task_id`/`source`/`cluster_id`/`split` are kept — never the heavy `row` data, which
-    `load_task_selection` re-derives fresh from the source at load time (the same reasoning
-    `calibration/tasks.py`'s stable ids exist for: the row is a lookup away, not something worth
-    duplicating into a second file). `k`, passed by the caller rather than re-derived here, is
-    ONLY used to report which clusters got zero tasks — a genuine gap in the gradeable pool
-    (`select_tasks` already logs this; this is the file's permanent record of it)."""
+    """Only `task_id`/`source`/`cluster_id`/`split` are kept — `load_task_selection` re-derives the
+    heavy `row` data fresh at load time. `k` is used only to report which clusters got zero tasks,
+    the permanent record of what `select_tasks` already logs."""
     represented = {s.cluster_id for s in selected}
     empty_clusters = [c for c in range(k) if c not in represented]
     now = datetime.now(UTC).isoformat()
@@ -335,14 +299,10 @@ def write_task_selection(artifact: dict, path: Path) -> Path:
 
 
 def load_task_selection(path: Path) -> list[SelectedTask]:
-    """The reverse of `selected_tasks_to_dict` — reconstructs `SelectedTask`s with fresh `row`
-    data by calling `load_gradeable_tasks` once per distinct source the pin references (the same
-    cost `select_tasks` already pays; embedding, not this, was ever the expensive step). Raises
-    (never silently drops) on either a pinned task_id no longer present in its source's gradeable
-    pool, or a content-digest mismatch — an incremental calibration run (see cli.py's `--model`)
-    depends on grading the new model against the EXACT set an existing model-profiles.json was
-    built from, so a silently-smaller or silently-changed set here would be worse than a hard
-    failure telling the caller to investigate."""
+    """The reverse of `selected_tasks_to_dict` — reconstructs `SelectedTask`s with fresh `row` data.
+    Raises (never silently drops) on a pinned task_id no longer in its source's gradeable pool, or
+    a content-digest mismatch — an incremental run (cli.py's `--model`) must grade against the
+    EXACT set an existing model-profiles.json was built from."""
     data = json.loads(path.read_text(encoding="utf-8"))
 
     sources = {entry["source"] for entry in data["tasks"]}
@@ -380,13 +340,10 @@ def run_and_grade(
     task: Task, model: ModelConfig, calibration_config: CalibrationConfig,
 ) -> tuple[GradeResult, str | None, runner_mod.TokenUsage | None]:
     """Returns (GradeResult, solution, usage) — `solution` is what the candidate actually produced
-    (the gold answer for `reference`, empty for `null`, the extracted/diff solution for `pi` —
-    falling back to the raw agent response when no solution could be extracted, so a CSV/log
-    consumer can still see what the agent said even when extraction failed). `usage` is Pi's own
-    reported token/cost usage for the call, or None for `reference`/`null` (synthesized, no real
-    call) and for a `pi` call whose stdout wasn't parseable JSON. Kept alongside `GradeResult`
-    rather than folded into it so `GradeResult` stays the small, stable type graders/tests already
-    build on."""
+    (falling back to the raw agent response when extraction failed), `usage` is Pi's reported
+    token/cost usage, or None for `reference`/`null` or an unparseable `pi` call. Kept as a tuple
+    rather than folded into `GradeResult` so that type stays the small, stable one graders/tests
+    already build on."""
     grader = _GRADERS.get(task.source)
     if grader is None:
         raise ValueError(f"no grader for source {task.source!r}")
@@ -403,34 +360,28 @@ def run_and_grade(
 
     if model.runner == "pi":
         run_result = runner_mod.run_pi(task, model, timeout_seconds=calibration_config.task_timeout_seconds)
+        # All of these are infra/harness problems, not the model failing to answer, so they're
+        # excluded (error_harness) rather than counted as a wrong answer.
         if run_result.context_unavailable:
-            # Repo clone/checkout failed before pi was ever invoked — an infra problem, not the
-            # model's fault, and per the spec's fairness requirement a task that can't be set up
-            # consistently for every model shouldn't be scored for any of them.
+            # Repo clone/checkout failed before pi was ever invoked.
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.rate_limited:
-            # An infra/quota rejection, not the model failing to answer — excluded rather than
-            # counted as a wrong answer, same reasoning as error_timeout/error_missing_dep.
+            # Provider quota rejection, retried and still failing.
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.harness_error:
-            # The provider itself rejected the call (e.g. an API auth failure) — pi exits 0 in this
-            # case, so it never reached the model at all. Confirmed live this session: 15% of one
-            # model's calls in one run hit this, previously miscounted as error_no_solution.
+            # Pi exits 0 even on a provider-level error — see docs/engineering-notes.md,
+            # "Pi exits 0 on a provider-level error".
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.timed_out:
-            # Our own subprocess timeout fired — a call that never finished isn't evidence the
-            # model couldn't solve the task, just that it didn't in the time we gave it. Distinct
-            # from a grader's own error_timeout (about the test run, not the model call).
+            # Our own subprocess timeout, distinct from a grader's own error_timeout (the test run).
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.solution is None:
             result = GradeResult(outcome="error_no_solution", detail=run_result.detail)
         else:
             result = grader(task, run_result.solution, timeout_seconds=grading_timeout)
 
-        # Multi-line despite the "one line per call" logging convention (logging_config.py) —
-        # deliberately: this is the one place meant for reading a code/diff block back, and
-        # collapsing it to one line would make exactly the thing it's for unreadable. DEBUG-only
-        # so it never appears in a normal run.
+        # Deliberately multi-line (unlike the rest of this module's one-line-per-call logging) so a
+        # code/diff block stays readable; DEBUG-only so it never appears in a normal run.
         logger.debug(
             f"{task.task_id} ({model.model_id}) -> {result.outcome}\n"
             f"  expected: {_preview(_expected_solution(task))}\n"
@@ -446,9 +397,7 @@ def run_and_grade(
 @dataclasses.dataclass(frozen=True)
 class TaskRunRecord:
     """`run_and_grade`'s (GradeResult, solution, usage) triple plus timing — one row of "what
-    actually happened" for a single (task, model) call, kept separate from `GradeResult` for the
-    same reason `run_and_grade` returns a tuple instead of widening it (see that function's
-    docstring)."""
+    actually happened" for a single (task, model) call."""
     result: GradeResult
     solution: str | None
     duration_ms: int
@@ -456,9 +405,8 @@ class TaskRunRecord:
 
 
 def run_and_log(task: Task, model: ModelConfig, calibration_config: CalibrationConfig, index: int, total: int) -> TaskRunRecord:
-    """`run_and_grade` plus the timing/progress log line — shared by calibrate_model's per-model
-    loop below and evaluate.py's per-model x per-task holdout loop, which otherwise duplicate this
-    exact started/duration/excluded-vs-not branch."""
+    """`run_and_grade` plus the timing/progress log line — shared by calibrate_models' per-model
+    loop and evaluate.py's per-model x per-task loop."""
     logger.info(f"[{index}/{total}] {model.model_id} task {task.task_id} ({task.source}) starting...")
     started = time.monotonic()
     result, solution, usage = run_and_grade(task, model, calibration_config)
@@ -517,21 +465,15 @@ class ModelCalibrationResult:
 
 def image_affinity_key(task: Task) -> tuple[str, str]:
     """Sort key that groups tasks sharing a Docker image next to each other, so consecutive grading
-    calls hit a warm image instead of re-pulling. Matters most for swe-smith, whose `image_name` is
-    per bug-injected repo (~128 distinct images across ~59K instances) rather than per instance —
-    swe-gym and multi-swe-rl build one image PER instance, so for them this only groups by repo,
-    which is still the right tiebreak for their shared git clones (repo_context.py)."""
+    calls hit a warm image instead of re-pulling. See docs/engineering-notes.md, "Image affinity"."""
     return (task.source, str(task.row.get("image_name") or task.row.get("repo") or task.task_id))
 
 
 @dataclasses.dataclass(frozen=True)
 class CalibrationDetailRow:
-    """One (task, model) call, flattened for `calibration-details-<run timestamp>.csv` —
-    everything `run_and_log` knows about a single call, alongside the task identity it was made
-    for. No per-row timestamp — the run's start time lives in the CSV's filename instead (see
-    calibrate_models' `details_csv_path` and cli.py's `calibrate` command), which is what actually
-    stops one run's file from overwriting another's; a per-row timestamp inside a single run's file
-    never distinguished anything and just gave every row in that file the same-ish value anyway."""
+    """One (task, model) call, flattened for `calibration-details-<run timestamp>.csv`. No per-row
+    timestamp — the run's start time lives in the CSV's filename instead (see calibrate_models'
+    `details_csv_path`), which is what actually distinguishes one run's file from another's."""
     task_id: str
     source: str
     cluster_id: int
@@ -544,12 +486,8 @@ class CalibrationDetailRow:
     duration_ms: int
     input_tokens: int = 0
     output_tokens: int = 0
-    cost_usd: float = 0.0  # Pi's own reported cost for this call (see TokenUsage) — 0 for the
-    # reference/null controls (synthesized, no real call) and for a call whose usage genuinely
-    # couldn't be read back, not a claim that the call was free.
-    turns: int = 0  # Number of agent turns Pi took to reach a final answer (see TokenUsage.
-    # turn_count) — 0 for the same cases cost_usd is 0: controls, and calls whose usage couldn't
-    # be read back.
+    cost_usd: float = 0.0  # Pi's own reported cost — 0 for controls or unreadable usage, not "free".
+    turns: int = 0  # Agent turns Pi took to reach a final answer — 0 for the same cases as above.
 
 
 _CSV_FIELDNAMES = [
@@ -566,10 +504,8 @@ def _csv_row_values(row: CalibrationDetailRow) -> list:
     ]
 
 
-# Truncation length for the `solution` column — long enough to see the shape of a real answer
-# (a full diff/patch can be huge), short enough that a multi-MB swe-gym patch doesn't blow up the
-# CSV. Same idea as _LOG_PREVIEW_CHARS above, just a separate constant since a CSV meant to be
-# opened in a spreadsheet tool can afford to keep more than a debug log line.
+# Truncation length for the `solution` column, so a multi-MB patch doesn't blow up the CSV. A
+# separate constant from _LOG_PREVIEW_CHARS since a spreadsheet-opened CSV can afford more.
 _CSV_SOLUTION_MAX_CHARS = 2000
 
 
@@ -583,19 +519,14 @@ _UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9_.-]")
 
 
 def _solutions_dir(details_csv_path: Path) -> Path:
-    # Keyed by the details CSV's own filename stem (which already embeds the run timestamp — see
-    # CalibrationDetailRow's docstring) so each run's persisted solutions land in their own
-    # directory, the same way the CSV itself never overwrites a different run's file.
+    # Keyed by the CSV's own filename stem (embeds the run timestamp) so each run's persisted
+    # solutions land in their own directory.
     return details_csv_path.parent / "solutions" / details_csv_path.stem
 
 
 def _persist_full_solution(solutions_dir: Path, task_id: str, model_id: str, solution: str) -> None:
-    """Only called when `_csv_preview` actually truncated `solution` — a short solution is already
-    complete in the CSV, so a side file for it would be pure duplication. Confirmed this session
-    why this matters: once `_csv_preview` truncates a large diff (e.g. Multi-SWE-RL's
-    `checkstyle-15001`, 613,777 chars), the original text is gone for good — it only ever existed
-    in memory for this one call — so there was no way to audit a large apply failure after the
-    fact without re-running a fresh container by hand."""
+    """Only called when `_csv_preview` truncated `solution` — see docs/engineering-notes.md,
+    "Large solution truncation"."""
     solutions_dir.mkdir(parents=True, exist_ok=True)
     safe_task_id = _UNSAFE_FILENAME_CHARS.sub("_", task_id)
     safe_model_id = _UNSAFE_FILENAME_CHARS.sub("_", model_id)
@@ -603,11 +534,8 @@ def _persist_full_solution(solutions_dir: Path, task_id: str, model_id: str, sol
 
 
 class _CalibrationDetailsWriter:
-    """Writes calibration-details.csv incrementally — one row per (task, model) call, flushed to
-    disk immediately — rather than accumulating everything in memory and writing once at the end.
-    A calibration run can take 30+ minutes (real Docker-based grading calls run several minutes
-    each) and this session saw more than one run interrupted partway through; without incremental
-    writes, an interrupted run left no CSV at all, and a still-running one couldn't be inspected."""
+    """Writes calibration-details.csv incrementally — one row per call, flushed immediately — so an
+    interrupted run still leaves a usable CSV and a still-running one can be inspected."""
 
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -622,20 +550,6 @@ class _CalibrationDetailsWriter:
 
     def close(self) -> None:
         self._file.close()
-
-
-def write_calibration_details_csv(rows: list[CalibrationDetailRow], path: Path | None = None) -> Path:
-    """One-shot variant, kept for regenerating the CSV from an already-in-memory row list (e.g. in
-    a test or a notebook) — a real `calibrate` run writes incrementally via
-    `_CalibrationDetailsWriter` instead, so its CSV survives an interrupted run."""
-    target = path or (ARTIFACTS_DIR / "calibration-details.csv")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(_CSV_FIELDNAMES)
-        for row in rows:
-            writer.writerow(_csv_row_values(row))
-    return target
 
 
 def _ground_truth_invalid(reference_outcome: str | None, null_outcome: str | None) -> bool:
@@ -653,39 +567,25 @@ def calibrate_models(
     models: list[ModelConfig], selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
     details_csv_path: Path | None = None,
 ) -> tuple[list[ModelCalibrationResult], list[CalibrationDetailRow]]:
-    """Runs every (task, model) pair TASKS-OUTER / MODELS-INNER, then aggregates per model.
+    """Runs every (task, model) pair TASKS-OUTER / MODELS-INNER, then aggregates per model. This
+    loop order is a deliberate optimization for Docker-image cache hit rate — see
+    docs/engineering-notes.md, "Tasks-outer / models-inner loop order" for the measured GB/TB
+    figures.
 
-    The loop order is the optimization, and it is worth roughly a factor of `len(models)` on the
-    dominant cost of a real run. swe-gym and multi-swe-rl build one multi-GB Docker image PER
-    INSTANCE (measured 2.9-6.5GB each), so a models-outer loop walks every image once per model
-    while `dockerexec`'s bounded LRU cache (15 images) is far too small to bridge the gap — at a
-    few hundred selected tasks the hit rate collapses to ~0 and every image is re-pulled for every
-    model. Grading each task against all models while its image is still hot pulls each image
-    exactly once instead: for ~250 Docker-backed tasks and 5 configured models that's ~250 pulls
-    (~875GB) rather than ~1,250 (~4.4TB), which at realistic bandwidth is the difference between
-    hours and a day of pure download. It also collapses peak resident disk, since a task's image is
-    finished with the moment its inner loop ends, and it fixes the same thrash for
-    `repo_context.py`'s bare-clone cache.
+    Within a task's inner loop, controls are graded first; if together they show this task's
+    ground truth is bad (`_ground_truth_invalid`), every real model for that task is skipped with a
+    synthesized `error_harness` result instead of a real grading call — see "Ground-truth-invalid
+    skip rate" for the measured skip rate. `index`/`total` still count a skipped call so `[i/total]`
+    progress stays consistent with the logged total.
 
-    Within a task's inner loop, controls (`reference-oracle`/`null-baseline`, if both are in
-    `models`) are graded FIRST — no new grading calls, they're already part of the normal roster —
-    and if together they show this task's ground truth is bad (see `_ground_truth_invalid`), every
-    REAL model for that task is skipped entirely: no `run_and_grade` call, a synthesized
-    `error_harness` result instead (already excluded from error-rate math, same bucket a harness
-    failure lands in). Confirmed against a real run that ~20% of tasks fail this check — those calls
-    were previously real, paid/timed attempts at a task no model could ever pass. `index`/`total`
-    still count a skipped call, so `[i/total]` progress stays consistent with the logged total.
-
-    Otherwise purely a reordering: outcomes are per (model, task) pair and every statistic is
-    computed after the fact by `_aggregate_outcomes`, so a task with valid ground truth produces
-    identical results to before. Task selection (and therefore the RNG) has already happened in
-    `select_tasks` by this point, so determinism is unaffected too."""
+    Otherwise purely a reordering: statistics are computed after the fact by `_aggregate_outcomes`,
+    so results are identical to a models-outer run, and determinism is unaffected since task
+    selection (and its RNG) already happened in `select_tasks`."""
     calibration_only = sorted(
         (st for st in selected_tasks if st.split == "calibration"),
         key=lambda st: image_affinity_key(st.task),
     )
-    # Controls before real models for every task — see _ground_truth_invalid above, which needs
-    # their outcome before deciding whether to run the real models at all.
+    # Controls before real models for every task — _ground_truth_invalid needs their outcome first.
     models = [m for m in models if m.is_control] + [m for m in models if not m.is_control]
     total = len(calibration_only) * len(models)
     logger.info(

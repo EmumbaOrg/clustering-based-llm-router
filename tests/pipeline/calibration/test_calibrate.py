@@ -351,9 +351,8 @@ def _outcome_for(task_id: str, model_id: str) -> str:
 
 
 def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the_next_task(monkeypatch, tmp_path):
-    # The whole point of the loop order: swe-gym/multi-swe-rl build one multi-GB image PER INSTANCE,
-    # so all models must be graded while a task's image is still hot. A models-outer loop re-pulls
-    # every image once per model (~5x the bytes at the configured roster size).
+    # swe-gym/multi-swe-rl build one multi-GB image PER INSTANCE, so all models must be graded
+    # while a task's image is still hot; a models-outer loop would re-pull every image per model.
     calls = []
 
     def fake_run_and_grade(task, model, calibration_config):
@@ -364,10 +363,8 @@ def test_calibrate_models_grades_every_model_against_a_task_before_moving_to_the
     models = [_named_model("m1"), _named_model("m2")]
     selected = [_selected("t1", 0), _selected("t2", 0)]
 
-    # details_csv_path MUST be redirected to tmp_path — the default writes to the real repo's
-    # artifacts/calibration-details.csv, which would silently clobber a real calibration run's
-    # output. Confirmed the hard way this session: running this suite overwrote a just-completed
-    # real run's CSV with this test's "m1"/"m2" fixture data.
+    # details_csv_path must be redirected to tmp_path — the default writes to the real repo's
+    # artifacts/calibration-details.csv.
     calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=tmp_path / "details.csv")
 
     assert calls == [("t1", "m1"), ("t1", "m2"), ("t2", "m1"), ("t2", "m2")]
@@ -504,10 +501,7 @@ def test_calibrate_models_grades_controls_before_real_models_even_if_listed_afte
 
 
 def test_calibrate_models_persists_the_full_solution_when_the_csv_preview_would_truncate_it(monkeypatch, tmp_path):
-    # Regression test: confirmed this session investigating Luna's Multi-SWE-RL failures that a
-    # solution over the CSV preview cap (e.g. `checkstyle-15001`, 613,777 chars) is gone for good
-    # once truncated — it only ever existed in memory for that one call, with no way to audit a
-    # large apply failure after the fact without re-running a fresh container by hand.
+    # A solution over the CSV preview cap must still be persisted in full, not silently truncated.
     huge_solution = "x" * (calibrate_module._CSV_SOLUTION_MAX_CHARS + 500)
     monkeypatch.setattr(
         calibrate_module, "run_and_grade",
@@ -656,8 +650,7 @@ def test_run_and_grade_still_treats_a_genuine_no_solution_as_a_real_failure(monk
 
 def test_run_and_grade_maps_a_harness_error_to_error_harness_not_error_no_solution(monkeypatch):
     # The provider itself rejected the call (e.g. an API auth failure) — pi exits 0 in this case, so
-    # this never reached the model at all. Confirmed live this session: a real 401 got silently
-    # miscounted as error_no_solution before this fix.
+    # this never reached the model at all and must not be counted as error_no_solution.
     monkeypatch.setattr(
         calibrate_module.runner_mod, "run_pi",
         lambda task, model, timeout_seconds: RunResult(solution=None, detail="401 API key is invalid", harness_error=True),

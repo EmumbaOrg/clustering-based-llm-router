@@ -5,9 +5,7 @@ Both artifacts follow the same two-layer validation shape (see ../../README.md's
 artifact schema"): standard JSON Schema structural checks, plus cross-field invariants the schema
 can't express on its own. Both layers live here rather than inside the pipeline writers — each schema's own
 `description` field says these invariants "must be re-checked by any consumer before trusting the
-file", and the runtime is a second consumer. `pipeline/clustering/cluster_map.py` and
-`pipeline/calibration/profiles.py` keep thin `validate_*` wrappers of the same names so neither
-call sites nor tests need to change; only artifact assembly and writing stay there.
+file", and the runtime is a second consumer.
 """
 from __future__ import annotations
 
@@ -48,10 +46,8 @@ def write_json_artifact(artifact: dict, path: Path) -> Path:
 def check_cluster_map_invariants(artifact: dict) -> None:
     """The three invariants cluster-map.schema.json's own description says it cannot express:
     clusters.length == kmeans.k, cluster ids contiguous 0..k-1 ascending, and every centroid's
-    length == embedding.dimensions. Also rejects a non-finite centroid value — `json.loads` accepts
-    `NaN`/`Infinity` by default and the schema's `"type": "number"` does not exclude them, but a NaN
-    coordinate would make every squared distance NaN and every `<` comparison in `assign_cluster`
-    false, silently pinning assignment to cluster 0 instead of erroring.
+    length == embedding.dimensions. Also rejects a non-finite centroid value — see
+    docs/engineering-notes.md, "NaN centroid guard".
     """
     dimensions = artifact["embedding"]["dimensions"]
     k = artifact["kmeans"]["k"]
@@ -78,8 +74,8 @@ def check_profiles_invariants(artifact: dict) -> None:
     """The invariants model-profiles.schema.json's own description says it cannot express: every
     cluster key falls within the referenced cluster map's 0..cluster_count-1 range, and
     number_succeeded + number_failed == number_of_tasks for every global/per-cluster block.
-    `cluster_count` is read with `.get()` — the schema marks it optional even though profiles.py
-    always writes it, so a reader must not KeyError on an otherwise-valid artifact.
+    `cluster_count` is read with `.get()` — see docs/engineering-notes.md, "profiles.json's
+    cluster_count is optional".
     """
     cluster_count = artifact.get("cluster_count")
     for model in artifact["models"]:

@@ -52,21 +52,15 @@ def test_only_the_result_line_is_used_even_with_other_output():
 # --- sentinel forgery (see base.py's NONCE_PLACEHOLDER docstring) ------------------------------
 
 def test_a_bare_result_line_with_no_nonce_is_not_recognized():
-    # Regression test for the exploit this session found and fixed: candidate code (exec()'d in
-    # the SAME process as the grading script — see module docstring's isolation note) used to be
-    # able to forge the sentinel just by printing a bare "RESULT: PASS", short-circuiting grading
-    # before the real test suite ever ran. Without the real nonce, this must NOT be recognized as
-    # a result line at all.
+    # A bare "RESULT: PASS" with no real nonce must not be recognized as a result line — candidate
+    # code (exec()'d in the SAME process as the grading script) could otherwise forge it.
     result = run_graded_script("print('RESULT: PASS')\nraise RuntimeError('the real check never ran')\n", timeout_seconds=10)
     assert result.outcome == "error_harness"
 
 
 def test_a_candidate_forged_pass_line_does_not_override_the_scripts_real_verdict():
-    # The realistic shape of the exploit: a candidate's OWN code (standing in for whatever the
-    # script exec()s before reaching its own real RESULT line) prints something that looks exactly
-    # like a passing sentinel but WITHOUT the real nonce, then the script's real logic goes on to
-    # correctly detect a failure with the real, noncified line. Only the second line uses
-    # NONCE_PLACEHOLDER — the first is deliberately left bare, simulating the forgery attempt.
+    # A candidate-forged bare "RESULT: PASS" (no nonce) must not short-circuit grading — only the
+    # real, noncified line from the script's own logic should be recognized.
     script = (
         "print('RESULT: PASS')  # forged by 'candidate' code, no real nonce\n"
         f"print('RESULT_{NONCE_PLACEHOLDER}: FAIL the real check')\n"
@@ -77,10 +71,13 @@ def test_a_candidate_forged_pass_line_does_not_override_the_scripts_real_verdict
 
 
 def test_two_different_calls_get_two_different_nonces():
-    # The nonce must be unpredictable per call — a candidate that happened to see one call's
-    # sentinel (e.g. from a prior run's logs) must not be able to reuse it for the next.
-    script = _script("print('RESULT: PASS')\n")
+    # The nonce must be unpredictable per call — a candidate that saw one call's sentinel (e.g.
+    # from a prior run's logs) must not be able to reuse it for the next. The script echoes the
+    # substituted NONCE_PLACEHOLDER token back into its own detail, so the actual nonce used by
+    # each separate run can be captured and compared here.
+    script = _script(f"print('RESULT: PASS ' + '{NONCE_PLACEHOLDER}')\n")
     first = run_graded_script(script, timeout_seconds=10)
     second = run_graded_script(script, timeout_seconds=10)
     assert first.outcome == "pass"
     assert second.outcome == "pass"
+    assert first.detail and first.detail != second.detail

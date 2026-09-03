@@ -1,9 +1,9 @@
 """Assembles, validates, and writes the final model-profiles.json artifact. Mirrors clustering's
 cluster_map.py structure for cluster-map.json: two-layer validation (JSON Schema + cross-field
-invariants the schema can't express — see ../../../README.md's "Config and artifact schema"). Both layers actually live
-in ../../common/artifacts.py — the runtime is a second consumer of this artifact and must run the
-exact same checks, so they can't be private to this writer. `validate_profiles` below is a thin
-wrapper kept here so call sites and tests don't need to reach into common/.
+invariants the schema can't express — see ../../../README.md's "Config and artifact schema").
+Both layers live in ../../common/artifacts.py, since the runtime is a second consumer of this
+artifact. `validate_profiles` below is a thin wrapper kept here so call sites and tests don't need
+to reach into common/.
 """
 from __future__ import annotations
 
@@ -80,12 +80,9 @@ def build_profiles_dict(
     }
 
 
-# Compatibility check for merge_profiles_dict below. Deliberately excludes task_selection's own
-# `total_tasks` field: build_profiles_dict sums number_of_tasks ACROSS every model in `results`
-# (see its own computation above), so an incremental single-model run's total_tasks is never equal
-# to a multi-model existing artifact's — that's expected, not a sign the two runs used different
-# task sets. The pinned task-selection file (--tasks-file) is what actually guarantees the task
-# sets matched; these fields are secondary, config-derived confirmation of the same thing.
+# Compatibility check for merge_profiles_dict below. Deliberately excludes `total_tasks`: it's
+# summed across models in `results`, so an incremental single-model run's value is never equal to
+# a multi-model existing artifact's — that's expected, not a mismatch.
 _TASK_SELECTION_COMPATIBILITY_FIELDS = ("gradeable_sources", "tasks_per_cluster", "seed")
 
 

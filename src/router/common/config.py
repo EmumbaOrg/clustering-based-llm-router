@@ -1,8 +1,6 @@
 """Loads ../../config/*.yaml (the repo-root config directory, not this package) into dataclasses.
 
-Kept deliberately dumb — plain dataclasses, no validation beyond what YAML/attribute access give
-for free. config/ is human-edited and small; a full schema is reserved for pipeline *output*
-(see artifacts-schema/), not this input config.
+config/ is human-edited, so there's no validation beyond what YAML/attribute access give for free; schemas live in artifacts-schema/ for pipeline output instead.
 """
 from __future__ import annotations
 
@@ -72,16 +70,8 @@ class ModelConfig:
     cost_output: float
     context_window: int
     max_tokens: int
-    rate_limit_rpm: int | None = None  # the provider's documented free-tier requests/minute cap
-    # for this model, or None for a provider with no meaningful limit (local, controls). Paced by
-    # runner.py's RateLimiter before every real API call — see its docstring for why.
-    supports_tool_calls: bool = True  # False for local llama.cpp providers, confirmed empirically
-    # this session: the model attempts a tool call (in its own training-time dialect, e.g.
-    # `<function-calls>{...}</function-calls>`) but llama.cpp's OpenAI-compatible endpoint never
-    # translates that into the wire protocol's `message.tool_calls` field — Pi only recognizes a
-    # tool call there, sees plain text instead, and returns the inert tool-call text as the "final
-    # answer". runner.py's build_prompt uses this to avoid inviting tool use a provider can't
-    # deliver on.
+    rate_limit_rpm: int | None = None  # provider's free-tier requests/minute cap, or None if unlimited (local, controls); paced by runner.py's RateLimiter
+    supports_tool_calls: bool = True  # False for local llama.cpp providers — see docs/engineering-notes.md, "No tool calls on local (llama.cpp) models"
 
     @property
     def is_control(self) -> bool:
@@ -103,19 +93,9 @@ class CalibrationConfig:
     smoothing: SmoothingConfig
     seed: int
     lambda_sweep: list[float]
-    # Additive, backward-compatible: absent/empty means every source grades under the plain
-    # task_timeout_seconds, same as before this field existed. Only GRADING calls (Docker-based
-    # sources in particular, which can need far longer than a Groq completion) read this — `run_pi`
-    # always uses task_timeout_seconds directly, so a slow grader can't also give a hung LLM call
-    # the same long leash.
+    # Optional per-source grading timeout overrides (Docker-based sources only); absent/empty falls back to task_timeout_seconds.
     task_timeout_overrides: dict[str, int] = dataclasses.field(default_factory=dict)
-    # Additive, backward-compatible: absent/empty means select_tasks() keeps today's flat
-    # stratified-by-cluster sampling. When set, {category: fraction} targets spec §5.1's "aim for
-    # the following distribution" (e.g. 60% repo-level Python / 25% multilingual / 15% standalone),
-    # applied within each cluster's tasks_per_cluster budget — see calibrate.py's CATEGORY_SOURCES
-    # for the (fixed, code-level) source->category mapping and select_tasks() for how a category
-    # shortfall in a given cluster is backfilled from the cluster's other categories. Validated in
-    # select_tasks() itself, not here — this module stays "dumb" per its own docstring.
+    # Optional {category: fraction} sampling target per spec §5.1; absent/empty keeps flat stratified-by-cluster sampling (see calibrate.py's CATEGORY_SOURCES).
     category_mix: dict[str, float] = dataclasses.field(default_factory=dict)
 
     def grading_timeout_for(self, source: str) -> int:

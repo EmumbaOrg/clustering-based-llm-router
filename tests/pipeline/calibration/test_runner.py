@@ -300,11 +300,9 @@ def test_run_pi_cleans_up_the_worktree_even_when_pi_times_out(monkeypatch, tmp_p
 # --- provider-level errors (see runner._parse_json_stream's NONCE_PLACEHOLDER-adjacent docstring) --
 
 def test_run_pi_flags_a_provider_error_as_harness_error_not_no_solution(monkeypatch):
-    # Regression test: pi exits 0 even when the underlying provider call itself failed (confirmed
-    # live this session against a real Anthropic 401) — the failure is only visible as
-    # `stopReason: "error"` on the last assistant message in the JSON event stream. Before this fix,
-    # such a call looked identical to a genuine empty response and was miscounted as
-    # error_no_solution (graded, counts against the model) instead of error_harness (excluded).
+    # pi exits 0 even when the underlying provider call itself failed — the failure is only visible
+    # as `stopReason: "error"` on the last assistant message in the JSON event stream, and must map
+    # to error_harness (excluded), not error_no_solution (counts against the model).
     stdout = (
         '{"type":"session"}\n'
         '{"type":"agent_end","messages":[{"role":"user","content":[{"type":"text","text":"hi"}]},'

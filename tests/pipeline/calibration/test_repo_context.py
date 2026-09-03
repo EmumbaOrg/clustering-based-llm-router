@@ -185,10 +185,7 @@ def test_extract_diff_captures_a_newly_created_file(real_git_worktree):
 
 
 def test_extract_diff_preserves_the_trailing_newline_git_apply_requires(real_git_worktree):
-    # Regression test: extract_diff used to build its return value with a bare `.strip()`, which
-    # eats the trailing newline every valid unified diff needs after its last line — confirmed
-    # empirically this session that `git apply` rejects such a diff outright with "corrupt patch",
-    # regardless of whether the underlying edit was correct.
+    # A diff missing its trailing newline is rejected by `git apply` with "corrupt patch".
     (real_git_worktree / "existing.py").write_text("value = 2\n")
     diff = extract_diff(real_git_worktree)
     assert diff is not None

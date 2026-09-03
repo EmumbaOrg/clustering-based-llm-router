@@ -1,9 +1,6 @@
 """Loads and hard-validates everything a routing decision needs: both artifacts, the candidate
 roster, and lambda. See docs/specs/2026-08-10-python-runtime-implementation-plan.md (Phase 2) for
-the reasoning behind each check below — in short, a routing decision that silently used the wrong
-artifact, the wrong embedding model, or a permuted cluster-to-error mapping would look completely
-healthy in the log while being wrong, which is exactly what §8's reproducibility requirement rules
-out. Every check here raises rather than degrades.
+the reasoning behind each check below. Every check here raises rather than degrades.
 """
 from __future__ import annotations
 
@@ -48,9 +45,9 @@ def _read_json(path: Path, what: str) -> dict:
 
 def _embedding_config_from_artifact(raw_map: dict) -> EmbeddingConfig:
     """Builds the EmbeddingConfig the runtime must actually embed with — from the artifact's
-    `embedding` block, not config/embedding.yaml. The artifact records what the corpus was
-    ACTUALLY embedded with; config can be edited ahead of a rebuild. This is the highest-risk
-    silent-drift point in the whole design, which is why the artifact carries the rule at all."""
+    `embedding` block, never config/embedding.yaml directly. This is the highest-risk silent-drift
+    point in the runtime design — see docs/engineering-notes.md, "Embedding config source of
+    truth" before touching this."""
     emb = raw_map["embedding"]
     truncation = TruncationConfig(**emb["input"]["truncation"])
     input_config = EmbeddingInputConfig(normalisation=emb["input"]["normalisation"], truncation=truncation)
@@ -67,8 +64,7 @@ def _compute_digest(lambda_: float, embedding_model_id: str, cluster_map_id: str
     """Pins everything that fed the decision besides the embedding vector itself. Byte-exact
     embeddings aren't reproducible across runs (fp16 vs fp32, batch composition, kernel
     differences) — what's reproducible is the decision GIVEN the vector, so this digest is what
-    makes "did anything change between run A and run B" answerable. Plain hashlib; there is no
-    reason to avoid it in Python the way the original TS plan avoided node:crypto."""
+    makes "did anything change between run A and run B" answerable."""
     payload = {
         "lambda": lambda_,
         "embedding_model_id": embedding_model_id,

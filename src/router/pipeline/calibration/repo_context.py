@@ -10,11 +10,6 @@ call (`git worktree add --detach`) gives each `run_pi` invocation an isolated, c
 re-cloning from network, removed (`remove_worktree`) right after that call finishes regardless of
 outcome. The clone cache is bounded the same way `_MAX_CACHED_IMAGES` bounds Docker images — a git
 mirror is far smaller than a Docker image, so the cap here is larger.
-
-Also fixes a real (if likely rare) existing gap: before this module existed, `run_pi`'s
-`subprocess.run` passed no `cwd` at all, so an agent that tried to use its already-enabled
-read/bash/edit tools would be pointed at THIS ROUTER'S OWN REPO, not a sandbox. Every worktree this
-module creates is a disposable directory outside this repo.
 """
 from __future__ import annotations
 
@@ -46,8 +41,7 @@ class RepoContextError(Exception):
 
 def _swesmith_remote_and_ref(task: Task) -> tuple[str, str]:
     # task.row["repo"] is already an "org/repo" path, e.g. "swesmith/oauthlib__oauthlib.1fd52536" —
-    # a real, public GitHub mirror pinned at the bug-injected commit (confirmed this session; see
-    # the repo-context plan). Its default branch is the clean, pre-bug state.
+    # a real, public GitHub mirror. Its default branch is the clean, pre-bug state.
     return f"https://github.com/{task.row['repo']}.git", "HEAD"
 
 
@@ -150,19 +144,11 @@ def checkout_worktree(cached_clone: Path, ref: str) -> Path:
 def _inject_swesmith_bug(worktree: Path, task: Task) -> None:
     """swe-smith's mirror repos (`_swesmith_remote_and_ref`) check out at the CLEAN, pre-bug
     commit — `task.row["patch"]` is the bug-injection diff that `grading/swesmith.py`'s Docker
-    setup applies forward before anything else happens. Without doing the same here, an agent
-    explores/edits code that doesn't have the bug its `problem_statement` describes, and writes a
-    diff against the wrong baseline — confirmed empirically this session: such a diff applies
-    cleanly against the clean worktree, then fails against the actually-buggy grading container,
-    which is exactly the "candidate patch failed to apply" failure seen across every model on
-    swe-smith tasks (not a model-quality or tool-use problem at all).
+    setup applies forward before anything else happens, so this does the same here. See
+    docs/engineering-notes.md, "SWE-smith bug injection must be committed" for the full root cause.
 
-    Committed, not left as an uncommitted working-tree change: `extract_diff()` does `git diff`
-    against HEAD, and must only ever capture the AGENT's own edits — if this injection stayed
-    unstaged, it would be indistinguishable from the agent's own changes and get folded into
-    `extract_diff()`'s output, corrupting it with a copy of the very step grading already applies
-    on its own inside Docker. Committing moves HEAD to "bug injected" as the new baseline, so a
-    later `git diff` reports only what the agent does on top of that."""
+    Must be committed, not left uncommitted, or `extract_diff()` would fold it into the agent's
+    own diff."""
     patch = task.row.get("patch")
     if not patch:
         return
@@ -189,10 +175,8 @@ def _inject_swesmith_bug(worktree: Path, task: Task) -> None:
 
 
 # Per-source post-checkout setup beyond the plain `git worktree add` — only swe-smith needs one
-# today (see `_inject_swesmith_bug`); swe-gym and multi-swe-rl check out a real historical pre-fix
-# commit directly (confirmed empirically this session: their own gold fix patches apply forward
-# cleanly against the checked-out worktree, meaning the buggy code is already there — no injection
-# needed). A source with no entry here is a deliberate no-op, not an oversight.
+# (see `_inject_swesmith_bug`); swe-gym and multi-swe-rl check out a real pre-fix commit directly,
+# so the buggy code is already there. A source with no entry here is a deliberate no-op.
 _POST_CHECKOUT_SETUP = {
     "swe-smith": _inject_swesmith_bug,
 }
@@ -231,9 +215,6 @@ def extract_diff(worktree: Path) -> str | None:
         ["git", "diff"],
         cwd=worktree, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
     )
-    # `.strip()` on the RETURNED value (not just to test for emptiness) used to eat the trailing
-    # newline every valid unified diff needs after its last line — confirmed empirically this
-    # session: `git apply` rejects such a diff outright with "corrupt patch", regardless of whether
-    # the underlying edit was correct. `proc.stdout` itself is returned unmodified when non-empty;
-    # `.strip()` is only used here to test for "nothing changed."
+    # Never apply .strip() to the returned diff text — see docs/engineering-notes.md, "git diff
+    # needs its trailing newline". `.strip()` here is only used to test for "nothing changed."
     return proc.stdout if proc.stdout.strip() else None

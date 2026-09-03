@@ -1,272 +1,37 @@
 """Grader for Multi-SWE-RL's Go, JS, TS, Java, and Rust slices — Docker-based, built on
-`dockerexec.py`'s sentinel protocol, mirroring `swegym.py`'s shape. `tasks.py`'s loader for this
-source returns rows from the dataset's `go/`, `js/`, `ts/`, `java/`, and `rust/` batch directories
-— see its own docstring for why the other 2 languages (C, C++) in this dataset are corpus-only for
-now. The Go section immediately below was the original (single-convention) pilot; the
-"whole-suite languages" section further down covers JS, TS, and Java, which all ended up sharing
-one considerably less uniform second design; Rust (further down still) turned out uniform enough
-to rejoin Go's original staged design instead.
+`dockerexec.py`'s sentinel protocol, mirroring `swegym.py`'s shape. C and C++ rows in this dataset
+are corpus-only (not gradeable) — see `tasks.py`'s loader docstring for why.
 
-Confirmed empirically this session (real `docker pull`/`docker run` against `gin-gonic/gin`,
-`prometheus/prometheus`, and `istio/istio` — small, medium, and the largest repo in the corpus)
-rather than assumed from the row schema or the official harness source alone:
+Image tag: `mswebench/{org}_m_{repo}:pr-{number}` (org/repo lower-cased). Repo checkout is always
+`/home/{repo}`.
 
-1. **Prebuilt per-instance Docker images exist and are public**, under Docker Hub namespace
-   `mswebench/{org}_m_{repo}:pr-{number}` (org/repo case-lowered; the `_m_` separator, from
-   `github.com/multi-swe-bench/multi-swe-bench`'s own `image.py`, needs no dataset-value
-   substitution the way swesmith's `_1776_`/swe-gym's `_s_` do). Verified against real instance
-   numbers pulled directly from our own corpus, not the official eval benchmark's curated subset —
-   `redis/redis` 11/11, `BurntSushi/ripgrep` 8/8, `gohugoio/hugo` 8/8 sampled.
-2. **Repo checkout path is always `/home/{repo}`** — confirmed both by reading the harness's
-   per-repo `dockerfile()` methods and by `docker run`-ing a real image directly.
-3. **No repo-specific install/build step is needed** — every Go repo shares one toolchain
-   (`go build`/`go test`), with the module cache already fully resolved in the image; unlike
-   swe-gym's `pandas` case, no build-backend rebuild-on-import surprise was found.
-4. **Test selection uses only the TOP-LEVEL test name, not full subtest paths, and needs no regex
-   escaping.** Rows carry `f2p_tests`/`n2p_tests`/`s2p_tests`/`p2p_tests` (a richer 4-way taxonomy
-   than swe-smith/swe-gym's FAIL_TO_PASS/PASS_TO_PASS) keyed by human-readable test names that are
-   often full subtest paths containing regex-special characters (e.g.
-   `TestPostingsForMatchers/n!~"(1|2.5)"` — real key, real prometheus instance). Passing the FULL
-   path would need per-name escaping AND get the path-splitting semantics of `-run` wrong. Instead,
-   truncating to the part before the first `/` gives a plain Go identifier (always safe, no
-   escaping needed — Go identifiers can't contain regex metacharacters) that matches the TOP-LEVEL
-   test, which by default runs and reports ALL its subtests — confirmed directly against the real
-   prometheus instance above: matching just `TestPostingsForMatchers` exercised that exact
-   special-character subtest, correctly, with zero escaping.
-5. **`go test`'s `-run` matching zero tests anywhere still exits 0** — confirmed directly (unlike
-   `pytest <node-ids>`, which errors loudly on an unknown id). A typo'd/mismatched test-name set
-   would otherwise silently "pass" a `grade_null` or a broken `grade_reference` call. Guarded here
-   by counting `=== RUN` lines (via `-v`) and reporting `HARNESS` if none appear — see
-   `_run_test_stage`.
-6. **Large, heavily-tested repos (e.g. `istio`, whose relevant test set spans ~1,750 top-level
-   names across ~11,000 individual subtests) can take several minutes per grading call** (measured:
-   6m51s for one `istio` instance) and may occasionally show an unrelated integration test fail
-   even against the GOLD fix — observed once (`TestAgent`, unconnected to the patched file) on
-   `istio`, almost certainly sandbox/resource sensitivity in a heavy integration test swept in by
-   the large regression-guard set, not a flaw in this grading mechanism (validated cleanly on two
-   other repos of increasing size first). Accepted as a known, occasional noise source for this
-   source's largest repos, same category as swe-gym's pytest-collection edge case — sized into a
-   generous timeout (`config/calibration.yaml`) rather than special-cased in code.
+Row semantics: `fix_patch` is the gold fix (`base_commit` is already the pre-fix buggy state the
+image is built at); `test_patch` carries the test changes needed to exercise the four
+`f2p_tests`/`n2p_tests`/`s2p_tests`/`p2p_tests` outcome dicts and must be applied in every mode.
 
-**Staged grading: run the small discriminating test set first, only run the large regression-guard
-set if that passes.** Investigated three hypotheses for why large repos are slow, empirically,
-before picking this one:
-- *Package-narrowing* (`go test ./pkgA ./pkgB` instead of `./...`) — tested directly: most packages
-  already contain a relevant test (prometheus 76/101, istio 244/475), so narrowing only cut ~9s off
-  a ~150s run (~6%). Not worth the added correctness surface (a grep-based discovery step, path
-  escaping) for that little.
-- *Storage backend* (host bind-mount vs. a Docker-native named volume for `$GOCACHE`) — tested
-  directly: 2m33s vs. 2m29s. No difference; ruled out.
-- *What's actually slow*: a handful of the REPO'S OWN genuinely slow tests inside the
-  regression-guard set — prometheus's `tsdb` package alone took 190 of ~150-190s wall-clock,
-  dominated by tests like `TestTombstoneCleanRetentionLimitsRace` (54.9s, a real concurrency stress
-  test). Same pattern independently seen on `istio`/`TestAgent` (157.8s). No caching or narrowing
-  changes this — it's inherent to the third-party test suite, not this harness.
+Go and Rust share one uniform per-language test convention; JS, TS, and Java are handled instead by
+`_REPO_CONFIG`, a per-repo table sourced from the official harness's own `run.sh`/`test-run.sh`
+rather than guessed from `package.json`/`pom.xml`/`build.gradle` — see "JS/TS/Java command
+sourcing" in docs/engineering-notes.md.
 
-Given that, the actual lever is deciding WHETHER the expensive set needs to run at all: measured
-across 5 real rows, the discriminating set (`f2p_tests`+`n2p_tests`+`s2p_tests`) is 1-320 names
-while the regression-guard set (`p2p_tests`) is 32-1,368 — usually >90% of all names. Running just
-the discriminating set for one real instance took 27s vs. 150-190s for the full set — a ~6x cut —
-and skipping the second stage changes nothing about the final outcome in the cases it's skipped:
-- `grade_null()` never applies a fix, so `p2p_tests` (defined as passing both BEFORE and after the
-  gold fix) are trivially already satisfied by null's exact state — checking them adds cost, not
-  signal. `grade_null` now never runs that stage.
-- `grade()` on a candidate that fails the discriminating stage is already decided — the
-  regression-guard stage cannot change a FAIL into anything else, so `grade()` skips straight to
-  reporting FAIL. Only a candidate that PASSES the discriminating stage runs the second, expensive
-  stage to confirm it didn't break anything else.
-- `grade_reference()` always runs both stages — it's the one place actually validating the "~100%
-  including regression safety" claim, so nothing here should be skipped.
+Go/Rust specifics (see docs/engineering-notes.md, "Grading — Multi-SWE-RL" section, for the
+measurements behind each):
+- `go test -run`/`cargo test -- --exact` both exit 0 on zero matched tests — see "Zero test
+  matches still exit 0".
+- Go test names are truncated to the top-level identifier before use in `-run` patterns — see "Go
+  test name truncation for -run patterns".
+- Large repos can take several minutes per grading call — see "Large repos can take several
+  minutes per grading call".
+- Grading is staged: the small discriminating set (f2p/n2p/s2p) runs first, and the large
+  regression-guard set (p2p) only runs if that passes (skipped entirely for `grade_null`) — see
+  "Staged grading rationale (Go/Rust)".
+- Go's build cache (`$GOCACHE`) is mounted as a persistent host volume; the module cache
+  (`$GOMODCACHE`) is not — see "Go build cache is mounted, module cache is not".
+- Rust needs no per-repo config (`_RUST_REPOS` is just an `_is_rust` dispatch set): every repo uses
+  bare `cargo test`.
 
-**A persistent Go BUILD cache (only — not the module cache) cuts the dominant real cost: repeated
-cold compiles of the SAME commit.** `grade()`, `grade_reference()`, and `grade_null()` all compile
-the SAME `base_commit` (differing only by which tiny patch is applied on top), and a real
-`calibrate` run calls `grade()` again for every candidate model against the SAME task — meaning the
-exact same, mostly-unchanged dependency tree gets recompiled from scratch every time. Mounting a
-persistent host directory as `$GOCACHE` measured a **34x speedup on a warm cache** for one real
-repeat compile (prometheus, `./tsdb/...`: 1m43s cold → 3s warm, confirmed by the `(cached)` markers
-in `go test`'s own output). Cross-commit reuse (a different PR of the same repo) is much weaker —
-different commits genuinely differ in enough files that the content-addressed cache mostly misses —
-but that isn't the redundancy this targets; same-commit, multiple-grading-call reuse is.
-
-**`$GOMODCACHE` is deliberately NOT mounted, despite the same idea seeming to apply.** Confirmed by
-direct inspection that every image already ships a fully-populated `/go/pkg/mod` (e.g. 214MB for
-`gin`, 1.3GB for `prometheus`) — an empty host-directory bind mount REPLACES that pre-baked cache
-rather than adding to it, forcing a real (if bounded, ~50s measured for prometheus) network
-re-download of every dependency on every single call, for zero benefit, since the image's own copy
-was already exactly right. Caught this by testing end-to-end before trusting the by-analogy
-assumption that "cache GOMODCACHE too" — the build cache and module cache are not interchangeable
-here: the build cache starts empty in every image (genuinely nothing to lose by mounting over it),
-the module cache does not.
-
-Go's build cache has its own internal age-based eviction; if host disk growth ever becomes a
-problem, `go clean -cache` against the mounted directory is the manual remedy — no bespoke bounding
-is implemented here, unlike `dockerexec.py`'s Docker image LRU cache, since Go's own cache already
-manages this and the cache directory is far smaller than a Docker image.
-
-Row semantics: `fix_patch` is the GOLD FIX (same convention as swe-gym's `patch`, opposite of
-swe-smith's bug-injecting `patch`) — `base_commit` (`row["base"]["sha"]`) is already the buggy,
-pre-fix state the image is built at. A separate `test_patch` field (same role as swe-gym's) carries
-the test changes needed to exercise the four test-outcome dicts and must be applied in every mode.
-
---- Whole-suite languages: JS, TS, Java (second and third pilots) ------------------------------
-
-`_REPO_CONFIG` covers the JS (619 tasks, 10 repos), TS (412 tasks, 8 repos), and Java (976 tasks,
-6 repos) slices — the second-, third-, and (by task count) largest-after-Go language buckets.
-
-An early version of this guessed the test command from each repo's `package.json` and tried to
-replicate Go's staged discriminating/regression-guard split by parsing a file path or test name out
-of each `f2p_tests`/`p2p_tests` key. Both guesses turned out wrong, or at least far riskier than
-necessary, once checked against ground truth: the official `multi_swe_bench` harness's own source
-(`multi_swe_bench/harness/repos/{javascript,typescript}/{org}/{repo}.py` in
-github.com/multi-swe-bench/multi-swe-bench) literally defines each repo's `prepare.sh`/`run.sh`/
-`test-run.sh`, and pulling two real images (`expressjs/express`, `colinhacks/zod`) confirmed those
-exact scripts are baked into every image at `/home/*.sh` — a much stronger source of truth than
-inferring from `package.json` alone. Two real findings from reading that source, not the dataset
-schema:
-
-1. **`package.json` guessed the wrong framework for `zod`.** It looked like Vitest (a `test:vitest`
-   script exists); the harness's own confirmed `run.sh` uses `yarn build && yarn test`, which
-   resolves to Jest (`test:ts-jest`) — `package.json` had multiple test scripts and the wrong one
-   was picked. Trusting the harness's own confirmed invocation instead of a heuristic avoided
-   shipping a broken command for that repo.
-2. **Almost none of the 18 confirmed commands support name-based narrowing.** Most are each repo's
-   own `npm test`/`yarn test`/`pnpm test` wrapper (`mongoose`'s is a bare `npm test`), not a direct
-   framework invocation we could append `--grep`/`--testNamePattern` to with any confidence it'd be
-   forwarded. Given that, and that a live run confirmed these suites are fast — `express`'s 1,149
-   Mocha tests ran in 4.9s — the staged discriminating-then-regression-guard split Go relies on
-   (see above) isn't worth the narrowing complexity/risk here: JS/TS runs the confirmed command
-   ONCE per grading call and reads the outcome from its exit code (`_whole_suite_test_script`), covering
-   both test sets in a single pass. `grade_null` still fails correctly here with no special-casing:
-   the discriminating tests are defined to fail without a fix, so the whole suite's exit code is
-   already non-zero.
-
-`_RepoConfig` has no install step: `prepare.sh` (dependency install) is a genuine one-time
-IMAGE-BUILD step (`RUN bash /home/prepare.sh` in the harness's own `dockerfile()`), not something
-to repeat at grading time — confirmed directly (both pulled images already had `node_modules`
-present: 59MB for `express`, 732MB for `zod`), the same "pre-resolved, don't touch it" shape as
-Go's `GOMODCACHE`. A handful of repos DO need a genuine per-call `build` step (`zod`, `nuxt`,
-`react-router`) because their tests run against compiled output that a candidate's source patch
-would otherwise leave stale — confirmed present in their own `run.sh`, not assumed.
-
-This is still genuinely closer in shape to the official harness's own ~533 hand-written per-repo
-classes than to Go's one clean convention — some of those classes exist specifically because a
-repo's test command changed across its own history (e.g. `commander.js` migrated from Jest to
-node's built-in `node:test` at some point) and needed a PR-range-specific override.
-`_REPO_CONFIG` uses whichever class has no such suffix (current/default), which may not exactly
-match every instance's era; a mismatch surfaces as a script failure (`error_harness`), not a
-silently wrong grade — see `_RepoConfig`'s own docstring.
-
-**Validated live against real containers** (`grade_null` ~0%, `grade_reference` ~100%, same bar as
-Go's own pilot): `colinhacks/zod` (has a build step), `expressjs/express` (JSON reporter, no build
-step), and `Automattic/mongoose` — the single largest JS/TS repo (302 of 1,031 tasks). Mongoose's
-first `grade_reference` run FAILED once (`tests failed`) while a byte-identical manual replay and
-an immediate retry both passed cleanly (3579 passing, 0 failing) — mongoose spins up a real
-MongoDB instance per test run (its own suite prints a live "Downloading MongoDB ..." progress
-line, confirmed in a real row's `f2p_tests` key), making it timing/network-sensitive per container.
-Treated the same way istio's/prometheus's occasional unrelated-test noise is treated above: a
-known, accepted flakiness source for this specific (large, heavyweight-setup) repo, not a grader
-bug — re-run rather than trust a single `grade_reference` failure there as conclusive. The
-remaining 15 repos share one of these three already-validated shapes (no build + JSON reporter,
-no build + plain exit code, or a build step) and haven't each been individually run against a
-container yet.
-
-**Java (added after JS/TS, applying the same lesson from the start)**: went straight to the
-harness's own source (`multi_swe_bench/harness/repos/java/{org}/{repo}.py`) for the confirmed
-command rather than guessing from `pom.xml`/`build.gradle`, and found a much simpler shape than
-JS/TS — every one of the 6 repos has exactly one class (no PR-range overrides), and every
-confirmed command is already whole-suite with no name-based narrowing (`mvn clean test
--Dstyle.color=never` for `checkstyle`; `./gradlew test`/`./gradlew clean test --continue` for the
-Gradle repos; a Maven-wrapper variant with the repo's own required profile flags for `fastjson2`).
-No repo needs a separate `build` field — Maven/Gradle's `clean test` already does compile+test in
-one command. `clean` wipes `target/`/`build/` on every call (the harness's own confirmed choice,
-not a shortcut of ours to remove without evidence), so unlike Go's incremental `go test`, a Java
-grading call always pays a full recompile.
-
-`checkstyle` is 845 of Java's 976 tasks (86.6%) — overwhelmingly the repo that matters here; the
-other 5 (`spotbugs` 57, `junit5` 55, `logstash`/`mockito` 7 each, `fastjson2` 5) are comparatively
-low-volume.
-
-**Whole-suite exit code turned out to be unreliable for `checkstyle` specifically — confirmed live,
-not assumed.** Its ~2,900-5,100-test suite has at least one baked-in, always-reproducible failure
-completely unrelated to any patch, reproducing even on the raw base commit with zero patches
-applied: on one real PR, `ImportControlLoaderTest.testInputStreamThatFailsOnClose` fails a Mockito
-`verify(times(1))` check (`Wanted 1 time but was 2 times`) — a JDK/library-version sensitivity, not
-a real regression; on a different, much later PR, `MainTest.testExistingTargetFileButWithoutReadAccess`
-fails because it expects a permission-denied file read to fail, but these containers all run as
-**root**, which bypasses Unix permission checks entirely, so the read always succeeds. Two
-different unrelated tests, both 100% deterministic (retried and reproduced on isolated single-class
-runs too) — this is baseline noise inherent to running this suite as root in this environment, not
-occasional flakiness like `istio`'s or `mongoose`'s. Trusting the overall exit code would make
-`grade_reference`/`grade_null` indistinguishable from this noise for 86.6% of all Java tasks.
-
-**Fix**: `checkstyle` and `fastjson2` (the two Maven repos whose `f2p_tests`/`p2p_tests` keys are
-exact fully-qualified class names — confirmed real format) use `granularity="class"`
-(`_java_class_test_script`): the confirmed command still runs exactly once, but the outcome is read
-from the SPECIFIC named classes' Maven Surefire XML reports (`target/surefire-reports/
-TEST-{class}.xml`, one line `<testsuite ... errors="N" failures="M">` per class — confirmed real
-format by inspecting a pulled image), ignoring whatever happens in every OTHER class. `mockito`/
-`junit5`/`logstash`/`spotbugs` key by Gradle *task* name (`buildSrc:generateExternalPluginSpecBuilders`)
-or a mix of task names and JUnit display names, not exact class names — `granularity="exit_code"`
-(no name-based check available) stays for those; lower volume (126 of 976 Java tasks) and no
-evidence yet of the same systemic noise.
-
-**Validated live against real containers** (`grade_null` fails, `grade_reference` passes):
-`checkstyle` on BOTH problem PRs above (confirming the class-granularity fix actually resolves what
-it was built for, not just that it runs), and `mockito` (Gradle, `exit_code` path). `~/.m2`
-confirmed pre-baked in the pulled `checkstyle` image (84MB) — the same "resolved once, baked into
-the image" shape as Go's `GOMODCACHE` and JS/TS's `node_modules`, not assumed by analogy alone.
-`checkstyle`'s suite took 1m37s–4m12s per run across the two validated PRs — real but not
-prohibitive. `fastjson2`/`logstash`/`junit5`/`spotbugs` (131 tasks combined) share an
-already-validated shape but haven't each been individually run against a container yet.
-
---- Rust (fourth pilot) ---------------------------------------------------------------------
-
-Rust turned out to be the most uniform language pilot yet, closer to Go's shape than to
-JS/TS/Java's — confirmed from the harness's own source
-(`multi_swe_bench/harness/repos/rust/{org}/{repo}.py`), not assumed from `Cargo.toml` conventions:
-**every one of the 14 repos** (`ripgrep`, `alacritty`, `clap`, `fish-shell`, `helix`, `nushell`,
-`rusqlite`, `mdBook`, `serde`, `bat`, `fd`, `bytes`, `tokio`, `tracing`) **uses the exact same
-confirmed command, bare `cargo test`** — no per-repo variation, no PR-range overrides, no build
-step. `f2p_tests`/`n2p_tests`/`s2p_tests`/`p2p_tests` keys are already exact `cargo test` filter
-targets (`module::submodule::test_name`) — Rust identifiers joined by `::`, which can't contain
-regex/shell metacharacters, so (unlike JS/TS) nothing needs parsing, stripping, or escaping.
-
-Given that uniformity, Rust **reuses Go's staged discriminating/regression-guard design directly**
-(`_cargo_test_stage`, dispatched from the same `_discriminating_stage_script`/
-`_regression_guard_stage_script` Go already used) rather than JS/TS/Java's whole-suite compromise:
-`cargo test -- --exact <name1> <name2> ...` runs exactly and only the OR'd named tests — confirmed
-live against a real container, Rust's own equivalent of Go's `-run "^(name1|name2)$"` anchor. Like
-Go's `-run`, it exits 0 even when it matches ZERO tests anywhere (confirmed live: a bogus name and
-a real name checked before its introducing patch was applied both produced `0 passed; 0 failed`
-across every test binary) — `_cargo_test_stage` sums `N passed`/`M failed` across every `test
-result:` line the run prints (one per test binary/crate target) as the "did anything run" guard,
-the same role Go's `RUN_COUNT` plays.
-
-No `_RepoConfig`/`_REPO_CONFIG` entry needed at all: Rust repos are tracked in a separate
-`_RUST_REPOS` set purely for `_is_rust` dispatch, since the confirmed command needs no per-repo
-customization the way JS/TS/Java's does. No cache volume is mounted either — `target/` (cargo's
-build cache) is confirmed pre-baked into the image at build time (`rusqlite`'s image shipped a
-140MB `target/` from `prepare.sh`'s own `cargo test || true` run), the same "resolved once, baked
-in" shape as Go's `GOMODCACHE`; a `$CARGO_TARGET_DIR` host mount (mirroring Go's `GOCACHE`) is a
-candidate future optimization, but — like every other cache-mount decision in this module — only
-worth adding after MEASURING repeated-call cost, not assumed from the Go precedent.
-
-One accepted quirk carries over unchanged, not newly introduced by Rust: a row whose entire
-discriminating set is `n2p_tests` (brand-new tests the fix introduces) shows "0 tests matched"
-against the null state, since those tests don't exist in source without the fix (confirmed live on
-a real `rusqlite` row) — reports `HARNESS`, the same outcome Go's own "zero tests matched" guard
-already produces for this exact class of row (it doesn't distinguish f2p/n2p/s2p either).
-
-**Validated live against real containers** (`grade_null` fails or reports the accepted `n2p`-only
-`HARNESS` outcome, `grade_reference` passes): `rusqlite` (smallest Rust repo, 1 task,
-discriminating set is 100% `n2p_tests` — exercises the accepted quirk above directly) and `clap`
-(largest single Rust repo, 62 tasks; the validated row's `p2p_tests` set was 212 names, confirming
-the multi-name `--exact` invocation holds up at scale, and its `grade_null` genuinely FAILED rather
-than zero-matching, confirming `cargo test`'s exit code correctly reflects a real test failure —
-closing the one risk this pilot's plan flagged as unconfirmed). Repo checkout path (`/home/{repo}`)
-and image tag convention confirmed unchanged. The other 12 repos share this already-validated shape
-but haven't each been individually run against a container yet.
+Other known quirks documented there: "Mongoose flakiness", "Checkstyle baseline noise", "Go's
+overall exit code is unreliable", "Lazygit needs a git identity", "Test-name substring collisions".
 """
 from __future__ import annotations
 
@@ -280,9 +45,8 @@ from .base import GradeResult, Task
 
 DOCKER_TIMEOUT_SECONDS = dockerexec.DOCKER_TIMEOUT_SECONDS
 
-# Confirmed via `go env GOCACHE` against a real image — lives under a root-owned path, consistent
-# with every one of these images running as root (confirmed via `whoami`). GOMODCACHE is
-# deliberately NOT mounted — see the module docstring for why that one's different.
+# Real path from `go env GOCACHE` in these (root-owned) images. GOMODCACHE is deliberately not
+# mounted — see docs/engineering-notes.md, "Go build cache is mounted, module cache is not".
 _GOCACHE_CONTAINER_DIR = "/root/.cache/go-build"
 GOCACHE_HOST_DIR = REPO_ROOT / ".cache" / "multiswerl" / "gocache"
 
@@ -292,7 +56,7 @@ def _cache_volumes() -> dict[str, str]:
     return {str(GOCACHE_HOST_DIR): _GOCACHE_CONTAINER_DIR}
 
 # Split, not one combined set, so PASS/FAIL can be decided from the small set alone in the common
-# case — see module docstring's "staged grading" section for why this matters and what it measured.
+# case — see docs/engineering-notes.md, "Staged grading rationale (Go/Rust)".
 _DISCRIMINATING_TEST_KEYS = ("f2p_tests", "n2p_tests", "s2p_tests")
 _REGRESSION_GUARD_TEST_KEY = "p2p_tests"
 
@@ -306,22 +70,18 @@ def _repo_dir(task: Task) -> str:
 
 
 def _top_level_names(row: dict, key: str) -> set[str]:
-    """Top-level Go test function names only (the part before the first `/`) — always a plain Go
-    identifier, so always a regex-safe `-run` term without escaping. See module docstring point 4
-    for why this is preferred over the full subtest path some of these keys carry."""
+    """Top-level Go test function name only (before the first `/`) — a plain Go identifier, so a
+    regex-safe `-run` term with no escaping needed. See docs/engineering-notes.md, "Go test name
+    truncation for -run patterns"."""
     return {name.split("/", 1)[0] for name in (row.get(key) or {})}
 
 
 def _is_n2p_only_discriminating_set(task: Task) -> bool:
-    """True when the discriminating set is entirely `n2p_tests` — brand-new tests the fix itself
-    introduces, with no `f2p_tests`/`s2p_tests` at all. Already a documented, accepted quirk for
-    `null-baseline` (those tests genuinely don't exist in source without the fix, so "0 tests
-    matched" is expected there) — confirmed this session that the same shape also explains most
-    REAL candidates' "no discriminating tests matched" misses on this class of task: a candidate's
-    different (even correct) fix essentially never reproduces the exact same newly-authored test
-    name the gold fix added, so the discriminating check can't find it either. Used only to label
-    that expected case distinctly from a genuine harness gap in the reported detail — the outcome
-    itself stays `error_harness` either way, still correctly excluded from error rates."""
+    """True when the discriminating set is entirely `n2p_tests` (brand-new tests the fix itself
+    introduces, no `f2p_tests`/`s2p_tests`) — the expected shape for `grade_null` and for most real
+    candidates that don't happen to reproduce the gold fix's exact new test name. Used only to
+    label that case distinctly in the reported detail; the outcome is still `error_harness` either
+    way."""
     f2p = task.row.get("f2p_tests") or {}
     s2p = task.row.get("s2p_tests") or {}
     n2p = task.row.get("n2p_tests") or {}
@@ -329,11 +89,8 @@ def _is_n2p_only_discriminating_set(task: Task) -> bool:
 
 
 def _discriminating_test_names(task: Task) -> list[str]:
-    """The small set that actually proves whether a fix works: existing tests that should flip
-    from failing to passing (`f2p_tests`), brand-new tests the fix introduces (`n2p_tests`), and
-    previously-skipped tests that should now run and pass (`s2p_tests`). Measured directly across
-    5 real rows: 1-320 names, vs. 32-1,368 for the regression-guard set below — usually well under
-    10% of the total."""
+    """The small set that proves whether a fix works: `f2p_tests` (should flip fail→pass),
+    `n2p_tests` (brand-new), `s2p_tests` (previously skipped, should now pass)."""
     names: set[str] = set()
     for key in _DISCRIMINATING_TEST_KEYS:
         names |= _top_level_names(task.row, key)
@@ -341,24 +98,18 @@ def _discriminating_test_names(task: Task) -> list[str]:
 
 
 def _regression_guard_test_names(task: Task) -> list[str]:
-    """`p2p_tests` — tests defined by the dataset as already passing BOTH before and after the
-    gold fix. Checking these is real, necessary work when a candidate's fix might have broken
-    something else, but it's expensive (measured: a single repo's regression-guard run took
-    150-190s, entirely dominated by a handful of the REPO's OWN genuinely slow tests — e.g.
-    prometheus's `TestTombstoneCleanRetentionLimitsRace` at 54.9s — not anything about our
-    harness; package-narrowing and storage-backend changes were tested directly and neither
-    moved this number meaningfully). See module docstring for when this stage runs at all."""
+    """`p2p_tests` — tests already passing both before and after the gold fix. Expensive to check
+    (dominated by a handful of genuinely slow tests in the target repo, not this harness) — see
+    docs/engineering-notes.md, "Staged grading rationale (Go/Rust)" for when this stage runs."""
     return sorted(_top_level_names(task.row, _REGRESSION_GUARD_TEST_KEY))
 
 
 def _full_test_names(row: dict, key: str) -> set[str]:
-    """The ORIGINAL, untruncated test/subtest names for `key` — used only to check each target
-    test's own `--- PASS`/`--- FAIL` line in `go test -v`'s output after the run, never for the
-    `-run` pattern itself (see `_top_level_names` for why the pattern needs the truncated,
-    regex-safe form instead). Confirmed live this session why this distinction matters: the
-    truncated top-level name is what SELECTS which tests execute, but for a repo whose tests use
-    Go's "one top-level test, many named subtests" pattern (e.g. `TestIntegration/foo/bar`), only
-    the full name can tell OUR target subtest's result apart from an unrelated sibling subtest's."""
+    """The original, untruncated test/subtest names for `key` — used to check each target test's
+    own `--- PASS`/`--- FAIL` line after the run, never for the `-run` pattern itself (which needs
+    `_top_level_names`'s truncated form instead). Needed because a top-level test with many named
+    subtests (e.g. `TestIntegration/foo/bar`) requires the full name to tell our target subtest's
+    result apart from an unrelated sibling's."""
     return set(row.get(key) or {})
 
 
@@ -373,10 +124,8 @@ def _regression_guard_full_test_names(task: Task) -> list[str]:
     return sorted(_full_test_names(task.row, _REGRESSION_GUARD_TEST_KEY))
 
 
-# Every one of these 14 repos is confirmed (from the official multi_swe_bench harness's own
-# run.sh, not guessed) to use the exact same bare `cargo test` command, with no PR-range
-# overrides — the most uniform of any language pilot so far, closer to Go's shape than to
-# JS/TS/Java's. See `_cargo_test_stage`'s docstring and the module docstring's Rust section.
+# Every repo here uses the exact same bare `cargo test` command (confirmed from the harness's own
+# run.sh), with no per-repo config needed — unlike JS/TS/Java's `_REPO_CONFIG`.
 _RUST_REPOS: frozenset[tuple[str, str]] = frozenset({
     ("BurntSushi", "ripgrep"),
     ("alacritty", "alacritty"),
@@ -400,10 +149,8 @@ def _is_rust(task: Task) -> bool:
 
 
 def _rust_test_names(task: Task, keys: tuple[str, ...]) -> list[str]:
-    """Rust's `f2p_tests`/`n2p_tests`/`s2p_tests`/`p2p_tests` keys are already exact `cargo test`
-    filter targets (`module::submodule::test_name`, confirmed real format) — no stripping needed,
-    unlike Go's `_top_level_names` (Rust identifiers joined by `::` can't contain the kind of
-    regex-special subtest-path suffix Go's keys sometimes carry)."""
+    """Rust's test-outcome keys are already exact `cargo test` filter targets
+    (`module::submodule::test_name`) — no stripping needed, unlike Go's `_top_level_names`."""
     names: set[str] = set()
     for key in keys:
         names |= set(task.row.get(key) or {})
@@ -413,21 +160,16 @@ def _rust_test_names(task: Task, keys: tuple[str, ...]) -> list[str]:
 def _cargo_test_stage(
     task: Task, nonce: str, names: list[str], label: str, on_pass: str, harness_detail_suffix: str = ""
 ) -> str:
-    """Rust's equivalent of `_run_test_stage`. `cargo test -- --exact <name1> <name2> ...` runs
-    exactly and only the named tests, OR'd — confirmed live against a real container (two real
-    test names ran and passed, correctly filtered out of every other test binary in the crate) —
-    Rust's own equivalent of Go's `-run "^(name1|name2)$"` anchor, needing no escaping since `::`
-    -joined paths are always safe identifiers.
+    """Rust's equivalent of `_run_test_stage`: `cargo test -- --exact <name1> <name2> ...` runs
+    exactly and only the named tests, OR'd — Rust's equivalent of Go's `-run "^(name1|name2)$"`
+    anchor, needing no escaping since `::`-joined paths are always safe identifiers. Also like Go's
+    `-run`, it exits 0 on zero matches (see docs/engineering-notes.md, "Zero test matches still
+    exit 0"), so this sums `N passed`/`M failed` across every `test result:` line rather than
+    trusting the exit code alone.
 
-    Like Go's `-run`, `cargo test -- --exact` exits 0 even when it matches ZERO tests anywhere
-    (confirmed live: a bogus name and a real name checked before its introducing patch was applied
-    both produced `0 passed; 0 failed` across every test binary, exit 0) — so this sums `N passed`/
-    `M failed` across every `test result:` line the run prints (`cargo test` runs one such line per
-    test binary/crate target) rather than trusting the exit code alone.
-
-    `harness_detail_suffix` (only ever non-empty for the discriminating stage — see
-    `_discriminating_stage_script`) distinguishes the expected n2p-only case from a genuine
-    harness gap in the reported detail; outcome classification is unaffected either way."""
+    `harness_detail_suffix` (non-empty only for the discriminating stage) distinguishes the
+    expected n2p-only case from a genuine harness gap in the reported detail; outcome
+    classification is unaffected either way."""
     repo_dir = _repo_dir(task)
     names_text = "\n".join(names)
     safe_label = label.replace("-", "_")
@@ -450,39 +192,26 @@ def _cargo_test_stage(
 
 @dataclass(frozen=True)
 class _RepoConfig:
-    """One row per JS/TS repo (keyed by `(org, repo)` in `_REPO_CONFIG`), copied directly from the
-    official `multi_swe_bench` harness's own per-repo source
-    (`multi_swe_bench/harness/repos/{javascript,typescript}/{org}/{repo}.py` in
-    github.com/multi-swe-bench/multi-swe-bench) — not guessed from `package.json`, and
-    independently confirmed by pulling `expressjs/express`'s and `colinhacks/zod`'s real images and
-    finding those exact commands baked into `/home/run.sh`/`/home/test-run.sh`.
+    """One row per JS/TS/Java repo (keyed by `(org, repo)` in `_REPO_CONFIG`), sourced from the
+    official `multi_swe_bench` harness's own per-repo classes (`.../repos/{javascript,typescript,
+    java}/{org}/{repo}.py`), not guessed from `package.json`/`pom.xml`/`build.gradle` — see
+    docs/engineering-notes.md, "JS/TS/Java command sourcing".
 
-    `build` is a per-grading-call compile step for the handful of repos whose tests run against
-    compiled output rather than source directly (`yarn build` for zod/react-router, `pnpm
-    build:stub` for nuxt) — confirmed present in their own `run.sh`, so it isn't optional. `test`
-    is the confirmed test invocation. There is no `install` field: `prepare.sh` (dependency
-    install) runs once at IMAGE BUILD time (`RUN bash /home/prepare.sh` in the harness's own
-    `dockerfile()`), the same way Go's module cache is pre-resolved — confirmed directly by
-    inspecting a pulled image (`express`'s `node_modules` was already 59MB; `zod`'s 732MB) rather
-    than assumed by analogy.
+    `build` is a per-grading-call compile step for repos whose tests run against compiled output
+    (`zod`, `nuxt`, `react-router`). `test` is the confirmed test invocation. There is no `install`
+    field: dependency install (`prepare.sh` / Maven's `~/.m2`) is baked into the image at build
+    time, not repeated at grading time.
 
-    A handful of these repos have PR-range-specific override classes upstream (e.g. `commander.js`
-    migrated from Jest to node's built-in `node:test` at some point in its history) — this table
-    uses whichever class has no numeric PR-range suffix (the current/default one), which may not
-    exactly match every instance's era. Treated as a known, low-blast-radius risk: a mismatched
-    command surfaces as a script failure (`error_harness`), not a silently wrong grade.
+    A handful of repos have PR-range-specific override classes upstream (e.g. `commander.js`
+    migrated from Jest to `node:test` at some point); this table uses the current/default class,
+    which may not exactly match every instance's era — a mismatch surfaces as `error_harness`, not
+    a silently wrong grade.
 
-    `granularity="exit_code"` (the default) trusts the confirmed command's own exit code — correct
-    for every repo above, and for the Gradle-based Java repos (`mockito`/`junit5`/`logstash`/
-    `spotbugs`), whose `f2p_tests`/`p2p_tests` keys are Gradle *task* names, not test names, so
-    there's nothing more specific to check anyway. `granularity="class"` is for Maven repos whose
-    keys ARE exact test class names (`checkstyle`, `fastjson2`) — confirmed necessary, not a
-    speculative refinement: `checkstyle`'s ~2,900-5,100-test suite has at least one baked-in,
-    always-reproducible failure unrelated to any patch (confirmed on two different PRs — a
-    Mockito/JDK-sensitive stream-close count in one, a root-user-bypasses-file-permissions check in
-    another), so trusting the overall exit code would make `grade_reference`/`grade_null`
-    indistinguishable from noise for checkstyle's 845 tasks (86.6% of all Java tasks). See
-    `_java_class_test_script`."""
+    `granularity="exit_code"` (default) trusts the confirmed command's own exit code.
+    `granularity="class"` is for Maven repos whose test-outcome keys are exact class names
+    (`checkstyle`, `fastjson2`) and reads per-class Surefire XML instead, because the whole-suite
+    exit code is unreliable for them — see docs/engineering-notes.md, "Checkstyle baseline noise",
+    and `_java_class_test_script`."""
     build: str | None
     test: str
     granularity: str = "exit_code"  # "exit_code" or "class"
@@ -514,14 +243,10 @@ _REPO_CONFIG: dict[tuple[str, str], _RepoConfig] = {
     ("trpc", "trpc"): _RepoConfig(None, "pnpm turbo --filter tests test-ci"),
     ("vuejs", "core"): _RepoConfig(None, "pnpm run test-unit --no-watch --reporter=verbose"),
     # --- Java -------------------------------------------------------------------------------
-    # `clean` is part of every confirmed command below (Maven/Gradle wipe their build output
-    # before testing), so — unlike Go — a full recompile happens on every single grading call.
-    # That's the harness's own confirmed choice, not a shortcut of ours to remove without
-    # evidence; no `build` field is needed here since `clean test` already does compile+test in
-    # one command, the same way it does for the repos above with `build=None`. `checkstyle`/
-    # `fastjson2` use `granularity="class"` (confirmed necessary, see _RepoConfig's docstring);
-    # the 4 Gradle repos key by build task name, not test name, so exit_code is the only option
-    # and no repo-specific noise has been found there (lower volume, lower validated confidence).
+    # `clean` is part of every command below, so (unlike Go) a full recompile happens on every
+    # grading call; no `build` field is needed since `clean test` does compile+test in one step.
+    # checkstyle/fastjson2 use granularity="class" (see _RepoConfig's docstring); the 4 Gradle
+    # repos key by build task name, not test name, so exit_code is the only option there.
     ("checkstyle", "checkstyle"): _RepoConfig(None, "mvn clean test -Dstyle.color=never", granularity="class"),
     ("mockito", "mockito"): _RepoConfig(None, "./gradlew test"),
     ("elastic", "logstash"): _RepoConfig(None, "./gradlew clean test --continue"),
@@ -542,32 +267,23 @@ def _whole_suite_config(task: Task) -> _RepoConfig | None:
 
 def _volumes(task: Task) -> dict[str, str] | None:
     """Go mounts a persistent build cache (see `_cache_volumes`) because the SAME `base_commit`
-    gets recompiled from scratch on every grading call. JS/TS mounts nothing: dependencies are
-    baked into the image at build time (see `_RepoConfig`'s docstring) and never touched again, and
-    the handful of repos with a genuine per-call build step compile from source into a small
-    per-container `dist`/`lib` output — not yet measured as worth caching the way Go's build cache
-    was (that mount was added only after measuring a 34x speedup, not assumed). Rust mounts nothing
-    either: `target/` (cargo's own build cache) is confirmed pre-baked into the image the same way
-    — a `$CARGO_TARGET_DIR` host mount is a candidate future optimization, same "measure first"
-    bar as Go's `GOCACHE`, not something to add on assumption."""
+    gets recompiled from scratch on every grading call — see docs/engineering-notes.md, "Go build
+    cache is mounted, module cache is not". JS/TS and Rust mount nothing: their dependency/build
+    caches are already baked into the image, and a host-mounted build-output cache for either
+    hasn't been measured as worth adding."""
     if _whole_suite_config(task) is not None or _is_rust(task):
         return None
     return _cache_volumes()
 
 
 def _setup_script(task: Task, nonce: str) -> str:
-    """Shared by all three modes: apply the test changes every mode needs to exercise the four
-    test-outcome dicts. A failure here is always `error_harness` — it's the dataset's own
-    test_patch against its own prebuilt image, never the candidate's fault.
+    """Shared by all three modes: apply the test changes needed to exercise the four test-outcome
+    dicts. A failure here is always `error_harness` — it's the dataset's own test_patch against its
+    own prebuilt image, never the candidate's fault.
 
-    The `git config --global` here is scoped to this disposable `--rm` container's own throwaway
-    `~/.gitconfig` — discarded the moment the container exits, never touching the host's git
-    identity. It's needed because some repos' own test suites shell out to `git commit` internally
-    (confirmed for `jesseduffield/lazygit`'s `TestIntegration`, which panics without one, taking
-    down sibling subtests that never get to print their own PASS/FAIL line — see
-    `_run_test_stage`'s docstring). We don't control those internal invocations to scope an
-    identity to just them the way `repo_context.py`'s `_inject_swesmith_bug` does for commits we
-    make ourselves, so it has to be global within the container instead."""
+    The `git config --global` is scoped to this disposable `--rm` container's own throwaway
+    `~/.gitconfig` (discarded on exit) — needed because some suites shell out to `git commit`
+    internally. See docs/engineering-notes.md, "Lazygit needs a git identity"."""
     repo_dir = _repo_dir(task)
     harness_no_repo = dockerexec.report_cmd(nonce, "HARNESS", f"missing {repo_dir}")
     harness_test_patch_apply = dockerexec.report_cmd(nonce, "HARNESS", "test_patch failed to apply")
@@ -590,34 +306,20 @@ def _run_test_stage(
     harness_detail_suffix: str = "",
 ) -> str:
     """Runs `run_names` (top-level, regex-safe truncated names) via `-run`, then decides
-    PASS/FAIL/HARNESS from each of `check_names`' (the ORIGINAL, untruncated) own `--- PASS:`/
+    PASS/FAIL/HARNESS from each of `check_names`' (the original, untruncated) own `--- PASS:`/
     `--- FAIL:` line in `go test -v`'s output — never from the overall exit code or a blanket
-    `=== RUN` count, both of which were confirmed live this session to misattribute failures that
-    have nothing to do with the tests we're actually checking:
+    `=== RUN` count, both of which are unreliable here. See docs/engineering-notes.md, "Go's
+    overall exit code is unreliable" and "Lazygit needs a git identity".
 
-    - `go test ./...` fails the WHOLE run's exit code if ANY package in the module fails to
-      compile, even a third-party test-only dependency completely unrelated to the patch or the
-      target test (`gohugoio/hugo`: an unrelated `go-internal/testscript` Go-toolchain/stdlib
-      mismatch failed the run's exit code while the target test itself printed `--- PASS`).
-    - A blanket `=== RUN` count can't tell OUR named tests apart from an unrelated SIBLING subtest
-      under the same top-level name (`jesseduffield/lazygit`: `TestIntegration` fans out to
-      hundreds of subtests via one top-level Go test function; an unrelated subtest's panic — a
-      missing git identity in the container, not a patch problem — doesn't mean our two named
-      subtests failed).
+    `grep -F -f` (patterns read from a file, matched literally) is used instead of interpolating
+    test names into the shell command, since real test names can contain characters that would
+    need shell escaping (e.g. `TestPostingsForMatchers/n!~"(1|2.5)"`). `go test -run` still exits 0
+    on zero matches (see "Zero test matches still exit 0"), which is what the "not every
+    check_name got a PASS" branch below reports as HARNESS.
 
-    `grep -F -f` (patterns read from a file, matched literally) is used throughout instead of
-    interpolating test names into the shell command: real test names contain characters that would
-    otherwise need careful shell escaping (`TestPostingsForMatchers/n!~"(1|2.5)"` is a real key
-    from this dataset, quote marks included) — reading patterns from a file sidesteps that
-    entirely, the same reasoning `write_file_cmd` already exists for. `go test -run` still exits 0
-    even if the pattern matches ZERO tests anywhere (confirmed directly, unlike pytest which errors
-    loudly on an unknown node id — see module docstring point 5), which is exactly the case the
-    "not every check_name got a PASS" branch below reports as HARNESS.
-
-    `harness_detail_suffix` (only ever non-empty for the discriminating stage — see
-    `_discriminating_stage_script`) distinguishes the expected n2p-only case from a genuine
-    harness gap (e.g. lazygit's missing-git-identity panic, mentioned above) in the reported
-    detail; outcome classification is unaffected either way."""
+    `harness_detail_suffix` (non-empty only for the discriminating stage) distinguishes the
+    expected n2p-only case from a genuine harness gap in the reported detail; outcome
+    classification is unaffected either way."""
     repo_dir = _repo_dir(task)
     pattern = "^(" + "|".join(run_names) + ")$"
     safe_label = label.replace("-", "_")
@@ -631,21 +333,12 @@ def _run_test_stage(
         nonce, "HARNESS", f"no {label} tests matched the expected names{harness_detail_suffix}"
     )
 
-    # Trailing newline on every line (including the last) so `wc -l` counts correctly regardless
-    # of how many names there are — a file with content but no trailing newline undercounts by one.
+    # Trailing newline on every line (including the last) so `wc -l` counts correctly.
     #
-    # Each pattern ends in " (" — the fixed text `go test -v` always prints right after a test name
-    # (`--- PASS: TestFoo (0.01s)`) — rather than stopping at the bare name. Go test names routinely
-    # share prefixes (confirmed empirically this session: 8.1M such pairs across this dataset's
-    # 1,675 real Go tasks, e.g. `TestAddTree`/`TestAddTree2`, `TestAlpha`/`TestAlphaDash`), and
-    # `grep -F`'s substring matching doesn't respect name boundaries — without the " (" anchor,
-    # `--- PASS: TestAddTree` matches as a literal substring of `--- PASS: TestAddTree2 (0.01s)`,
-    # so a shorter name could be counted as passed/failed off a completely different, unrelated
-    # sibling test's own result line. The realistic failure mode: `TestAddTree` gets `t.Skip()`-ed
-    # (never prints its own PASS/FAIL line) while `TestAddTree2` genuinely passes — without this
-    # anchor, `TestAddTree` would be silently counted as passed too, even though it was never
-    # actually verified. Appending " (" requires the exact next two characters after the name to
-    # match, which `TestAddTree2 (...)` never produces for the pattern `TestAddTree (`.
+    # Append " (" to each pattern (the text `go test -v` always prints right after a test name) so
+    # a shorter name's pattern can't match as a substring of a longer name's result line (e.g.
+    # `TestAddTree` vs. `TestAddTree2`) — see docs/engineering-notes.md, "Test-name substring
+    # collisions".
     pass_patterns = "".join(f"--- PASS: {name} (\n" for name in check_names)
     fail_patterns = "".join(f"--- FAIL: {name} (\n" for name in check_names)
 
@@ -849,14 +542,12 @@ def grade_null(task: Task, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -> Gra
     (`f2p_tests`/`n2p_tests`/`s2p_tests`) are expected to fail. Must score ~0% or the grader is
     broken.
 
-    Go deliberately never runs the regression-guard (`p2p_tests`) stage here — those are defined
-    by the dataset as passing both BEFORE and after the gold fix, and null's state (test_patch
-    applied, no fix) IS the "before" state, so by the dataset's own labeling they're already
-    guaranteed to pass here. Checking them would only add cost, not signal — measured directly:
-    27s for the discriminating stage alone vs. 150-190s for the full set on the same real
-    instance, a ~6x cut on every single null-control run. JS/TS has no separate stage to skip
-    (see `_RepoConfig`'s docstring) — its one whole-suite run naturally fails here because the
-    discriminating tests fail without a fix, exactly the same signal a staged run would give."""
+    Go deliberately never runs the regression-guard (`p2p_tests`) stage here — those tests are
+    defined as passing both before and after the gold fix, and null's state already is the
+    "before" state, so they're trivially guaranteed to pass and checking them adds cost, not
+    signal — see docs/engineering-notes.md, "Staged grading rationale (Go/Rust)". JS/TS has no
+    separate stage to skip: its one whole-suite run naturally fails here since the discriminating
+    tests fail without a fix."""
     image = _image(task)
     nonce = uuid.uuid4().hex
     pass_cmd = dockerexec.report_cmd(nonce, "PASS")

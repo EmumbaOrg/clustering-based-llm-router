@@ -3,9 +3,7 @@
 suite present — no `test_patch`, no clone needed. (`repo` is a synthetic `swesmith/...` namespace,
 not a real GitHub repo, so cloning isn't an option even in principle — see pipeline README.)
 
-Confirmed empirically against `jyangballin/swesmith.x86_64.oauthlib_1776_oauthlib.1fd52536`
-(the calibration plan's "validate on one instance" step) — three things that were WRONG in the
-first draft, before that check:
+Confirmed empirically against `jyangballin/swesmith.x86_64.oauthlib_1776_oauthlib.1fd52536`:
 
 1. **The image starts clean, not buggy.** `patch` (the row's bug-introducing diff) has NOT been
    applied yet — `git log` shows a single "Initial commit" and the pre-bug source is what's
@@ -53,19 +51,9 @@ def _setup_script(task: Task, nonce: str) -> str:
 
 
 def _pytest_script(task: Task, nonce: str) -> str:
-    """Run the test suite and report PASS/FAIL off its exit code.
-
-    One exception, exit codes 4/5 (pytest's own "usage error" / "no tests collected"): a
-    FAIL_TO_PASS/PASS_TO_PASS node id that pytest can't collect as given — same class of issue
-    documented at length in swegym.py's `_pytest_script` (a dataset-recorded id not matching what
-    the installed pytest actually generates, whether from a non-ASCII parametrize case or an id
-    truncated mid-value at an embedded comma, both confirmed live against real SWE-Gym rows this
-    session). This module shares swegym.py's `FAIL_TO_PASS`/`PASS_TO_PASS` node-id shape and the
-    same single-batch invocation, so it's exposed to the identical failure mode — previously
-    unhandled here, which silently miscounted an infra/dataset problem as a genuine model `FAIL`.
-    `dockerexec.pytest_collect_then_run` routes it to HARNESS instead, and additionally recovers
-    whichever other ids in the same batch ARE collectible rather than losing the whole task's
-    signal to one bad id."""
+    """Run the test suite and report PASS/FAIL off its exit code. Same node-id collection handling
+    as swegym.py's `_pytest_script` — see docs/engineering-notes.md, "Pytest collection mismatch
+    (swegym/swesmith)"."""
     return dockerexec.pytest_collect_then_run(
         node_ids=task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"],
         nonce=nonce,

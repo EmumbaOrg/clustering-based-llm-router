@@ -1,31 +1,18 @@
 """Invokes the Pi coding agent headlessly (`pi -p`) to produce a candidate solution for a task
 against a configured model. This is the ONLY code path that calls a real agent.
 
-The `reference`/`null` grader-validation controls (see config/models.yaml) do NOT go through this
-module — they're synthesized directly by calibrate.py, source by source, without invoking Pi at
-all (the "reference" solution is just the dataset's own gold value; "null" is an empty solution).
-That keeps the controls fast, free, and independent of agent/model behavior, which is the whole
-point of using them to validate a grader before trusting any real model's score.
+The `reference`/`null` grader-validation controls do NOT go through this module — they're
+synthesized directly by calibrate.py, source by source, without invoking Pi at all, which keeps
+them fast, free, and independent of agent/model behavior.
 
-Extracting "the solution" from an agent's free-form response is inherently fuzzy — we ask for a
-single fenced code block and take the first one found, falling back to the whole response if none
-is fenced. This is a known limitation of prompt-based extraction rather than a structured-output
-contract with Pi; acceptable for this pass's completeness goal (see pipeline-python/README.md),
-but expect it to hurt a real model's measured score independently of its actual coding ability.
-For sources `repo_context.py` knows how to check out (swe-smith today), this is sidestepped
-instead of worked around: the agent gets a real, isolated working tree and its own edit/write
-tools, and the solution is captured via `git diff` on that tree rather than parsed from prose —
-text extraction stays only as the fallback for a response with no repo context or no tool use.
+Extracting "the solution" from an agent's free-form response is inherently fuzzy — we take the
+first fenced code block, falling back to the whole response if none is fenced. For sources
+`repo_context.py` can check out, this is sidestepped instead: the agent gets a real, isolated
+working tree and its own edit/write tools, and the solution is captured via `git diff` — text
+extraction stays only as the fallback for a response with no repo context or no tool use.
 
-Every call is paced by `RateLimiter` against the candidate's configured `rate_limit_rpm` (see
-config/models.yaml). That paces *request count*, but Groq's free tier also caps *tokens per
-minute* — observed in practice to bind much sooner than RPM for these prompt sizes, since a
-rejection reserves the request's prompt + max_tokens against the budget up front rather than
-waiting to see actual usage. Groq's own error message names an exact cooldown ("Please try again
-in Ns"), so a TPM rejection is retried after that exact wait (`MAX_RATE_LIMIT_RETRIES` times, each
-capped at `MAX_RATE_LIMIT_WAIT_SECONDS`) rather than immediately given up on. Only once retries are
-exhausted does `RunResult.rate_limited` get set, routing calibrate.py to exclude the task
-(`error_harness`) instead of counting a quota rejection as a wrong answer.
+Every call is paced by `RateLimiter` against the candidate's `rate_limit_rpm`. See
+docs/engineering-notes.md, "Groq TPM vs RPM" for why RPM pacing alone isn't sufficient for Groq.
 """
 from __future__ import annotations
 
@@ -45,10 +32,9 @@ logger = logging.getLogger(__name__)
 
 _CODE_BLOCK_RE = re.compile(r"```(?:\w+)?\n(.*?)```", re.DOTALL)
 
-# Substrings looked for (case-insensitively) in a failed pi call's stderr to tell "the provider
-# rate-limited us" apart from any other failure. Deliberately loose — providers don't share a
-# wire format for this, and a false positive here only costs one `error_harness` exclusion, while
-# a false negative would let a rate-limit response silently inflate a model's measured error rate.
+# Substrings looked for (case-insensitively) in a failed pi call's stderr to detect a rate limit.
+# Deliberately loose — a false positive only costs one exclusion; a false negative would inflate a
+# model's measured error rate.
 _RATE_LIMIT_MARKERS = ("429", "rate limit", "rate_limit", "too many requests")
 
 # Groq's rate-limit error names the exact cooldown, e.g. "Please try again in 20.19s" or
@@ -70,14 +56,9 @@ def _parse_retry_after_seconds(stderr: str) -> float | None:
 
 
 class RateLimiter:
-    """Paces successive calls per model_id to at most `rpm` per minute — the free-tier limits
-    documented per-model on the provider's own rate-limit page (see config/models.yaml). A
-    SAFETY_MARGIN is applied on top of the documented limit since our own clock and the
-    provider's rate-limit window aren't perfectly aligned; better to run slightly under the
-    documented cap than to 429 right at the boundary.
-
-    `clock`/`sleep` are injectable so tests can exercise the pacing logic without a real sleep.
-    """
+    """Paces successive calls per model_id to at most `rpm` per minute (see config/models.yaml). A
+    SAFETY_MARGIN runs slightly under the documented cap since our clock and the provider's
+    rate-limit window aren't perfectly aligned. `clock`/`sleep` are injectable for tests."""
 
     SAFETY_MARGIN = 1.15
 
@@ -140,17 +121,9 @@ _INSTRUCTIONS = {
 # told to use them directly rather than hand-write a diff from memory. Only sources with a
 # _REPO_SOURCES entry (repo_context.py) ever reach this path.
 #
-# No "summarize the change or include a diff" escape hatch — confirmed empirically this session
-# why that phrasing was a real bug, not just imprecise wording. There is only ONE path that ever
-# reaches the grading Docker container: repo_context.extract_diff() runs `git diff` on this local
-# worktree AFTER the call finishes, and THAT diff — never the agent's prose or a code block in its
-# text response — is what gets shipped and `git apply`'d in a container that shares nothing else
-# with this worktree. A model that took the "summarize instead" option produced plain code with no
-# diff structure (confirmed on real claude-haiku-4-5 calibration rows, e.g. arrow-py/sqlfluff:
-# bare function bodies, not `diff --git` output) — extract_diff() found no real edits to report,
-# fell back to parsing that text, and `git apply` had nothing valid to work with. It could never
-# have worked regardless of how the model formatted its answer. The fix is to remove the option
-# entirely: the only real deliverable is actually editing the files.
+# Deliberately has no "summarize the change or include a diff" escape hatch — see
+# docs/engineering-notes.md, "No "summarize instead" escape hatch" for why that option is a real
+# bug, not just imprecise wording.
 _CONTEXT_INSTRUCTIONS = {
     "swe-smith": (
         "The repository is checked out in your current working directory, at the state before "
@@ -185,13 +158,8 @@ _CONTEXT_INSTRUCTIONS = {
 }
 
 # Used instead of _CONTEXT_INSTRUCTIONS when the model config says `supports_tool_calls: false`
-# (currently: local llama.cpp providers). Confirmed empirically this session: given the
-# tool-inviting instruction above, these models attempt a tool call in their own training-time
-# dialect (e.g. `<function-calls>{...}</function-calls>`), but llama.cpp's OpenAI-compatible
-# endpoint never translates that into `message.tool_calls` — Pi sees plain text, not a tool call,
-# and returns the inert tool-call text as the "final answer", which always fails to apply as a
-# patch. Asking directly for a diff — the same shape `_INSTRUCTIONS` already uses when there's no
-# repo context at all — at least gets a gradeable answer instead of a guaranteed failure.
+# (local llama.cpp providers) — see docs/engineering-notes.md, "No tool calls on local (llama.cpp)
+# models".
 _CONTEXT_INSTRUCTIONS_NO_TOOLS = {
     "swe-smith": (
         "The repository is checked out in your current working directory, at the state before "
@@ -220,16 +188,12 @@ _CONTEXT_INSTRUCTIONS_NO_TOOLS = {
 @dataclasses.dataclass(frozen=True)
 class TokenUsage:
     """Pi's own reported usage/cost for one `pi -p` call, read from its `--mode json` event stream
-    rather than computed from our own token estimate — Pi already prices every call against its
-    built-in model catalog (confirmed: it reports accurate cost for claude-haiku-4-5 even though
-    that model has no entry in our local ~/.pi/agent/models.json), so there's nothing for us to
-    estimate."""
+    rather than estimated locally — see docs/engineering-notes.md, "Pi cost is authoritative"."""
     input_tokens: int
     output_tokens: int
     cost_usd: float
-    turn_count: int  # number of assistant messages in agent_end's conversation — i.e. how many
-    # turns the agent took to reach a final answer. Same source as the usage totals above (see
-    # _parse_json_stream: each assistant message is one turn), so it comes for free alongside them.
+    turn_count: int  # number of assistant messages in agent_end's conversation (see
+    # _parse_json_stream) — comes for free alongside the usage totals above.
 
 
 @dataclasses.dataclass(frozen=True)
@@ -238,24 +202,15 @@ class RunResult:
     # error_no_solution outcome, which calibrate.py records directly without calling a grader.
     detail: str = ""
     raw_response: str = ""
-    rate_limited: bool = False  # True routes calibrate.py to `error_harness` instead of
-    # `error_no_solution` — a 429 is an infra/quota problem, not the model failing to answer, and
-    # must not inflate its measured error rate.
-    context_unavailable: bool = False  # True if repo_context setup (clone/checkout) itself failed,
-    # before pi was ever invoked — an infra problem, not the model's fault, so calibrate.py must
-    # route this to `error_harness` too, the same as rate_limited.
-    harness_error: bool = False  # True when Pi's own event stream reports the PROVIDER rejected
-    # the call (e.g. an API auth failure) — confirmed live this session that Pi exits 0 in this
-    # case, so nothing else here would ever catch it. `detail` carries the provider's error message.
-    # Routes to `error_harness`, same reasoning as rate_limited/context_unavailable: the call never
-    # reached the model, so it can't be evidence of the model failing to answer.
-    timed_out: bool = False  # True when OUR subprocess timeout fired (distinct from a grader's own
-    # error_timeout, which is about the TEST run, not the model call). Previously fell through to
-    # `error_no_solution` like a genuine empty response — but a call that never finished isn't
-    # evidence the model couldn't solve the task, just that it didn't in the time we gave it.
-    usage: TokenUsage | None = None  # None when pi's stdout wasn't parseable JSON (e.g. it never
-    # ran, or emitted plain text) — a genuinely unknown cost, not a zero one; calibrate.py treats
-    # that distinction as "0 measured" for the CSV since there's nothing else to report.
+    rate_limited: bool = False  # 429 after retries exhausted — routes calibrate.py to error_harness.
+    context_unavailable: bool = False  # repo_context clone/checkout failed before pi ran — routes
+    # to error_harness, same as rate_limited.
+    harness_error: bool = False  # provider rejected the call — see docs/engineering-notes.md,
+    # "Pi exits 0 on a provider-level error". `detail` carries the provider's error message.
+    timed_out: bool = False  # OUR subprocess timeout fired, distinct from a grader's own
+    # error_timeout (the TEST run, not the model call).
+    usage: TokenUsage | None = None  # None when pi's stdout wasn't parseable JSON — a genuinely
+    # unknown cost, not a zero one; calibrate.py treats it as "0 measured" for the CSV.
 
 
 def build_prompt(task: Task, has_repo_context: bool = False, supports_tool_calls: bool = True) -> str:
@@ -285,32 +240,13 @@ def extract_solution(response: str) -> str | None:
 
 def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None, str | None]:
     """Parses `pi --mode json`'s newline-delimited event stream, returning the final assistant
-    message's text, the call's total usage/cost, and — new — an API-level error message if the
-    provider itself rejected the call.
-
-    That third value matters because Pi's own process exit code does NOT reflect this: confirmed
-    live this session that a real Anthropic 401 ("API key is invalid") left `pi` exiting 0, with
-    the failure visible only as `stopReason: "error"` / `errorMessage: "..."` on the last assistant
-    message. Before this, `run_pi` had no way to tell "the provider rejected the call" apart from
-    "the model genuinely produced nothing" — both looked identical (empty text, zero usage), and
-    calibrate.py counted the former as `error_no_solution` (graded, counts against the model)
-    instead of `error_harness` (excluded) — a real, observed 15% of one model's calls in one run,
-    all in the back half, consistent with a credential degrading partway through rather than being
-    broken from the start.
+    message's text, the call's total usage/cost, and an API-level error message if the provider
+    itself rejected the call (Pi's own exit code does not reflect this — see
+    docs/engineering-notes.md, "Pi exits 0 on a provider-level error").
 
     `agent_end` is always the last event and carries the full conversation, so it alone has
-    everything needed — no need to track events as they stream by.
-
-    Usage is summed across EVERY assistant message in the turn, not read off the last one alone —
-    confirmed live this session that each assistant message's `usage` is PER-TURN, not cumulative,
-    for a real tool-use conversation: a 6-turn repo-context call showed `input: 3` on every single
-    turn and a small, DIFFERENT `cost.total` on each (e.g. $0.00035, $0.00013, ..., $0.00025) — only
-    `totalTokens` (a separate, genuinely cumulative field we don't use) grows turn over turn. Taking
-    only the last message, as an earlier version of this function did, silently kept just that
-    final turn's cost and dropped the other 5 — a real ~7x undercount on that one call. A
-    single-turn, no-tool-use call (the only shape this was originally verified against) has exactly
-    one assistant message, where "sum across messages" and "last message" are the same number,
-    which is why that earlier verification didn't catch this.
+    everything needed. Usage is summed across EVERY assistant message, not read off the last one
+    alone — see "Pi usage is summed per turn, not read from the last message" for why that matters.
 
     Returns (None, None, None) on anything that isn't this NDJSON shape — e.g. a test's plain-text
     stdout fixture, or a real failure — so callers fall back to treating `stdout` as the raw
@@ -406,16 +342,7 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
             # that isn't this shape, and extract_solution then runs on raw stdout same as always.
             "--mode", "json",
         ]
-        # Pi offers its own built-in read/write/bash/edit tools to every model call by default —
-        # confirmed empirically this session that this isn't harmless even for a model with
-        # correctly-working tool calls (Llama-3.1-8B-Instruct): on a self-contained task with no
-        # repo to act on (bigcodebench/ds1000), it can still attempt a tool call, and Pi's own
-        # response parser rejects the malformed attempt outright ("The model produced output that
-        # does not match the expected peg-native format", exit 1, before any real content comes
-        # back — confirmed by reproducing the exact failing call with/without `--no-tools`).
-        # Tools are only useful when BOTH a real worktree exists to act on AND the model is known
-        # to translate its tool-call attempts into the wire protocol correctly — anything else and
-        # offering them is pure downside.
+        # See docs/engineering-notes.md, "--no-tools is required whenever there's no worktree".
         if not (has_repo_context and model.supports_tool_calls):
             args.append("--no-tools")
 
@@ -462,9 +389,7 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int, sleep=time.slee
 
             final_text, usage, error_message = _parse_json_stream(proc.stdout)
             if error_message is not None:
-                # Pi itself exits 0 even when the underlying provider call failed (confirmed live:
-                # a real Anthropic 401 "API key is invalid") — this is an infra/credential problem,
-                # not the model failing to answer, so it must not be scored as error_no_solution.
+                # See RunResult.harness_error above for why this must not be scored as error_no_solution.
                 logger.error(
                     f"provider rejected the call (pi exited 0 but reported an error): "
                     f"{model.model_id} on task {task.task_id} — {error_message}"

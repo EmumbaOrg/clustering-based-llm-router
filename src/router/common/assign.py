@@ -5,9 +5,7 @@ Shared by ../pipeline (calibration/evaluation reads cluster-map.json to assign h
 cluster-map.json and must use the exact same tie-break/argmin rule, which is why this lives in
 common/ rather than being reimplemented on either side.
 
-Distance is SQUARED Euclidean (no sqrt) — monotone with true distance, one fewer floating-point
-operation, and avoids sqrt's platform/library differences mattering for a comparison that doesn't
-need them.
+Distance is SQUARED Euclidean (no sqrt) — monotone with true distance, so it's fine for comparison.
 """
 from __future__ import annotations
 
@@ -37,10 +35,7 @@ class ClusterAssignment:
 
 
 def cluster_map_from_dict(data: dict) -> ClusterMap:
-    """Builds a ClusterMap from an already-parsed cluster-map.json. Separated from
-    `load_cluster_map` so a caller that has already read the file once (to schema-validate it, or
-    to pull the `embedding.input` preprocessing rule off it — see runtime/context.py) doesn't read
-    it a second time just to get the centroids."""
+    """Builds a ClusterMap from an already-parsed cluster-map.json, so a caller that already read the file once doesn't have to read it again just for the centroids."""
     clusters = data["clusters"]
     dimensions = data["embedding"]["dimensions"]
     k = len(clusters)

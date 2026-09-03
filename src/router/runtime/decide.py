@@ -27,9 +27,7 @@ class RoutingDecision:
     selected: ScoredCandidate
     cluster: ClusterAssignment
     scores: list[ScoredCandidate]        # every scored candidate, for audit
-    excluded: dict[str, str]             # model_id -> reason; empty whenever context validation
-    # has already guaranteed every candidate has a usable profile, which is the common case —
-    # kept so a future gap in that guarantee is recorded rather than silently losing a candidate
+    excluded: dict[str, str]             # model_id -> reason; normally empty, kept as a safety net
     lambda_: float
     digest: str
     cluster_map_id: str

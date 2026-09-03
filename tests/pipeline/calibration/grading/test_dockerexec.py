@@ -44,9 +44,8 @@ def test_classify_harness_sentinel():
 
 
 def test_no_sentinel_and_nonzero_exit_is_error_harness_never_fail():
-    # The core invariant this module exists to enforce (regression test for Bug 1): a container
-    # that exits nonzero WITHOUT our script ever reporting must never be misread as the candidate
-    # failing the task.
+    # A container that exits nonzero WITHOUT our script ever reporting must never be misread as
+    # the candidate failing the task.
     result = classify(NONCE, 1, "some unrelated output\n", "")
     assert result.outcome == "error_harness"
     assert result.outcome != "fail"
@@ -115,10 +114,8 @@ def test_run_names_the_container_so_it_can_be_killed_later(monkeypatch):
 
 
 def test_run_kills_the_container_on_timeout(monkeypatch):
-    # Regression test for a confirmed leak: killing the `docker run` client does NOT stop the
-    # container, so without an explicit `docker kill` a timed-out task keeps burning CPU for the
-    # rest of the calibration run. Verified live before this fix — `error_timeout` returned on
-    # schedule while `docker ps` still showed the container `Up` and running.
+    # Killing the `docker run` client does NOT stop the container — an explicit `docker kill` is
+    # required, or a timed-out task keeps burning CPU for the rest of the calibration run.
     calls = []
 
     def fake_run(args, **kwargs):
@@ -299,9 +296,9 @@ def test_pytest_collect_then_run_collects_before_executing():
     collect_index = script.index("--collect-only")
     execute_index = script.index('python -m pytest -q "${VALID[@]}"')
     assert collect_index < execute_index
-    # Both passes must run in the same cwd/env — a mismatch would make the collect-only pass's
-    # "not found" lines use a different absolute path than step 2 expects, silently excluding
-    # every id (confirmed live: pytest resolves relative node ids against getcwd()).
+    # Both passes must run in the same cwd/env — pytest resolves relative node ids against
+    # getcwd(), so a mismatch would make the collect-only pass's "not found" lines use a different
+    # absolute path than step 2 expects, silently excluding every id.
     assert script.count("conda activate testbed && cd /testbed") == 2
 
 
@@ -316,12 +313,9 @@ def test_pytest_collect_then_run_reports_harness_immediately_when_every_id_is_ex
 
 
 def test_pytest_collect_then_run_checks_both_of_pytests_not_found_message_shapes():
-    # Regression test: confirmed live this session that pytest reports an unresolvable id one of
-    # two ways depending on whether the FILE itself exists — "not found: <repo_dir>/<id>"
-    # (absolute path, file exists but the specific test/class doesn't) or "file or directory not
-    # found: <id>" (relative, id exactly as given, file doesn't exist at all). A synthetic
-    # nonexistent-file id hit only the second form and was silently kept as "valid" when only the
-    # first was checked.
+    # pytest reports an unresolvable id one of two ways depending on whether the FILE itself
+    # exists — "not found: <repo_dir>/<id>" (file exists but the specific test/class doesn't) or
+    # "file or directory not found: <id>" (file doesn't exist at all) — both must be checked.
     script = pytest_collect_then_run(["tests/test_x.py::test_one"], NONCE, "/testbed", "conda activate testbed")
     assert 'grep -qxF "ERROR: not found: /testbed/$id"' in script
     assert 'grep -qxF "ERROR: file or directory not found: $id"' in script
@@ -338,10 +332,8 @@ def test_pytest_collect_then_run_folds_excluded_count_into_fail_and_pass_detail(
 
 
 def test_apply_patch_or_fail_cmd_folds_gits_real_stderr_into_the_fail_detail():
-    # Previously a static "candidate patch failed to apply" discarded git's own error message
-    # entirely — confirmed this session investigating Luna's Multi-SWE-RL failures that there was
-    # no way to tell "malformed diff" from "diff doesn't match this baseline" from anything else
-    # after the fact without re-running a fresh container by hand.
+    # git's own error message must be preserved, not discarded behind a static failure string —
+    # otherwise "malformed diff" is indistinguishable from "diff doesn't match this baseline".
     script = apply_patch_or_fail_cmd(NONCE, "/tmp/candidate.patch", fail_detail="candidate patch failed to apply")
 
     assert "git apply /tmp/candidate.patch 2>/tmp/apply_err.txt ||" in script

@@ -120,11 +120,9 @@ def test_pytest_script_reports_pass_and_fail_off_the_same_exit_code_check():
 
 
 def test_pytest_script_reports_harness_for_uncollectable_node_ids():
-    # Regression test: confirmed live this session (a comma-truncated FAIL_TO_PASS/PASS_TO_PASS
-    # id on real SWE-Gym rows, same node-id shape this module shares) that pytest's exit codes 4
-    # (usage error) / 5 (no tests collected) must map to HARNESS, not FAIL, so a dataset id this
-    # module can't collect as given can't spuriously count against a candidate. Mirrors
-    # swegym.py's identical regression test.
+    # An uncollectable node id (pytest exit 4/5) must map to HARNESS, not FAIL, so a dataset id
+    # this module can't collect as given can't spuriously count against a candidate. Mirrors
+    # swegym.py's identical test.
     script = swesmith._pytest_script(_task(), "nonce")
     assert dockerexec.report_cmd("nonce", "HARNESS", "pytest could not collect the specified test ids") in script
     assert "PYTEST_EXIT -eq 4" in script

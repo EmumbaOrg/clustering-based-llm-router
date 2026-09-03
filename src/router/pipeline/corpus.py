@@ -1,25 +1,13 @@
-"""Loads the corpus: SWE-smith (sampled 20,000 of ~59,136), SWE-Gym, BigCodeBench-Instruct,
-DS-1000 (all rows from each), and Multi-SWE-RL (batch 1 only, ~4,723 multilingual instances — see
-../README.md). Multi-SWE-RL spans 7 languages (C, C++, Go, Java, JS, Rust, TS); Go, JS, TS, Java,
-and Rust are gradeable (`calibration/grading/multiswerl.py`, `calibration/tasks.py`'s language
-filter) — C and C++ remain corpus-only here, same as before.
+"""Loads the corpus from five sources: SWE-smith (sampled 20,000 of ~59,136), SWE-Gym,
+BigCodeBench-Instruct, and DS-1000 (all rows), and Multi-SWE-RL (batch 1 only, ~4,723 multilingual
+instances; C/C++ are corpus-only here, not gradeable).
 
-Multi-SWE-RL can't use the generic `load_dataset(hf_id, split=split)` path below — its 74
-batch-1 JSONL files have per-repo-heterogeneous nested fields, and Arrow schema unification across
-them fails with "Couldn't cast array of type string to null" (the same reason the HF dataset
-viewer is broken for this dataset). It's fetched file-by-file via `huggingface_hub.hf_hub_download`
-and parsed with plain `json.loads` instead; see `_load_multi_swe_rl`.
+Multi-SWE-RL is fetched file-by-file via `huggingface_hub.hf_hub_download` rather than
+`load_dataset` — its per-repo-heterogeneous JSONL schema breaks Arrow's loader; see
+`_load_multi_swe_rl`.
 
-Row ids are the SAME stable, dataset-native identifier `calibration/tasks.py` uses for its
-`Task.task_id` (`stable_task_id`, single-sourced so the two can't drift apart) — not a positional
-`<source>:<index>` the way this module used to assign them. This is what lets a row's cluster
-label (computed once by `build-artifact`'s K-means fit) be joined against a calibration task by
-id later, without a second, separate embedding pass just to re-derive it (see
-`clustering/task_cluster_map.py`). A stable id was already required for multi-swe-rl regardless —
-that source's files are read smallest-first (see `_multi_swe_rl_ordered_paths`) and truncated by
-`--sample`, so a positional id would never have been stable across runs there even before this
-changed for every other source too — and `compute_corpus_digest` (clustering/cluster_map.py) sorts
-rows by id, so an unstable id would make the corpus digest non-reproducible for identical content.
+Row ids are the SAME stable, dataset-native ids `calibration/tasks.py` uses for `Task.task_id`
+(`stable_task_id`), so a row's cluster label can be joined to a calibration task by id.
 """
 from __future__ import annotations
 
@@ -65,14 +53,9 @@ SOURCE_METADATA: dict[str, dict[str, str]] = {
         "field": "prompt",
         "license": "CC-BY-SA-4.0",
     },
-    # Registered LAST deliberately: build_corpus() iterates SOURCE_METADATA in insertion order and
-    # dedup_exact() keeps the FIRST occurrence of a duplicate, so a Multi-SWE-RL row that happens
-    # to duplicate an existing row can never evict it and churn an existing row's id (and thus the
-    # corpus digest). `split` has no HF meaning here — load_dataset can't read this dataset at all
-    # (see module docstring) — so it instead records which release batch was pulled, which is what
-    # actually matters for reproducing this source. `field` is a composite description rather than
-    # one dataset field name; both are plain minLength-1 strings in the schema, so this needs no
-    # schema change.
+    # Registered LAST deliberately — see docs/engineering-notes.md, "Corpus source order and dedup".
+    # `split`/`field` here don't carry their usual HF meaning (see module docstring); both are still
+    # plain minLength-1 strings in the schema, so this needs no schema change.
     "multi-swe-rl": {
         "hf_id": "ByteDance-Seed/Multi-SWE-RL",
         "split": "data_20240601_20250331",
@@ -96,10 +79,7 @@ MULTI_SWE_RL_BATCH = SOURCE_METADATA["multi-swe-rl"]["split"]
 # dropped ids, not instances) and any future sibling metadata file in the same batch directory.
 _MULTI_SWE_RL_FILE_SUFFIX = "_dataset.jsonl"
 
-# Measured directly over 39 records spanning all 7 batch-1 languages: resolved_issues title+body
-# was present in 39/39, median 750 chars, minimum 99. This threshold should never fire on today's
-# data — it exists to catch upstream format drift, not to route normal rows to the weaker
-# title/body (pull request) fallback.
+# See docs/engineering-notes.md, "Multi-SWE-RL issue text threshold".
 _MULTI_SWE_RL_MIN_ISSUE_CHARS = 80
 
 
@@ -128,12 +108,9 @@ def provenance_for(name: str, rows: int) -> SourceProvenance:
 
 
 def _extract_multi_swe_rl_text(record: dict) -> str | None:
-    # This dataset has no problem_statement field. `resolved_issues` is the GitHub ISSUE (the
-    # problem) and is the true analogue of the other sources' problem_statement; the top-level
-    # title/body is the PULL REQUEST, i.e. a description of the solution — embedding that would
-    # cluster on how a fix was written, not on what was asked. Hence PR text is only a fallback,
-    # used when the issue text is missing or too thin to be a real substitute (see
-    # _MULTI_SWE_RL_MIN_ISSUE_CHARS).
+    # `resolved_issues` (the GitHub issue) is the real problem_statement analogue; top-level
+    # title/body is the PR (solution) and only a fallback — see docs/engineering-notes.md,
+    # "Multi-SWE-RL issue vs PR text".
     issues = record.get("resolved_issues")
     parts: list[str] = []
     if isinstance(issues, list):
@@ -156,16 +133,12 @@ def _extract_multi_swe_rl_text(record: dict) -> str | None:
 
 def stable_task_id(source: str, row: dict) -> str | None:
     """The SAME stable, dataset-native id `calibration/tasks.py`'s per-source loaders derive —
-    kept here, single-sourced, so corpus.py's row ids and calibration's `Task.task_id`s are
-    always the same identifier for the same underlying row (previously they weren't: corpus.py
-    used a positional `f"{name}:{i}"` for every source except multi-swe-rl, which meant a full
-    per-row cluster label already computed by `build-artifact`'s K-means fit could never be joined
-    against a calibration task_id for 4 of 5 sources). `calibration/tasks.py`'s loaders call this
-    too, so the two can't drift apart again — this is the one place the mapping is defined.
+    kept here, single-sourced, so corpus.py's row ids and calibration's `Task.task_id`s are always
+    the same identifier for the same underlying row; `calibration/tasks.py` calls this too, so the
+    two can't drift apart.
 
-    Returns None for a row missing the field it needs (mirrors `_multi_swe_rl_row_id`'s own
-    None-on-missing-data convention below) — the caller skips it rather than crashing the whole
-    corpus load over one malformed row."""
+    Returns None for a row missing the field it needs; the caller skips it rather than crashing
+    the whole corpus load over one malformed row."""
     if source == "bigcodebench":
         task_id = row.get("task_id")
         return str(task_id) if task_id else None
@@ -194,17 +167,13 @@ def _multi_swe_rl_row_id(record: dict) -> str | None:
 
 
 def _multi_swe_rl_ordered_paths(files: list[tuple[str, int]]) -> list[str]:
-    """Smallest-first WITHIN each language, then round-robin ACROSS languages.
-
-    File sizes are extremely skewed — a handful of files are 86MB-973MB (bloat is per-instance
-    test-log fields, not more instances) while most of the rest total well under that. `--sample N`
-    stops as soon as N rows exist, so read order decides whether a dry run costs megabytes or
-    gigabytes. Ranking by size within a language and interleaving keeps a dry run both cheap AND
-    multilingual, rather than cheap-but-single-language.
+    """Smallest-first WITHIN each language, then round-robin ACROSS languages, so a `--sample N`
+    dry run (which stops as soon as N rows exist) stays cheap and still multilingual.
 
     TRADEOFF: unlike every other source, a CAPPED multi-swe-rl sample is not random — it is biased
     toward small repos. Fine for a dry run that just needs to exercise the loader; never treat a
-    --sample multi-swe-rl subset as representative.
+    --sample multi-swe-rl subset as representative. See docs/engineering-notes.md, "Multi-SWE-RL
+    sample bias" for the measured numbers.
     """
     by_language: dict[str, list[tuple[int, str]]] = defaultdict(list)
     for path, size in files:
@@ -290,11 +259,8 @@ def _load_source(name: str, cap: int | None) -> list[CorpusRow]:
     if effective_cap is not None and effective_cap < len(ds):
         ds = ds.shuffle(seed=CORPUS_SAMPLE_SEED)
 
-    # Shuffle-then-filter-then-stop, rather than shuffle-then-cap-then-filter: a meaningful
-    # fraction of SWE-smith rows have a genuinely empty problem_statement (confirmed by direct
-    # inspection — synthetic mutation tasks with no generated NL description), so capping BEFORE
-    # filtering would silently under-sample. This guarantees up to `effective_cap` non-empty rows
-    # whenever that many exist in the dataset, at the cost of a full pass when a cap is set.
+    # Shuffle-then-filter-then-stop, not shuffle-then-cap-then-filter: some SWE-smith rows have a
+    # genuinely empty problem_statement, so capping before filtering would silently under-sample.
     rows: list[CorpusRow] = []
     seen_ids: set[str] = set()
     skipped_no_id = 0

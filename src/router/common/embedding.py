@@ -1,14 +1,7 @@
-"""Text preprocessing + encoding — shared by the pipeline (batch corpus embedding) and, once
-implemented, the runtime (single-query embedding). Kept as one module rather than a
-preprocess/embed split: preprocessing only exists to feed encoding, no caller needs one without
-the other, and both must always agree on the exact same rule (see `prepare_embedding_input`'s
-docstring) — one file makes that impossible to drift apart by construction.
+"""Text preprocessing + encoding, shared by the pipeline (batch corpus embedding) and the runtime
+(single-query embedding via `embed_one`) so both always agree on the exact same rule.
 
-No server, no HTTP call — the encoder runs in-process via sentence-transformers. That was a
-deliberate choice for the pipeline's batch corpus embedding, and
-applies equally to the runtime once it exists: embedding one live prompt is just `embed_texts`
-called with a one-element list, so there is no separate runtime-specific embedding path to build
-or keep in sync with this one.
+No server, no HTTP call — the encoder runs in-process via sentence-transformers.
 """
 from __future__ import annotations
 
@@ -40,22 +33,13 @@ def prepare_embedding_input(text: str, max_chars: int) -> str:
     return normalized[:max_chars]
 
 
-# Measured empirically on this CPU-only setup: batch_size=32 spikes attention-matrix memory hard
-# enough on this corpus's longer documents (up to 8000 chars / ~2000 tokens post-truncation) to
-# get the process SIGKILL'd. batch_size=4 was both the safest AND fastest of the sizes tried
-# (4/8/12 all measured; 4 won on both memory and wall-clock — larger batches pay more in padding
-# waste across a wide length distribution than they gain in vectorization on CPU).
+# Measured empirically — see docs/engineering-notes.md, "Embedding batch size".
 DEFAULT_BATCH_SIZE = 4
 
 
 @functools.lru_cache(maxsize=2)
 def _load_encoder(model_id: str):
-    """Memoised per model id so a process that calls embed_texts/embed_one repeatedly (the
-    runtime, or a pipeline command run in a loop) pays the load cost once, not per call. maxsize=2
-    rather than 1: nothing in this codebase needs more than one model loaded at a time, but a
-    fixed small cap costs nothing and avoids a hard "you may only ever load one model" assumption
-    baked into the cache itself.
-    """
+    """Memoised per model id so repeated calls to embed_texts/embed_one pay the load cost once."""
     # Deferred import: sentence-transformers (and the torch it pulls in) is heavy: only pay for it
     # when actually embedding, not on every CLI invocation (e.g. `cluster`, which never needs it).
     from sentence_transformers import SentenceTransformer

@@ -31,11 +31,8 @@ logger = logging.getLogger(__name__)
 
 DOCKER_TIMEOUT_SECONDS = 300  # image pull (if not cached) + container run
 
-# Bounds how many distinct pulled images stay resident at once (see touch_image). Measured
-# swe-smith image size is ~3.2-3.5GB, so 15 caps disk at roughly 50GB regardless of how long a run
-# goes or how many distinct repos it touches — comfortably inside a typical dev/CI disk budget,
-# while still large enough to keep a task's image warm across the reference-then-null passes
-# validate-graders runs in quick succession (the case measured to otherwise double every pull).
+# Bounds how many distinct pulled images stay resident at once (see touch_image). See
+# docs/engineering-notes.md, "Dockerexec image cache sizing".
 _MAX_CACHED_IMAGES = 15
 _recently_used_images: OrderedDict[str, None] = OrderedDict()
 
@@ -86,24 +83,19 @@ def pytest_collect_then_run(
 ) -> str:
     """Shared by swegym.py and swesmith.py's `_pytest_script` — both pass every declared
     FAIL_TO_PASS/PASS_TO_PASS node id to pytest in a single batch, and pytest fails the WHOLE
-    invocation (exit 4 "usage error" / 5 "no tests collected") if even one id can't be collected.
-    Confirmed live this session against real SWE-Gym rows: `pandas-56051` lost all 122
-    discriminating tests over 4 bad ids, `dvc-4011` lost all 30 over 1 — a single malformed id
-    (non-ASCII, or truncated mid-value at an embedded comma) costing an otherwise-fully-gradeable
-    task its entire signal.
+    invocation (exit 4 "usage error" / 5 "no tests collected") if even one id can't be collected,
+    losing all signal for the task over one bad id. See docs/engineering-notes.md, "Pytest
+    collection mismatch (swegym/swesmith)".
 
     Splits into an explicit collect-then-execute shape instead of "run for real, retry on
-    failure" so the potentially-slow execution step runs AT MOST ONCE, by construction — a
-    `--collect-only` pass can never execute a test body, so it's unconditionally cheap regardless
-    of suite size (confirmed live: 0.04s against a real 3,272-id pandas suite) — rather than
-    depending on an assumption about pytest's own internal error-ordering:
+    failure" so the potentially-slow execution step runs at most once, by construction — a
+    `--collect-only` pass can never execute a test body, so it's cheap regardless of suite size:
 
     1. `--collect-only` against every declared id.
     2. Check each id individually against that pass's own `ERROR: not found: <repo_dir>/<id>`
-       lines (confirmed exact format live) — an EXACT full-line match (`grep -x`), not a substring
-       one, since a substring match would let one valid id be wrongly excluded just for being a
-       literal prefix of a different, genuinely-bad id's line (the same class of collision
-       `multiswerl.py`'s Go test-name matching was anchored against earlier this session).
+       lines — an exact full-line match (`grep -x`), not a substring one, since a substring match
+       would let one valid id be wrongly excluded just for being a literal prefix of a different,
+       genuinely-bad id's line.
     3. If every id turns out uncollectable, report HARNESS immediately — no point invoking pytest
        again on an empty set.
     4. Otherwise run the REAL pytest pass exactly once, against only the survivors. Its own exit
@@ -120,19 +112,16 @@ def pytest_collect_then_run(
         f"readarray -t IDS < {ids_file}\n"
         # Collection must run from the SAME cwd (repo_dir) and env (conda_activate) as the real
         # execution pass below — pytest resolves relative node-id args against getcwd() into the
-        # absolute form its own "ERROR: not found: <path>" line reports (confirmed live: the
-        # printed path was `/testbed/...` when collected from inside `/testbed`), so a mismatched
-        # cwd here would make every id in step 2 below fail to match, silently excluding
-        # everything.
+        # absolute form its own "ERROR: not found: <path>" line reports, so a mismatched cwd here
+        # would make every id in step 2 below fail to match, silently excluding everything.
         f'{conda_activate} && cd {repo_dir} && python -m pytest --collect-only -q "${{IDS[@]}}" > {collect_log} 2>&1\n'
         f"> {valid_file}\n"
         f'for id in "${{IDS[@]}}"; do\n'
-        # pytest reports an unresolvable id one of two ways, confirmed live for both: "not found:
-        # <repo_dir>/<id>" (absolute path — the FILE exists, the specific test/class within it
-        # doesn't) or "file or directory not found: <id>" (relative, id exactly as given — the
-        # file itself doesn't exist). Both must be checked; the first synthetic test of this
-        # helper (a made-up file path) hit only the second form and would have silently kept a
-        # genuinely uncollectable id as "valid" if only the first were checked.
+        # pytest reports an unresolvable id one of two ways: "not found: <repo_dir>/<id>"
+        # (absolute path — the FILE exists, the specific test/class within it doesn't) or "file or
+        # directory not found: <id>" (relative, id exactly as given — the file itself doesn't
+        # exist). Both must be checked, or a genuinely uncollectable id can be silently kept as
+        # "valid".
         f'  if grep -qxF "ERROR: not found: {repo_dir}/$id" {collect_log} || '
         f'grep -qxF "ERROR: file or directory not found: $id" {collect_log}; then :; '
         f'else echo "$id" >> {valid_file}; fi\n'
@@ -161,12 +150,9 @@ def apply_patch_or_fail_cmd(nonce: str, patch_path: str, fail_detail: str = "can
     """`git apply <patch_path> || FAIL`, folding git's own real error message into the detail
     instead of discarding it for a static string. Used for the CANDIDATE's own patch only —
     test_patch/bug_patch/gold-patch applies stay on their existing static HARNESS messages (a
-    dataset/harness problem by definition regardless of git's specific error there, not something
-    worth the extra detail for). A candidate's apply failure previously gave no way to tell "the
-    diff is malformed" from "the diff doesn't match this baseline" from any other cause after the
-    fact — confirmed this session investigating Luna's Multi-SWE-RL failures that the stored
-    `solution` alone (even before it hits the CSV's own truncation cap) isn't enough to diagnose
-    why without re-running a fresh container by hand.
+    dataset/harness problem regardless of git's specific error there). Without the real error, a
+    candidate's apply failure gives no way to tell "the diff is malformed" from "the diff doesn't
+    match this baseline" after the fact.
 
     `2>{err_file}` isolates git's stderr from the rest of the script's own stdout — `tr`+`cut`
     collapses it to one line and caps it at 500 chars, matching `report_cmd`'s own single-line
@@ -244,13 +230,9 @@ def run(
             check=False,
         )
     except subprocess.TimeoutExpired:
-        # Killing the `docker run` CLIENT does NOT stop the container — the daemon owns its
-        # lifecycle, so without this explicit kill the container runs to completion regardless of
-        # our timeout, burning CPU for the rest of the calibration run and slowing down every
-        # other task still to be graded. Confirmed empirically: an 8s-timeout call returned
-        # `error_timeout` on schedule while `docker ps` still showed its container `Up` and
-        # running. The bounded-CPU cost of a runaway container is exactly the kind of thing that
-        # turns a long grading run into an unpredictable one.
+        # Killing the `docker run` CLIENT does not stop the container — the daemon owns its
+        # lifecycle, so without this explicit kill a timed-out container keeps running in the
+        # background. See docs/engineering-notes.md, "Dockerexec timeout kill".
         kill_container(container_name)
         return GradeResult(outcome="error_timeout", detail=f"exceeded {timeout_seconds}s")
     except FileNotFoundError:

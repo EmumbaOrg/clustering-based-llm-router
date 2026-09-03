@@ -23,9 +23,8 @@ def _task(**row_overrides) -> Task:
         "s2p_tests": {},
         "p2p_tests": {
             "TestDisableBindValidation": {"fix": "PASS", "test": "PASS", "run": "PASS"},
-            # A real, table-driven subtest name with regex-special characters (quotes, parens,
-            # pipe) — confirmed live against a real prometheus instance this session: matching
-            # just the top-level name exercises this correctly with zero escaping needed.
+            # A table-driven subtest name with regex-special characters (quotes, parens, pipe) —
+            # matching just the top-level name needs zero escaping.
             'TestPostingsForMatchers/n!~"(1|2.5)"': {"fix": "PASS", "test": "PASS", "run": "PASS"},
         },
     }
@@ -84,13 +83,9 @@ def test_grade_calls_dockerexec_run_and_touches_the_image(monkeypatch):
     assert result.outcome == "pass"
     assert captured["image"] == multiswerl._image(task)
     assert touched == [multiswerl._image(task)]
-    # A persistent Go build cache is what makes repeated same-commit compiles (reference/null/
-    # candidate, and once per model in a real calibrate run) fast — see the module docstring's
-    # measured 34x warm-cache speedup.
-    # Regression guard: mounting an empty GOMODCACHE would wipe the image's own pre-populated
-    # module cache (confirmed directly: 214MB-1.3GB already present) for zero benefit — see the
-    # module docstring for the measured ~50s network-redownload cost this avoids. Only GOCACHE
-    # (which every image starts genuinely empty, confirmed) is mounted.
+    # A persistent Go build cache makes repeated same-commit compiles (reference/null/candidate,
+    # and once per model in a real calibrate run) fast — see the module docstring. Only GOCACHE is
+    # mounted: mounting an empty GOMODCACHE would wipe the image's own pre-populated module cache.
     assert captured["volumes"] == {str(multiswerl.GOCACHE_HOST_DIR): multiswerl._GOCACHE_CONTAINER_DIR}
     assert "/go/pkg/mod" not in captured["volumes"].values()
 
@@ -160,12 +155,11 @@ def test_run_test_stage_reports_pass_fail_and_harness_off_per_test_pass_fail_lin
     assert "go test ./..." in script
     assert dockerexec.report_cmd("nonce", "FAIL", "mystage tests failed") in script
     assert dockerexec.report_cmd("nonce", "HARNESS", "no mystage tests matched the expected names") in script
-    # Regression guard: the overall exit code and a blanket `=== RUN` count were both confirmed
-    # live this session to misattribute failures unrelated to the actual target test (an unrelated
-    # package failing to compile elsewhere in the module; an unrelated sibling subtest panicking
-    # under the same top-level name) — the script must instead check each target test's OWN
-    # `--- PASS`/`--- FAIL` line, via patterns read from a file (grep -F -f), never interpolated
-    # into the shell command directly (real test names can contain quotes/parens/etc).
+    # The overall exit code and a blanket `=== RUN` count can misattribute failures unrelated to
+    # the actual target test (an unrelated package failing to compile; a sibling subtest panicking
+    # under the same top-level name) — the script must check each target test's OWN `--- PASS`/
+    # `--- FAIL` line, via patterns read from a file (grep -F -f), never interpolated into the
+    # shell command directly (real test names can contain quotes/parens/etc).
     assert "grep -F -o -f" in script
     # " (" anchor (not a bare name) — Go test names routinely share prefixes (e.g. TestFoo/TestFoo2)
     # and a substring match without this would let one test's PASS line get counted for another's.
@@ -184,10 +178,9 @@ def test_run_test_stage_builds_a_safe_anchored_pattern_with_no_raw_special_chara
 
 
 def test_run_test_stage_check_names_use_the_full_untruncated_name_not_the_run_pattern():
-    # A repo whose tests use Go's "one top-level test, many named subtests" pattern needs the
-    # FULL subtest name checked, even though `-run` only ever sees the truncated top-level name —
-    # confirmed live this session (jesseduffield/lazygit's `TestIntegration` fans out to hundreds
-    # of subtests; only the full name tells our target subtest's result apart from a sibling's).
+    # A repo whose tests use Go's "one top-level test, many named subtests" pattern needs the FULL
+    # subtest name checked, even though `-run` only ever sees the truncated top-level name — only
+    # the full name tells our target subtest's result apart from a sibling's.
     script = multiswerl._run_test_stage(
         _task(), "nonce", ["TestIntegration"], ["TestIntegration/foo/bar"], "mystage", on_pass=""
     )
@@ -211,10 +204,9 @@ def test_is_n2p_only_discriminating_set():
 
 
 def test_discriminating_stage_script_labels_the_n2p_only_case_distinctly_for_go():
-    # Confirmed live this session (istio, hugo, clap, etc.): most REAL candidates' "no
-    # discriminating tests matched" misses trace to this n2p-only shape, not a genuine harness
-    # gap — labeling it distinctly makes that visible in the CSV without re-deriving it by hand.
-    # Outcome classification (still error_harness) is unaffected — only the detail string changes.
+    # Most "no discriminating tests matched" misses trace to this n2p-only shape, not a genuine
+    # harness gap — labeling it distinctly makes that visible in the CSV. Outcome classification
+    # (still error_harness) is unaffected — only the detail string changes.
     task = _task(f2p_tests={}, s2p_tests={}, n2p_tests={"TestNew": {"fix": "PASS", "test": "FAIL", "run": "NONE"}})
     script = multiswerl._discriminating_stage_script(task, "nonce", on_pass="NEXT\n")
     assert (
@@ -552,8 +544,7 @@ def test_cargo_test_stage_builds_an_exact_multi_name_invocation():
 
 def test_cargo_test_stage_sums_passed_and_failed_across_every_test_result_line():
     # cargo test prints one "test result: ok. N passed; M failed; ..." line per test binary/crate
-    # target — confirmed live this session (rusqlite prints 4+ such lines per invocation) — so the
-    # "did anything actually run" guard must sum across all of them, not trust just one.
+    # target — the "did anything actually run" guard must sum across all of them, not trust just one.
     script = multiswerl._cargo_test_stage(_rust_task(), "nonce", ["a::b"], "discriminating", on_pass="")
     assert "grep -oE '[0-9]+ passed; [0-9]+ failed'" in script
     assert "awk '{sum += $1 + $3} END {print sum+0}'" in script

@@ -2,20 +2,12 @@
 selection across a lambda sweep, plus always-strongest / always-cheapest / oracle baselines — the
 metrics from spec §7.
 
-Holdout tasks are actually EXECUTED against every configured model (that's what "held out of
-calibration" means — unseen during calibration, but they still need real graded outcomes to score
-against). Routing decisions themselves use ONLY the calibration profiles (predicted_error) to pick
-a model — never anything computed from the holdout run — matching how the live router would only
-ever have calibration data to route on, not a peek at how things turn out.
+Holdout tasks are actually EXECUTED against every configured model to get real graded outcomes,
+but routing decisions themselves use ONLY the calibration profiles (predicted_error) — never
+anything computed from the holdout run — matching what the live router has available.
 
-Currently dormant: select_tasks() no longer produces a "holdout" split (see
-config/calibration.yaml's comment on the removed holdout_fraction), so `holdout` below is always
-empty and every metric in this module reports 0/empty until this is rewired against a real,
-separate evaluation benchmark per spec §7.
-
-With a single non-control candidate model (this pass's dry-run state), every baseline and every
-lambda collapses to that one model by construction — the point is that the machinery runs and the
-numbers reconcile, not that the curves are informative yet.
+Currently dormant: select_tasks() no longer produces a "holdout" split, so `holdout` below is
+always empty and every metric here reports 0/empty until this is rewired against a real benchmark.
 """
 from __future__ import annotations
 

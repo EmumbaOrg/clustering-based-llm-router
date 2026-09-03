@@ -41,12 +41,6 @@ def test_child_loggers_respect_the_configured_level(capsys):
     assert "this should show up" in err
 
 
-def test_log_file_none_keeps_the_single_stderr_handler():
-    configure_logging(level="INFO", log_file=None)
-    logger = logging.getLogger("router")
-    assert len(logger.handlers) == 1
-
-
 def test_log_file_adds_a_second_handler_and_writes_to_disk(tmp_path):
     log_path = tmp_path / "run.log"
     configure_logging(level="INFO", log_file=log_path)

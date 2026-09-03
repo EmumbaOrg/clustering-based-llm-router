@@ -62,15 +62,8 @@ class GradeResult:
 
 # Every grading script template (bigcodebench.py, ds1000.py) writes its sentinel as
 # `RESULT_NONCE_PLACEHOLDER:` (this literal text) — `run_graded_script` substitutes it with a fresh
-# `uuid4().hex` per call before the script ever runs, exactly mirroring why `dockerexec.py`'s
-# Docker-based graders use a per-call nonce: candidate code here runs via `exec()` in the SAME
-# process as the grading script (see module docstring's isolation note), so it's just as capable of
-# printing arbitrary text as an arbitrary Docker container's candidate patch is. Confirmed
-# empirically this session that the OLD fixed `RESULT:` prefix was exploitable — a candidate
-# solution that merely contains `print("RESULT: PASS")` short-circuited the whole grading run to
-# `pass` before the real test suite ever ran, because the old code returned on the FIRST matching
-# line rather than requiring anything unforgeable. A nonce generated fresh per call and unknown to
-# the candidate ahead of time closes that off the same way it already does for Docker grading.
+# `uuid4().hex` per call before the script ever runs, mirroring why `dockerexec.py`'s Docker-based
+# graders use a per-call nonce. See docs/engineering-notes.md, "Base grading sentinel nonce".
 NONCE_PLACEHOLDER = "NONCE_PLACEHOLDER"
 
 

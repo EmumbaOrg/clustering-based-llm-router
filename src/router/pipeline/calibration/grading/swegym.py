@@ -1,26 +1,17 @@
 """Grader for SWE-Gym — Docker-based, built on `dockerexec.py`'s sentinel protocol, mirroring
 `swesmith.py`'s shape closely but with different row semantics.
 
-Confirmed empirically this session (Docker Hub API + real `docker pull`/`docker run` against
-`getmoto/moto` and `pandas-dev/pandas` instances) rather than assumed from the row schema alone —
-correcting an earlier stub docstring that concluded SWE-Gym needed hand-resolving 161 distinct
-`version` strings against SWE-bench's own environment-setup constants:
+Confirmed empirically (Docker Hub API + real `docker pull`/`docker run` against `getmoto/moto` and
+`pandas-dev/pandas` instances) rather than assumed from the row schema alone:
 
 1. **Prebuilt per-instance Docker images exist and are public**, under Docker Hub namespace
    `xingyaoww/sweb.eval.x86_64.{instance_id}` with `__` replaced by `_s_` (dunders aren't allowed
    in Docker Hub image names) — confirmed for every one of the 11 repos in this dataset. SWE-Gym
    rows don't carry an `image_name` field the way swe-smith's do, so the tag is constructed instead
    of read; see `_image`.
-2. **No repo-specific `install`/environment-setup step is needed at grade time.** The official
-   harness re-runs an `install` command per (repo, version) at eval time, but every prebuilt image
-   here already has its package editable-installed — confirmed for `getmoto/moto` (`import moto`
-   resolves straight to `/testbed/moto/__init__.py`) and, more demandingly, for
-   `pandas-dev/pandas`: a real instance whose gold patch touched `meson.build` files still passed
-   its test after nothing but `git apply` + `python -m pytest`, because pandas' meson-python
-   editable install **rebuilds automatically on next import** when the build graph changes — no
-   explicit install command required. This is a genuine simplification over the design this was
-   originally planned with, discovered by testing the worst case (a build-config-touching patch)
-   rather than assuming a plain code patch would be representative.
+2. **No repo-specific `install`/environment-setup step is needed at grade time** — every prebuilt
+   image already has its package editable-installed. See docs/engineering-notes.md, "SWE-Gym /
+   pandas meson rebuild".
 3. **Working dir is always `/testbed`, conda env is always named `testbed`** — same universal
    convention as swesmith's images, though the exact activation script's path differs (confirmed
    directly, not assumed identical): `source /opt/miniconda3/bin/activate`, not
@@ -79,20 +70,9 @@ def _setup_script(task: Task, nonce: str) -> str:
 
 
 def _pytest_script(task: Task, nonce: str) -> str:
-    """Run the test suite and report PASS/FAIL off its exit code.
-
-    One confirmed exception, exit codes 4/5 (pytest's own "usage error" / "no tests collected"):
-    a small fraction of rows record a `FAIL_TO_PASS`/`PASS_TO_PASS` node id pytest can't collect
-    as given — confirmed live this session as TWO distinct causes, not just one: the originally
-    identified ~2.8%-of-dataset non-ASCII-parametrize mismatch (a literal emoji recorded at
-    dataset-collection time vs. the grading image's installed pytest escaping it when generating
-    its own node ids), AND, found investigating `pandas-56051`/`pandas-56594`/`pandas-56522`/
-    `getmoto-6107`, ids truncated mid-value at an embedded comma (e.g.
-    `test_groups_repr_truncates[4-{0:` — missing its closing `]`), a dataset-construction bug
-    unrelated to character encoding. Either way it's a dataset-side mismatch, not a candidate's
-    fault — `dockerexec.pytest_collect_then_run` handles both, and additionally recovers the
-    other, perfectly valid ids in the same batch instead of losing the whole task's signal to one
-    bad id (confirmed live: `pandas-56051` lost all 122 ids over just 4 bad ones)."""
+    """Run the test suite and report PASS/FAIL off its exit code. `dockerexec.pytest_collect_then_run`
+    handles the case where some `FAIL_TO_PASS`/`PASS_TO_PASS` node ids can't be collected as given —
+    see docs/engineering-notes.md, "Pytest collection mismatch (swegym/swesmith)"."""
     return dockerexec.pytest_collect_then_run(
         node_ids=task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"],
         nonce=nonce,

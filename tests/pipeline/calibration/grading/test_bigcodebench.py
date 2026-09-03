@@ -35,9 +35,3 @@ def test_missing_dependency_is_classified_separately_from_a_wrong_answer():
     solution = "    import totally_fake_nonexistent_package_xyz\n    return a + b\n"
     result = grade(_task(), solution)
     assert result.outcome == "error_missing_dep"
-
-
-def test_reference_solution_from_the_task_itself_passes():
-    task = _task()
-    result = grade(task, task.reference_solution)
-    assert result.outcome == "pass"

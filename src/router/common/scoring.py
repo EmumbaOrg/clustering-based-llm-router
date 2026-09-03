@@ -1,9 +1,7 @@
 """The routing-score arithmetic: predicted_error + lambda * normalised_cost -> selected model.
 
-Shared between ../pipeline/evaluate.py (which replays this over a holdout split for the
-lambda-sweep report) and ../runtime (which applies it to a single live request) — both must use
-the exact same formula and tie-break rule, or the offline evaluation numbers stop describing what
-the runtime actually does.
+Shared between ../pipeline/evaluate.py and ../runtime so both use the exact same formula and
+tie-break rule — otherwise offline evaluation stops describing what the runtime actually does.
 """
 from __future__ import annotations
 
@@ -13,9 +11,8 @@ from .config import ModelConfig
 
 
 def static_price_per_1m(model: ModelConfig) -> float:
-    """$ per 1M tokens (input + output). Config stores $ per 1k, hence *1000. Min-max
-    normalisation is invariant under this scaling, so the unit choice can't change any routing
-    decision — converting anyway keeps this figure comparable to published provider pricing."""
+    """$ per 1M tokens (input + output). Config stores $ per 1k, hence *1000 — min-max
+    normalisation is scale-invariant so this is purely for comparability with published pricing."""
     return (model.cost_input + model.cost_output) * 1000
 
 

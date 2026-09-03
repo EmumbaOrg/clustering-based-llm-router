@@ -39,10 +39,8 @@ def test_image_lowercases_mixed_case_instance_ids():
 
 
 def test_pytest_script_passes_every_declared_node_id_to_the_shared_collect_then_run_helper():
-    # Space-containing-id safety (the property `_node_ids` used to guarantee via shell-quoting,
-    # before it was replaced by dockerexec.pytest_collect_then_run's file-based mechanism) is
-    # covered directly at that shared helper in test_dockerexec.py — this just confirms the right
-    # ids/repo_dir/conda env are threaded through from a real task row.
+    # Confirms the right ids/repo_dir/conda env are threaded through from a real task row;
+    # space-containing-id safety itself is covered at dockerexec.pytest_collect_then_run.
     script = swegym._pytest_script(_task(), "nonce")
     assert _decoded_ids_file_content(script) == (
         "tests/test_x.py::test_one\ntests/test_x.py::test_two\ntests/test with space.py::test_three\n"
@@ -148,12 +146,9 @@ def test_pytest_script_reports_pass_and_fail_off_the_same_exit_code_check():
 
 
 def test_pytest_script_reports_harness_for_uncollectable_node_ids(monkeypatch):
-    # Regression test: a real validate-graders run against getmoto__moto-6308 found a
-    # PASS_TO_PASS id with a literal emoji that pytest (in that image) can't collect as given —
-    # pytest's own exit codes 4 (usage error) / 5 (no tests collected) must map to HARNESS, not
-    # FAIL, so a dataset/pytest-version mismatch can't spuriously count against a candidate. Now
-    # handled by the shared dockerexec.pytest_collect_then_run (see test_dockerexec.py for the
-    # collect-then-exclude mechanism itself) — this just confirms swegym.py wires into it.
+    # An uncollectable node id (pytest exit 4/5) must map to HARNESS, not FAIL, so a
+    # dataset/pytest-version mismatch can't spuriously count against a candidate. Confirms
+    # swegym.py wires into the shared dockerexec.pytest_collect_then_run mechanism.
     script = swegym._pytest_script(_task(), "nonce")
     assert dockerexec.report_cmd("nonce", "HARNESS", "pytest could not collect the specified test ids") in script
     assert "PYTEST_EXIT -eq 4" in script

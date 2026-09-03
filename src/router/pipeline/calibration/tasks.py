@@ -5,9 +5,8 @@ post-shuffle indices, so a task can be referenced across separate runs without d
 order.
 
 Only the gradeable sources (see config/calibration.yaml) are covered. swe-smith, swe-gym, and
-multi-swe-rl's Go/JS/TS/Java/Rust slices are all wired below — each Docker grader was validated against real
-instances before its loader was added (see grading/swesmith.py, grading/swegym.py,
-grading/multiswerl.py).
+multi-swe-rl's Go/JS/TS/Java/Rust slices are all wired below (see grading/swesmith.py,
+grading/swegym.py, grading/multiswerl.py).
 """
 from __future__ import annotations
 
@@ -79,17 +78,9 @@ def _ds1000_tasks() -> list[Task]:
     return tasks
 
 
-# select_tasks() calls load_gradeable_tasks(source) for every gradeable source on every
-# calibrate/evaluate/validate-graders invocation (it needs the real Task/row data — the
-# task-cluster-map only carries task_id/source/cluster_id) — loading and filtering all ~59K
-# SWE-smith rows for that costs real time each run, so this is capped well below the full dataset.
-# Matches corpus.py's own SWE_SMITH_SAMPLE_SIZE (also 20,000, also seeded 42, also filtering the
-# same non-empty-problem_statement condition) DELIBERATELY: same seed + same dataset + same filter
-# means this walks the identical shuffled sequence corpus.py used to build task-cluster-map.json's
-# swe-smith cluster labels, so raising this to match closes the gap between them — previously
-# capped lower (5,000) than the corpus's own 20,000, which meant most cluster-labeled swe-smith
-# rows had no matching gradeable task at all (confirmed live: ~15,000 of the ~15,940
-# "no matching gradeable task" entries in a real run traced to exactly this mismatch).
+# Matches corpus.py's own SWE_SMITH_SAMPLE_SIZE (same seed 42, same filter) so this loader walks
+# the identical shuffled sequence used to build task-cluster-map.json's swe-smith cluster labels —
+# see docs/engineering-notes.md, "SWE-smith task pool cap".
 SWESMITH_TASK_POOL_CAP = 20_000
 _SWESMITH_POOL_SEED = 42
 
@@ -136,22 +127,15 @@ def _swegym_tasks() -> list[Task]:
                 task_id=task_id,
                 source="swe-gym",
                 prompt=row["problem_statement"],
-                reference_solution="",  # unused: calibrate.py special-cases swe-gym to
-                # swegym.grade_reference/grade_null, same reasoning as swe-smith above.
+                reference_solution="",  # unused for this source — see swe-smith's loader above.
                 row=dict(row),
             )
         )
     return tasks
 
 
-# Multi-SWE-RL rows carry three enormous per-test execution-log fields (`fix_patch_result`,
-# `run_result`, `test_patch_result`) plus `fixed_tests`, and NOTHING in the grading path reads any
-# of them — measured at 796MB across the 1,675 Go rows, i.e. 57% of all retained row bytes, held in
-# RAM for the entire run for nothing. `title`/`body`/`resolved_issues` are consumed into
-# `Task.prompt` at load time (see corpus.py's _extract_multi_swe_rl_text) and aren't needed after
-# that either. Keeping only the fields grading/repo_context actually touch is a pure memory win
-# with no behavior change; each entry below names its reader so this stays checkable as the grader
-# evolves (test_tasks.py exercises the real accessors against a trimmed row).
+# Keeps only the fields grading/repo_context actually touch — see docs/engineering-notes.md,
+# "Multi-SWE-RL field trim". Each entry below names its reader so this stays checkable.
 _MULTI_SWE_RL_GRADED_FIELDS = frozenset({
     "instance_id",  # not read by the grader — kept as the row's own stable id, and only ~21 B/row
     "org", "repo", "number",  # grading/multiswerl.py: _image / _repo_dir
@@ -201,8 +185,7 @@ def _multi_swe_rl_tasks() -> list[Task]:
                         task_id=task_id,
                         source="multi-swe-rl",
                         prompt=text,
-                        reference_solution="",  # unused: calibrate.py special-cases multi-swe-rl to
-                        # multiswerl.grade_reference/grade_null, same reasoning as swe-smith/swe-gym above.
+                        reference_solution="",  # unused for this source — see swe-smith's loader above.
                         row={k: v for k, v in row.items() if k in _MULTI_SWE_RL_GRADED_FIELDS},
                     )
                 )
