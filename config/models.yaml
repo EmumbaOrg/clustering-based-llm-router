@@ -109,6 +109,20 @@ models:
     context_window: 400000
     max_tokens: 128000
 
+  # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna/gpt-5-nano) ──
+  # Codex-tuned coding model. Verified live via `pi --list-models codex`: provider=openai,
+  # context=400K, max-out=128K, matching the values below exactly. cost_input/cost_output are
+  # OpenAI's own published $1.75/$14.00 per 1M tokens (standard mode, not the 2x "fast" mode),
+  # checked live against developers.openai.com/api/docs/pricing and cross-verified against
+  # OpenRouter's own published per-token price for openai/gpt-5.3-codex — both agreed exactly.
+  - model_id: gpt-5.3-codex
+    provider: openai
+    runner: pi
+    cost_input: 0.00175
+    cost_output: 0.014
+    context_window: 400000
+    max_tokens: 128000
+
   # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
   # Commented out so calibration doesn't attempt them. Uncomment as keys become available.
   # - model_id: gpt-5.4-nano
