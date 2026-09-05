@@ -521,13 +521,24 @@ def _solutions_dir(details_csv_path: Path) -> Path:
     return details_csv_path.parent / "solutions" / details_csv_path.stem
 
 
+# `run_and_grade`'s pi branch falls back to `run_result.raw_response` (Pi's raw `--mode json`
+# stdout, e.g. `{"type":"session",...}` one JSON object per line) whenever no solution could be
+# extracted — see its own docstring. That raw stdout is never mistakable for a real diff/code
+# solution, so it's used here purely to pick a filename extension that doesn't claim to be a diff
+# when it isn't. Never affects grading, which already treats this text identically either way.
+_RAW_PI_EVENT_STREAM_PREFIX = '{"type":'
+
+
 def _persist_full_solution(solutions_dir: Path, task_id: str, model_id: str, solution: str) -> None:
     """Only called when `_csv_preview` truncated `solution` — see docs/engineering-notes.md,
-    "Large solution truncation"."""
+    "Large solution truncation". Uses a `.raw.txt` extension instead of `.diff` when `solution` is
+    actually Pi's raw, unparsed event-stream stdout rather than a real diff/code solution, so
+    browsing this directory doesn't show a `.diff` file that isn't one."""
     solutions_dir.mkdir(parents=True, exist_ok=True)
     safe_task_id = _UNSAFE_FILENAME_CHARS.sub("_", task_id)
     safe_model_id = _UNSAFE_FILENAME_CHARS.sub("_", model_id)
-    (solutions_dir / f"{safe_task_id}__{safe_model_id}.diff").write_text(solution, encoding="utf-8")
+    ext = "raw.txt" if solution.lstrip().startswith(_RAW_PI_EVENT_STREAM_PREFIX) else "diff"
+    (solutions_dir / f"{safe_task_id}__{safe_model_id}.{ext}").write_text(solution, encoding="utf-8")
 
 
 class _CalibrationDetailsWriter:

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import re
 import shlex
 import subprocess
 from collections import OrderedDict
@@ -146,7 +147,21 @@ def pytest_collect_then_run(
     )
 
 
-def apply_patch_or_fail_cmd(nonce: str, patch_path: str, fail_detail: str = "candidate patch failed to apply") -> str:
+_DIFF_GIT_HEADER_RE = re.compile(r"^diff --git a/(\S+) b/\S+", re.MULTILINE)
+
+
+def diff_touched_paths(diff_text: str) -> list[str]:
+    """Every file path a unified diff touches, parsed from its `diff --git a/<path> b/<path>`
+    headers. Used to build `apply_patch_or_fail_cmd`'s `exclude_paths` — see swegym.py/
+    multiswerl.py's `grade()`, which exclude any path the task's own `test_patch` already owns from
+    the candidate's patch."""
+    return sorted(set(_DIFF_GIT_HEADER_RE.findall(diff_text)))
+
+
+def apply_patch_or_fail_cmd(
+    nonce: str, patch_path: str, fail_detail: str = "candidate patch failed to apply",
+    exclude_paths: list[str] | None = None,
+) -> str:
     """`git apply <patch_path> || FAIL`, folding git's own real error message into the detail
     instead of discarding it for a static string. Used for the CANDIDATE's own patch only —
     test_patch/bug_patch/gold-patch applies stay on their existing static HARNESS messages (a
@@ -154,14 +169,27 @@ def apply_patch_or_fail_cmd(nonce: str, patch_path: str, fail_detail: str = "can
     candidate's apply failure gives no way to tell "the diff is malformed" from "the diff doesn't
     match this baseline" after the fact.
 
+    `exclude_paths` (swegym.py/multiswerl.py only, via `--exclude=<path>`) skips any hunk targeting
+    a file the task's own `test_patch` already touches. Confirmed real: an agent's own worktree
+    never has `test_patch` applied (only swe-smith's bug injection gets that treatment — see
+    docs/engineering-notes.md, "Candidate diffs colliding with test_patch"), so a candidate's diff
+    is captured against a file state that no longer matches once grading applies `test_patch` first
+    — reproduced live on real tasks (`checkstyle-6939`, `dask-10784`), both agent-authored hunks
+    landing in a file `test_patch` also rewrites. Confirmed separately across every gold fix in a
+    real run (76/76) that a correct fix never needs to touch a `test_patch` file, so excluding those
+    paths from the candidate's patch can never drop anything the fix actually required — this is
+    strictly a grading-time change; the agent's own worktree is never touched, so `test_patch`
+    (effectively the expected test assertions) is never exposed during solving.
+
     `2>{err_file}` isolates git's stderr from the rest of the script's own stdout — `tr`+`cut`
     collapses it to one line and caps it at 500 chars, matching `report_cmd`'s own single-line
     convention (an embedded newline would otherwise look like additional, unrelated output lines
     to `classify`'s line-by-line scan)."""
     err_file = "/tmp/apply_err.txt"
     prefix = sentinel(nonce)
+    exclude_flags = "".join(f" --exclude={shlex.quote(path)}" for path in (exclude_paths or []))
     return (
-        f"git apply {patch_path} 2>{err_file} || {{\n"
+        f"git apply{exclude_flags} {patch_path} 2>{err_file} || {{\n"
         f"  ERR=$(tr '\\n' ' ' < {err_file} | cut -c1-500)\n"
         f'  echo "{prefix}FAIL:{fail_detail}: $ERR"\n'
         "  exit 0\n"

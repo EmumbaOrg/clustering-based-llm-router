@@ -85,16 +85,22 @@ def _pytest_script(task: Task, nonce: str) -> str:
 def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -> GradeResult:
     """`solution` is a forward-apply unified diff — the shape a real candidate/agent produces,
     applied on top of the test-patched baseline. An inapplicable candidate diff is `fail` (the
-    model's own failure), not `error_harness`."""
+    model's own failure), not `error_harness`.
+
+    Excludes any path `test_patch` already touches from the candidate's own patch — see
+    `dockerexec.apply_patch_or_fail_cmd`'s docstring for why this is safe (no gold fix ever needs
+    those paths) and necessary (the agent's worktree never has `test_patch` applied, so a
+    same-file edit is captured against a baseline that no longer matches at grading time)."""
     if not solution.strip():
         return GradeResult(outcome="fail", detail="empty patch — bug remains unfixed")
 
     image = _image(task)
     nonce = uuid.uuid4().hex
+    exclude_paths = dockerexec.diff_touched_paths(task.row["test_patch"])
     script = (
         _setup_script(task, nonce)
         + f"{dockerexec.write_file_cmd(solution, '/tmp/candidate.patch')}\n"
-        + dockerexec.apply_patch_or_fail_cmd(nonce, "/tmp/candidate.patch")
+        + dockerexec.apply_patch_or_fail_cmd(nonce, "/tmp/candidate.patch", exclude_paths=exclude_paths)
         + _pytest_script(task, nonce)
     )
     try:

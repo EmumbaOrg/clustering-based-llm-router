@@ -184,6 +184,16 @@ def test_extract_diff_captures_a_newly_created_file(real_git_worktree):
     assert "+def fixed():" in diff
 
 
+def test_extract_diff_does_not_crash_on_non_utf8_content(real_git_worktree):
+    # Confirmed real: a calibration run crashed entirely (not just this one task) on
+    # `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xfc` from a repo with non-UTF-8
+    # content in its diff. 0xfc is 'ü' in latin-1 — not valid standalone UTF-8.
+    (real_git_worktree / "existing.py").write_bytes(b"value = 2  # caf\xfc\n")
+    diff = extract_diff(real_git_worktree)  # must not raise
+    assert diff is not None
+    assert "existing.py" in diff
+
+
 def test_extract_diff_preserves_the_trailing_newline_git_apply_requires(real_git_worktree):
     # A diff missing its trailing newline is rejected by `git apply` with "corrupt patch".
     (real_git_worktree / "existing.py").write_text("value = 2\n")

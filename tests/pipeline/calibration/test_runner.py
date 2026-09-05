@@ -5,7 +5,7 @@ import pytest
 from router.common.config import ModelConfig
 from router.pipeline.calibration import runner as runner_module
 from router.pipeline.calibration.grading.base import Task
-from router.pipeline.calibration.runner import run_pi
+from router.pipeline.calibration.runner import build_prompt, run_pi
 
 
 def _task() -> Task:
@@ -24,6 +24,17 @@ def _model() -> ModelConfig:
         model_id="m", provider="openai", runner="pi", cost_input=0, cost_output=0,
         context_window=0, max_tokens=0,
     )
+
+
+@pytest.mark.parametrize("source", ["swe-smith", "swe-gym", "multi-swe-rl"])
+def test_build_prompt_tells_the_agent_not_to_touch_test_files(source):
+    # No gold fix in a real run ever touches a test_patch file (confirmed 76/76, swe-gym +
+    # multi-swe-rl) — this is a courtesy nudge, not the real fix (see
+    # docs/engineering-notes.md, "Candidate diffs colliding with test_patch (swegym/multiswerl)"
+    # for the harness-side change that actually closes the gap regardless of what the model does).
+    task = Task(task_id="t", source=source, prompt="fix the bug", reference_solution="", row={})
+    prompt = build_prompt(task, has_repo_context=True, supports_tool_calls=True)
+    assert "test files" in prompt
 
 
 def test_run_pi_returns_the_failure_detail_on_a_nonzero_exit(monkeypatch):

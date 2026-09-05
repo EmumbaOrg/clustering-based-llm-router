@@ -207,13 +207,22 @@ def extract_diff(worktree: Path) -> str | None:
     every change an agent's edit/write tools made against the checked-out ref. Preferred over
     parsing the agent's text response: a tool-using agent's actual edits, not its prose description
     of them, are the ground truth for what changed."""
+    # errors="replace": a real calibration run crashed the ENTIRE process (not just this one task)
+    # on `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xfc` — some repo had a non-UTF-8
+    # encoded file (or binary-ish content) in its diff, and Python's default strict decoding under
+    # text=True has no tolerance for that. Replacing the undecodable bytes means that one task's
+    # diff may fail to `git apply` cleanly (same failure shape as any other malformed patch,
+    # already a known/handled outcome) — vastly preferable to losing every remaining task in the
+    # run to one repo's encoding.
     subprocess.run(
         ["git", "add", "-A", "-N", "."],
-        cwd=worktree, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+        cwd=worktree, capture_output=True, text=True, errors="replace",
+        timeout=GIT_TIMEOUT_SECONDS, check=False,
     )
     proc = subprocess.run(
         ["git", "diff"],
-        cwd=worktree, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+        cwd=worktree, capture_output=True, text=True, errors="replace",
+        timeout=GIT_TIMEOUT_SECONDS, check=False,
     )
     # Never apply .strip() to the returned diff text — see docs/engineering-notes.md, "git diff
     # needs its trailing newline". `.strip()` here is only used to test for "nothing changed."

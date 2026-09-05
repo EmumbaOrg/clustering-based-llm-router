@@ -518,6 +518,26 @@ def test_calibrate_models_persists_the_full_solution_when_the_csv_preview_would_
     assert persisted.read_text(encoding="utf-8") == huge_solution
 
 
+def test_calibrate_models_persists_a_raw_response_fallback_as_raw_txt_not_diff(monkeypatch, tmp_path):
+    # run_and_grade's pi branch falls back to Pi's raw --mode json stdout (starts with `{"type":`)
+    # when no solution could be extracted — that text isn't a real diff, so it must not get a
+    # `.diff` extension. See docs/engineering-notes.md, "Large solution truncation".
+    raw_event_stream = '{"type":"session","v":1}\n' + ("x" * calibrate_module._CSV_SOLUTION_MAX_CHARS)
+    monkeypatch.setattr(
+        calibrate_module, "run_and_grade",
+        lambda task, model, cfg: (GradeResult(outcome="error_harness"), raw_event_stream, None),
+    )
+    models = [_named_model("m1")]
+    selected = [_selected("t1", 0)]
+    details_path = tmp_path / "details.csv"
+
+    calibrate_module.calibrate_models(models, selected, _calibration_config(), details_csv_path=details_path)
+
+    persisted = tmp_path / "solutions" / "details" / "t1__m1.raw.txt"
+    assert persisted.read_text(encoding="utf-8") == raw_event_stream
+    assert not (tmp_path / "solutions" / "details" / "t1__m1.diff").exists()
+
+
 def test_calibrate_models_does_not_persist_a_side_file_for_a_solution_that_already_fits(monkeypatch, tmp_path):
     # A short solution is already complete in the CSV — a side file for it would be pure
     # duplication, and every (task, model) pair in a real run would get one otherwise.

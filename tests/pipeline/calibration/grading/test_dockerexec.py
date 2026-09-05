@@ -9,6 +9,7 @@ from router.pipeline.calibration.grading.dockerexec import (
     apply_patch_or_fail_cmd,
     classify,
     cleanup_image,
+    diff_touched_paths,
     pytest_collect_then_run,
     report_cmd,
     run,
@@ -347,3 +348,51 @@ def test_apply_patch_or_fail_cmd_never_reports_on_the_success_path():
     fail_line_index = script.index("echo")
     apply_line_index = script.index("git apply")
     assert apply_line_index < fail_line_index  # the echo is inside the || block, after the apply attempt
+
+
+def test_apply_patch_or_fail_cmd_adds_no_exclude_flags_by_default():
+    script = apply_patch_or_fail_cmd(NONCE, "/tmp/candidate.patch")
+    assert "git apply /tmp/candidate.patch 2>/tmp/apply_err.txt ||" in script
+
+
+def test_apply_patch_or_fail_cmd_excludes_every_given_path():
+    # swegym.py/multiswerl.py pass test_patch's own files here so the candidate's patch never
+    # collides with a file test_patch already rewrote — see docs/engineering-notes.md, "Candidate
+    # diffs colliding with test_patch (swegym/multiswerl)".
+    script = apply_patch_or_fail_cmd(
+        NONCE, "/tmp/candidate.patch", exclude_paths=["tests/test_x.py", "a file with spaces.py"],
+    )
+    assert "git apply --exclude=tests/test_x.py --exclude='a file with spaces.py' /tmp/candidate.patch" in script
+
+
+def test_diff_touched_paths_extracts_every_file_from_a_multi_file_diff():
+    diff_text = (
+        "diff --git a/src/a.py b/src/a.py\n"
+        "index 111..222 100644\n"
+        "--- a/src/a.py\n"
+        "+++ b/src/a.py\n"
+        "@@ -1 +1 @@\n"
+        "-old\n"
+        "+new\n"
+        "diff --git a/tests/test_a.py b/tests/test_a.py\n"
+        "index 333..444 100644\n"
+        "--- a/tests/test_a.py\n"
+        "+++ b/tests/test_a.py\n"
+        "@@ -1 +1 @@\n"
+        "-old\n"
+        "+new\n"
+    )
+    assert diff_touched_paths(diff_text) == ["src/a.py", "tests/test_a.py"]
+
+
+def test_diff_touched_paths_deduplicates_and_sorts():
+    diff_text = (
+        "diff --git a/z.py b/z.py\n@@ -1 +1 @@\n-a\n+b\n"
+        "diff --git a/a.py b/a.py\n@@ -1 +1 @@\n-a\n+b\n"
+        "diff --git a/z.py b/z.py\n@@ -2 +2 @@\n-c\n+d\n"
+    )
+    assert diff_touched_paths(diff_text) == ["a.py", "z.py"]
+
+
+def test_diff_touched_paths_returns_empty_for_no_diff():
+    assert diff_touched_paths("") == []

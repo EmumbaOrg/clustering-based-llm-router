@@ -125,6 +125,20 @@ def test_setup_script_reports_harness_for_test_patch_apply_failure():
     assert "cd /home/gin" in script
 
 
+def test_grade_excludes_test_patchs_own_files_from_the_candidate_apply(monkeypatch):
+    # test_patch touches "fix_test.go" (see _task's fixture row) — the agent's own worktree never
+    # has test_patch applied, so a candidate hunk in that same file would be captured against a
+    # baseline that no longer matches once test_patch is applied first at grading time. See
+    # docs/engineering-notes.md, "Candidate diffs colliding with test_patch (swegym/multiswerl)".
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    multiswerl.grade(_task(), "diff --git a/fix.go b/fix.go\n+fix\n")
+
+    assert "--exclude=fix_test.go" in captured["script"]
+
+
 def test_grade_reference_applies_the_fix_patch_and_reports_harness_on_failure(monkeypatch):
     captured = {}
     monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds, volumes=None: captured.update(script=script))

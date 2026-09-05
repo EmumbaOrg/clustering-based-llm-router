@@ -493,17 +493,23 @@ def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECON
 
     Go: staged — the (small, fast) discriminating tests run first; the (large, slow)
     regression-guard tests only run if those pass. JS/TS: one whole-suite run — see
-    `_RepoConfig`'s docstring for why staging isn't worth it there."""
+    `_RepoConfig`'s docstring for why staging isn't worth it there.
+
+    Excludes any path `test_patch` already touches from the candidate's own patch — see
+    `dockerexec.apply_patch_or_fail_cmd`'s docstring for why this is safe (no gold fix ever needs
+    those paths) and necessary (the agent's worktree never has `test_patch` applied, so a
+    same-file edit is captured against a baseline that no longer matches at grading time)."""
     if not solution.strip():
         return GradeResult(outcome="fail", detail="empty patch — bug remains unfixed")
 
     image = _image(task)
     nonce = uuid.uuid4().hex
     pass_cmd = dockerexec.report_cmd(nonce, "PASS")
+    exclude_paths = dockerexec.diff_touched_paths(task.row["test_patch"])
     script = (
         _setup_script(task, nonce)
         + f"{dockerexec.write_file_cmd(solution, '/tmp/candidate.patch')}\n"
-        + dockerexec.apply_patch_or_fail_cmd(nonce, "/tmp/candidate.patch")
+        + dockerexec.apply_patch_or_fail_cmd(nonce, "/tmp/candidate.patch", exclude_paths=exclude_paths)
         + _test_stage_script(task, nonce, on_pass=pass_cmd)
     )
     try:

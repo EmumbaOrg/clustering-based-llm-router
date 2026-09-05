@@ -108,6 +108,20 @@ def test_grade_script_reports_fail_not_harness_when_candidate_patch_wont_apply(m
     assert "HARNESS:candidate" not in captured["script"]
 
 
+def test_grade_excludes_test_patchs_own_files_from_the_candidate_apply(monkeypatch):
+    # test_patch touches "tests/test_x.py" (see _task's fixture row) — the agent's own worktree
+    # never has test_patch applied, so a candidate hunk in that same file would be captured
+    # against a baseline that no longer matches once test_patch is applied first at grading time.
+    # See docs/engineering-notes.md, "Candidate diffs colliding with test_patch (swegym/multiswerl)".
+    captured = {}
+    monkeypatch.setattr(dockerexec, "run", lambda image, script, nonce, timeout_seconds: captured.update(script=script))
+    monkeypatch.setattr(dockerexec, "touch_image", lambda image: None)
+
+    swegym.grade(_task(), "diff --git a/fix.py b/fix.py\n+fix\n")
+
+    assert "--exclude=tests/test_x.py" in captured["script"]
+
+
 def test_setup_script_reports_harness_for_test_patch_apply_failure():
     script = swegym._setup_script(_task(), "nonce")
     assert dockerexec.report_cmd("nonce", "HARNESS", "test_patch failed to apply") in script
