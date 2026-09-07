@@ -105,6 +105,17 @@ def _validate_category_mix(category_mix: dict[str, float]) -> None:
             f"config/calibration.yaml's category_mix has unknown categor{'y' if len(unknown) == 1 else 'ies'} "
             f"{unknown} — known categories are {sorted(CATEGORY_SOURCES)}."
         )
+    # A category missing here isn't "excluded on purpose" — that's what gradeable_sources is for.
+    # Left unchecked, an omitted category's tasks are silently never selected (chosen/backfill both
+    # only ever iterate over category_mix's own keys), with no warning and a config that still
+    # "validly" sums to ~1.0.
+    missing = sorted(set(CATEGORY_SOURCES) - set(category_mix))
+    if missing:
+        raise ValueError(
+            f"config/calibration.yaml's category_mix is missing categor{'y' if len(missing) == 1 else 'ies'} "
+            f"{missing} — every known category must have an explicit ratio (use 0.0 to deliberately "
+            "exclude one), or its tasks are silently never selected."
+        )
     total = sum(category_mix.values())
     if abs(total - 1.0) > _CATEGORY_MIX_SUM_TOLERANCE:
         raise ValueError(

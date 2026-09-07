@@ -46,6 +46,11 @@ def test_run_pi_returns_the_failure_detail_on_a_nonzero_exit(monkeypatch):
 
     assert result.solution is None
     assert "connection refused" in result.detail
+    # A nonzero exit is Pi's OWN process failing (crash/OOM/disk full) — per "Pi exits 0 on a
+    # provider-level error", Pi's convention is to exit 0 even when the model/provider itself
+    # fails. This must map to error_harness (excluded), never error_no_solution (a real, GRADED
+    # failure counted against the model) — see docs/engineering-notes.md.
+    assert result.harness_error is True
 
 
 # --- repo-context wiring ---------------------------------------------------------------------

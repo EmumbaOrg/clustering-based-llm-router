@@ -264,6 +264,17 @@ def test_validate_category_mix_rejects_an_unknown_category():
         assert "bogus" in str(e)
 
 
+def test_validate_category_mix_rejects_a_missing_category():
+    # Omitting a known category (even if the ones present still sum to ~1.0) must not validate —
+    # left unchecked, that category's tasks are silently never selected, with no warning and no
+    # backfill (both only ever iterate over category_mix's own keys).
+    try:
+        calibrate_module._validate_category_mix({"repo_python": 0.75, "standalone": 0.25})
+        assert False, "expected a ValueError"
+    except ValueError as e:
+        assert "multilingual" in str(e)
+
+
 def test_validate_category_mix_rejects_ratios_that_do_not_sum_to_one():
     try:
         calibrate_module._validate_category_mix({"repo_python": 0.5, "multilingual": 0.3, "standalone": 0.1})

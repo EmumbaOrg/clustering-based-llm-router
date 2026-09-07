@@ -306,8 +306,16 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int) -> RunResult:
                 f"pi call failed (exit {proc.returncode}) after {duration_s}s: "
                 f"{model.model_id} on task {task.task_id} — {proc.stderr[-300:].strip()}"
             )
+            # harness_error=True, not a bare solution=None: per "Pi exits 0 on a provider-level
+            # error" above, Pi's own convention is to exit 0 even when the PROVIDER/model itself
+            # fails, reporting that through its JSON error protocol instead (see error_message
+            # below). A nonzero exit is therefore Pi's own process failing (crash, OOM, disk full),
+            # not the model producing nothing — without this flag it fell through to
+            # error_no_solution, a GRADED outcome, wrongly counting an infra failure against the
+            # model's error rate.
             return RunResult(
                 solution=None, detail=f"pi exit {proc.returncode}: {proc.stderr[-500:]}", raw_response=proc.stdout,
+                harness_error=True,
             )
 
         final_text, usage, error_message = _parse_json_stream(proc.stdout)
