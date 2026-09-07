@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import json
 import random
 from collections import Counter
@@ -25,6 +26,7 @@ from . import corpus as corpus_mod
 from . import evaluate as evaluate_mod
 from . import visualize as visualize_mod
 from .calibration import calibrate as calibrate_mod
+from .calibration import ground_truth_registry
 from .calibration import profiles as profiles_mod
 from .calibration.calibrate import SelectedTask
 from .calibration.tasks import load_gradeable_tasks
@@ -282,6 +284,90 @@ def validate_graders(
             f"{src} (n={len(tasks)}): reference {ref_pass}/{len(tasks)} pass {dict(Counter(ref_outcomes))} | "
             f"null {null_pass}/{len(tasks)} pass {dict(Counter(null_outcomes))}"
         )
+
+
+@app.command("backfill-ground-truth-registry")
+def backfill_ground_truth_registry_command(
+    details_csv: Path = typer.Option(
+        ..., "--details-csv",
+        help="A calibration-details-*.csv from a prior run — its reference-oracle/null-baseline "
+        "rows are recovered into the registry instead of being re-graded from scratch.",
+    ),
+) -> None:
+    """Recovers ground-truth verifications already paid for in a prior calibration run into the
+    persistent registry `select-verified-tasks` consults, so that work isn't wasted. Idempotent and
+    safe to run repeatedly (including against multiple old CSVs) — never overwrites an existing,
+    still-fresh entry, only fills in tasks the registry doesn't already have."""
+    if not details_csv.exists():
+        raise typer.BadParameter(f"{details_csv} not found.")
+    registry = ground_truth_registry.load_registry()
+    before = len(registry["entries"])
+    added = calibrate_mod.backfill_registry_from_details_csv(details_csv, registry)
+    ground_truth_registry.write_registry(registry)
+    typer.echo(f"Backfilled {added} new registry entries from {details_csv} ({before} -> {len(registry['entries'])} total)")
+
+
+@app.command("select-verified-tasks")
+def select_verified_tasks_command(
+    target: int = typer.Option(
+        ..., "--target",
+        help="Approximate total task count to select across all clusters. Achieved by scaling up "
+        "calibration.yaml's tasks_per_cluster (the same knob select_tasks already uses) so the "
+        "achieved total lands near --target — exact count still depends on category-mix rounding "
+        "and any unfillable shortfall.",
+    ),
+) -> None:
+    """Builds a ground-truth-PRE-verified pinned task selection: every candidate is checked
+    (reference/null controls, cached in the ground-truth registry) before being counted, so the
+    resulting pin never includes a task with already-known-bad ground truth. Requires
+    config/calibration.yaml's category_mix to be set — this only supports category-aware
+    selections.
+
+    Slow — every not-yet-verified candidate costs a real grading call (Docker for repo-context
+    sources) — meant to be run occasionally, not as part of routine `calibrate`. The ordinary
+    `calibrate`/`select_tasks` path is unchanged by this and stays fast. Writes both a normal
+    pinned selection (feed it to `calibrate --tasks-file <pin>` exactly as any other pin) and the
+    updated ground-truth registry, so a task verified here is never re-checked by a future run of
+    this command."""
+    if not CLUSTER_MAP_PATH.exists():
+        raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
+    if not TASK_CLUSTER_MAP_PATH.exists():
+        raise typer.BadParameter(f"{TASK_CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
+
+    cluster_map = load_cluster_map(CLUSTER_MAP_PATH)
+    calibration_config = load_calibration_config()
+    if not calibration_config.category_mix:
+        raise typer.BadParameter(
+            "select-verified-tasks requires config/calibration.yaml's category_mix to be set."
+        )
+    task_cluster_map = task_cluster_map_mod.load_task_cluster_map(TASK_CLUSTER_MAP_PATH)
+
+    k = cluster_map.centroids.shape[0]
+    # Ceiling division so a shortfall-prone run still aims at the requested floor, not just under it.
+    scaled_tasks_per_cluster = max(1, -(-target // k))
+    scaled_config = dataclasses.replace(calibration_config, tasks_per_cluster=scaled_tasks_per_cluster)
+
+    registry = ground_truth_registry.load_registry()
+    typer.echo(
+        f"Selecting ~{target} ground-truth-verified tasks across {k} clusters "
+        f"(tasks_per_cluster={scaled_tasks_per_cluster})..."
+    )
+    typer.echo(f"Registry already has {len(registry['entries'])} previously-verified task(s) — those cost no grading calls.")
+
+    selected = calibrate_mod.select_verified_tasks(scaled_config, cluster_map, task_cluster_map, registry)
+
+    run_timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H%M%S")
+    selection_artifact = calibrate_mod.selected_tasks_to_dict(selected, k=k)
+    selection_path = profiles_mod.ARTIFACTS_DIR / f"calibration-task-selection-{run_timestamp}.json"
+    calibrate_mod.write_task_selection(selection_artifact, selection_path)
+    ground_truth_registry.write_registry(registry)
+
+    typer.echo(f"Selected {len(selected)} verified tasks (target was ~{target})")
+    typer.echo(f"Wrote task selection to {selection_path}")
+    typer.echo(
+        f"Wrote ground-truth registry to {ground_truth_registry.REGISTRY_PATH} "
+        f"({len(registry['entries'])} total entries)"
+    )
 
 
 _MODEL_OPTION = typer.Option(

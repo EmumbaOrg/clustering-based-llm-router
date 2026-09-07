@@ -8,12 +8,14 @@ import logging
 import random
 import re
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 from ...common.artifacts import ARTIFACTS_DIR
 from ...common.assign import ClusterMap
 from ...common.config import CalibrationConfig, ModelConfig
+from . import ground_truth_registry
 from . import runner as runner_mod
 from .grading import base as grading_base
 from .grading import bigcodebench, ds1000, multiswerl, swegym, swesmith
@@ -124,14 +126,43 @@ def _validate_category_mix(category_mix: dict[str, float]) -> None:
         )
 
 
+def _take_up_to(candidates: list[Task], n: int, verify: Callable[[Task], bool] | None) -> tuple[list[Task], list[Task]]:
+    """Returns (taken, remaining) — `taken` is the first `n` USABLE candidates (all of them, in
+    order, if `verify` is `None`; the first `n` for which `verify(task)` is true otherwise), and
+    `remaining` is whatever in `candidates` was never examined, so it can still be offered as
+    backfill surplus to a different category without re-examining (or re-verifying) anything.
+
+    A candidate `verify` rejects is dropped for good — never re-offered as surplus — since
+    rejecting it just recorded (via `verify`'s own side effect, see `calibrate_verified_tasks`)
+    that it's not usable at all, not merely unlucky for this particular category/quota."""
+    if verify is None:
+        return candidates[:n], candidates[n:]
+    taken: list[Task] = []
+    i = 0
+    while i < len(candidates) and len(taken) < n:
+        if verify(candidates[i]):
+            taken.append(candidates[i])
+        i += 1
+    return taken, candidates[i:]
+
+
 def _select_with_category_mix(
     tasks_in_cluster: list[Task], budget: int, category_mix: dict[str, float], rng: random.Random,
+    verify: Callable[[Task], bool] | None = None,
 ) -> tuple[list[Task], dict[str, int]]:
     """Splits `budget` across categories by `category_mix`'s ratios, then backfills any category's
     shortfall from other categories' surplus in the same cluster (a cluster naturally dominated by
     one source may have nothing to give another). Returns (chosen, shortfalls) — shortfalls maps
     category -> how much of its quota went unfilled, for logging; `chosen` can still total less
-    than `budget` if every category in this cluster is already exhausted."""
+    than `budget` if every category in this cluster is already exhausted.
+
+    `verify` (optional) turns "take the first `quota` candidates" into "take the first `quota`
+    USABLE candidates, skipping and permanently discarding any it rejects, pulling further into the
+    shuffled pool as needed" — see `_take_up_to`. `None` (the default, used by `select_tasks`)
+    preserves the exact original behavior: unconditional, no extra work. Passing a real predicate
+    (see `calibrate_verified_tasks`) is what turns this from "select, then separately filter and
+    hope enough survive" into "select exactly `budget` already-known-good tasks per category,
+    verifying lazily — only as many candidates as actually needed, never the whole pool"."""
     by_category: dict[str, list[Task]] = {}
     for task in tasks_in_cluster:
         category = _SOURCE_CATEGORY.get(task.source)
@@ -159,12 +190,14 @@ def _select_with_category_mix(
 
     chosen: list[Task] = []
     shortfalls: dict[str, int] = {}
+    leftover_by_category: dict[str, list[Task]] = {}
     remaining_budget = 0
     for category in categories:
         available = by_category.get(category, [])
         quota = quotas[category]
-        take = available[:quota]
+        take, leftover = _take_up_to(available, quota, verify)
         chosen.extend(take)
+        leftover_by_category[category] = leftover
         shortfall = quota - len(take)
         if shortfall > 0:
             shortfalls[category] = shortfall
@@ -174,39 +207,29 @@ def _select_with_category_mix(
         for category in categories:
             if remaining_budget <= 0:
                 break
-            surplus = by_category.get(category, [])[quotas[category]:]  # not already taken above
-            take_extra = surplus[:remaining_budget]
+            surplus = leftover_by_category.get(category, [])  # not already taken above
+            take_extra, leftover = _take_up_to(surplus, remaining_budget, verify)
             chosen.extend(take_extra)
+            leftover_by_category[category] = leftover
             remaining_budget -= len(take_extra)
 
     return chosen, shortfalls
 
 
-def select_tasks(
-    calibration_config: CalibrationConfig,
-    cluster_map: ClusterMap,
-    task_cluster_map: dict,
-) -> list[SelectedTask]:
-    """Stratified-by-cluster task selection, driven by the full task->cluster mapping computed once
-    at `build-artifact` time (`clustering/task_cluster_map.py`) rather than a per-run random
-    pre-filter — see docs/engineering-notes.md, "Task-cluster mapping replaced a per-run random
-    pre-filter" for why. When `calibration_config.category_mix` is set, each cluster's
-    `tasks_per_cluster` budget is further split by category (see `_select_with_category_mix`) per
-    spec §5.1; left empty (the default), behavior is a flat shuffle-and-cap per cluster.
-
-    Raises if `task_cluster_map` wasn't built against the SAME cluster map passed in — a stale or
-    mismatched mapping would silently make cluster ids mean different things than the centroids
-    `cluster_map` carries, which must fail loudly rather than produce a quietly-wrong selection."""
+def _group_gradeable_tasks_by_cluster(
+    calibration_config: CalibrationConfig, cluster_map: ClusterMap, task_cluster_map: dict,
+) -> tuple[dict[int, list[Task]], int]:
+    """Shared setup for `select_tasks`/`select_verified_tasks`: validates `task_cluster_map` was
+    built against the SAME `cluster_map` (a stale/mismatched mapping would silently make cluster
+    ids mean different things than the centroids `cluster_map` carries, which must fail loudly
+    rather than produce a quietly-wrong selection), then loads every gradeable source's full row
+    data and groups it by cluster. Returns (by_cluster, k)."""
     if task_cluster_map["cluster_map_id"] != cluster_map.artifact_id:
         raise ValueError(
             f"task-cluster-map.json was built against cluster map {task_cluster_map['cluster_map_id']!r}, "
             f"but the current cluster-map.json is {cluster_map.artifact_id!r} — re-run `build-artifact` "
             "to regenerate a matching task-cluster-map.json."
         )
-    if calibration_config.category_mix:
-        _validate_category_mix(calibration_config.category_mix)
-
-    rng = random.Random(calibration_config.seed)
     k = cluster_map.centroids.shape[0]
     gradeable_sources = set(calibration_config.gradeable_sources)
 
@@ -235,6 +258,43 @@ def select_tasks(
     if empty_clusters:
         logger.warning(f"{len(empty_clusters)} of {k} clusters have zero gradeable tasks: {empty_clusters}")
 
+    return by_cluster, k
+
+
+def _log_category_mix_achieved(
+    selected: list[SelectedTask], category_mix: dict[str, float], num_clusters: int, clusters_with_shortfall: int,
+) -> None:
+    achieved = {cat: sum(1 for s in selected if _SOURCE_CATEGORY[s.task.source] == cat) for cat in category_mix}
+    total = len(selected) or 1
+    achieved_pct = {cat: round(100 * n / total, 1) for cat, n in achieved.items()}
+    logger.info(
+        f"selected {len(selected)} tasks across {num_clusters} clusters — category mix achieved: "
+        f"{achieved_pct} (target: {category_mix}, {clusters_with_shortfall} cluster(s) had a quota shortfall)"
+    )
+
+
+def select_tasks(
+    calibration_config: CalibrationConfig,
+    cluster_map: ClusterMap,
+    task_cluster_map: dict,
+) -> list[SelectedTask]:
+    """Stratified-by-cluster task selection, driven by the full task->cluster mapping computed once
+    at `build-artifact` time (`clustering/task_cluster_map.py`) rather than a per-run random
+    pre-filter — see docs/engineering-notes.md, "Task-cluster mapping replaced a per-run random
+    pre-filter" for why. When `calibration_config.category_mix` is set, each cluster's
+    `tasks_per_cluster` budget is further split by category (see `_select_with_category_mix`) per
+    spec §5.1; left empty (the default), behavior is a flat shuffle-and-cap per cluster.
+
+    Fast and pure — no grading calls, no Docker. Ground-truth validity of what comes out is only
+    discovered later, mid-calibration (`_ground_truth_invalid`'s in-run skip). For a selection
+    that's already pre-verified, see `select_verified_tasks` — a separate, explicit, slower entry
+    point; this function's behavior and callers (routine `calibrate` runs loading a pin) are
+    unchanged by that existing."""
+    if calibration_config.category_mix:
+        _validate_category_mix(calibration_config.category_mix)
+    rng = random.Random(calibration_config.seed)
+    by_cluster, _k = _group_gradeable_tasks_by_cluster(calibration_config, cluster_map, task_cluster_map)
+
     selected: list[SelectedTask] = []
     clusters_with_shortfall = 0
     for cluster_id in sorted(by_cluster):  # explicit, not dict-insertion-order reliance
@@ -255,16 +315,62 @@ def select_tasks(
             selected.append(SelectedTask(task=task, cluster_id=cluster_id, split="calibration"))
 
     if calibration_config.category_mix:
-        achieved = {cat: sum(1 for s in selected if _SOURCE_CATEGORY[s.task.source] == cat) for cat in calibration_config.category_mix}
-        total = len(selected) or 1
-        achieved_pct = {cat: round(100 * n / total, 1) for cat, n in achieved.items()}
-        logger.info(
-            f"selected {len(selected)} tasks across {len(by_cluster)} clusters — category mix achieved: "
-            f"{achieved_pct} (target: {calibration_config.category_mix}, {clusters_with_shortfall} "
-            f"cluster(s) had a quota shortfall)"
-        )
+        _log_category_mix_achieved(selected, calibration_config.category_mix, len(by_cluster), clusters_with_shortfall)
     else:
         logger.info(f"selected {len(selected)} tasks across {len(by_cluster)} clusters")
+    return selected
+
+
+def select_verified_tasks(
+    calibration_config: CalibrationConfig,
+    cluster_map: ClusterMap,
+    task_cluster_map: dict,
+    registry: dict,
+    registry_path: Path = ground_truth_registry.REGISTRY_PATH,
+) -> list[SelectedTask]:
+    """Like `select_tasks`, but every candidate is ground-truth-verified (via `verify_ground_truth`
+    — registry-cached, live-graded only on a cache miss) before being counted toward its cluster's
+    category quota — see `_select_with_category_mix`'s `verify` parameter. A task the verification
+    rejects is skipped and never re-offered, including as backfill surplus for a different
+    category; `select_tasks` itself is untouched by this — routine `calibrate` runs stay fast.
+
+    Requires `calibration_config.category_mix` (a flat, uncategorized verified selection isn't a
+    real use case this supports yet — every caller so far wants the category-mix targeting).
+    `tasks_per_cluster` is the same per-cluster budget `select_tasks` uses; asking for a bigger
+    overall pin means raising it (see `cli.py`'s `select-verified-tasks` command), the same lever
+    `select_tasks` already exposes.
+
+    `registry` is mutated in place AND written to `registry_path` after every new verification (see
+    `verify_ground_truth`) — a run touching hundreds of tasks over hours must not risk losing
+    everything to a crash near the end; callers still get the final in-memory `registry` back for
+    logging, but don't need to write it again themselves for correctness."""
+    if not calibration_config.category_mix:
+        raise ValueError("select_verified_tasks requires calibration_config.category_mix to be set")
+    _validate_category_mix(calibration_config.category_mix)
+    rng = random.Random(calibration_config.seed)
+    by_cluster, _k = _group_gradeable_tasks_by_cluster(calibration_config, cluster_map, task_cluster_map)
+
+    def verify(task: Task) -> bool:
+        return verify_ground_truth(task, calibration_config, registry, registry_path) == "valid"
+
+    selected: list[SelectedTask] = []
+    clusters_with_shortfall = 0
+    for cluster_id in sorted(by_cluster):
+        tasks_in_cluster = by_cluster[cluster_id]
+        chosen, shortfalls = _select_with_category_mix(
+            tasks_in_cluster, calibration_config.tasks_per_cluster, calibration_config.category_mix, rng,
+            verify=verify,
+        )
+        if shortfalls:
+            clusters_with_shortfall += 1
+            logger.info(
+                f"cluster {cluster_id}: category quota shortfall after ground-truth verification "
+                f"(backfilled where possible): {shortfalls}"
+            )
+        for task in chosen:
+            selected.append(SelectedTask(task=task, cluster_id=cluster_id, split="calibration"))
+
+    _log_category_mix_achieved(selected, calibration_config.category_mix, len(by_cluster), clusters_with_shortfall)
     return selected
 
 
@@ -580,6 +686,102 @@ def _ground_truth_invalid(reference_outcome: str | None, null_outcome: str | Non
     if reference_outcome is None or null_outcome is None:
         return False
     return reference_outcome != "pass" or null_outcome == "pass"
+
+
+def verify_ground_truth(
+    task: Task, calibration_config: CalibrationConfig, registry: dict,
+    registry_path: Path = ground_truth_registry.REGISTRY_PATH,
+) -> str:
+    """Returns `"valid"` or `"invalid"` for `task`, consulting `registry` first (a task already
+    verified with a matching prompt digest costs zero grading calls) and running the real
+    `grade_reference`/`grade_null` controls — upserting the result back into `registry` — only on a
+    cache miss.
+
+    Writes `registry` to `registry_path` immediately after every cache-miss upsert (never on a
+    cache hit — nothing changed) — a real, Docker-based verification run can take hours, and this
+    environment has a genuine history of crashing mid-run (credit exhaustion, encoding bugs); a
+    write here costs milliseconds against a grading call that costs seconds to minutes, so batching
+    writes to save on I/O would be a bad trade. Same discipline as `_CalibrationDetailsWriter`'s
+    per-row flush, for the same reason: confirmed real — a `select-verified-tasks` run was killed
+    after ~40 minutes of grading with the registry file's mtime never having moved once.
+
+    This is the only intended way `registry` gets new entries — it grows accretively from whatever
+    selection/calibration work already needs a task's ground truth, never from a separate,
+    dedicated verification sweep. See `ground_truth_registry`'s module docstring."""
+    digest = ground_truth_registry.compute_task_digest(task)
+    cached = ground_truth_registry.lookup(registry, task.task_id, digest)
+    if cached is not None:
+        return cached["verdict"]
+
+    grading_timeout = calibration_config.grading_timeout_for(task.source)
+    reference_result = grade_reference(task, grading_timeout)
+    null_result = grade_null(task, grading_timeout)
+    verdict = "invalid" if _ground_truth_invalid(reference_result.outcome, null_result.outcome) else "valid"
+
+    ground_truth_registry.upsert(
+        registry,
+        task_id=task.task_id,
+        source=task.source,
+        prompt_digest=digest,
+        reference_outcome=reference_result.outcome,
+        reference_detail=reference_result.detail,
+        null_outcome=null_result.outcome,
+        null_detail=null_result.detail,
+        verdict=verdict,
+    )
+    ground_truth_registry.write_registry(registry, registry_path)
+    return verdict
+
+
+def backfill_registry_from_details_csv(csv_path: Path, registry: dict) -> int:
+    """Recovers ground-truth verifications already paid for in a prior calibration run's details
+    CSV into `registry`, instead of re-grading them from scratch via `verify_ground_truth` —
+    idempotent and safe to run against any old CSV at any time: only adds an entry for a task that
+    both (a) has both `reference-oracle` and `null-baseline` rows in this CSV, and (b) isn't
+    ALREADY registered with a matching prompt digest — an existing, still-fresh entry (e.g. from a
+    live verification in a later run) is never overwritten by older CSV data.
+
+    The CSV itself doesn't carry prompt text, so a task's CURRENT prompt (needed to compute the
+    digest that makes a cache hit trustworthy) is loaded fresh per source, same mechanism
+    `select_tasks`/`load_task_selection` already use — a task the CSV mentions that's no longer in
+    its source's gradeable pool (dataset drift) is skipped, not an error.
+
+    Returns the number of NEW entries added."""
+    rows = list(csv.DictReader(csv_path.open(encoding="utf-8")))
+    reference_rows = {r["task_id"]: r for r in rows if r["model_id"] == "reference-oracle"}
+    null_rows = {r["task_id"]: r for r in rows if r["model_id"] == "null-baseline"}
+    both = sorted(set(reference_rows) & set(null_rows))
+
+    sources = {reference_rows[task_id]["source"] for task_id in both}
+    task_by_id: dict[str, Task] = {}
+    for source in sources:
+        for task in load_gradeable_tasks(source):
+            task_by_id[task.task_id] = task
+
+    added = 0
+    for task_id in both:
+        task = task_by_id.get(task_id)
+        if task is None:
+            continue
+        digest = ground_truth_registry.compute_task_digest(task)
+        if ground_truth_registry.lookup(registry, task_id, digest) is not None:
+            continue
+        reference_row = reference_rows[task_id]
+        null_row = null_rows[task_id]
+        verdict = "invalid" if _ground_truth_invalid(reference_row["outcome"], null_row["outcome"]) else "valid"
+        ground_truth_registry.upsert(
+            registry,
+            task_id=task_id,
+            source=task.source,
+            prompt_digest=digest,
+            reference_outcome=reference_row["outcome"],
+            reference_detail=reference_row["detail"],
+            null_outcome=null_row["outcome"],
+            null_detail=null_row["detail"],
+            verdict=verdict,
+        )
+        added += 1
+    return added
 
 
 def calibrate_models(

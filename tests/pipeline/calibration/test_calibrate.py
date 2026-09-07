@@ -3,6 +3,7 @@ import numpy as np
 from router.common.assign import ClusterMap
 from router.common.config import CalibrationConfig, ModelConfig, SmoothingConfig
 from router.pipeline.calibration import calibrate as calibrate_module
+from router.pipeline.calibration import ground_truth_registry as gt_registry
 from router.pipeline.calibration.calibrate import (
     SelectedTask,
     _expected_solution,
@@ -345,6 +346,318 @@ def test_select_tasks_is_deterministic_with_category_mix(monkeypatch):
     second = select_tasks(config, cluster_map, task_map)
 
     assert [s.task.task_id for s in first] == [s.task.task_id for s in second]
+
+
+# --- _take_up_to: verify=None preserves select_tasks' exact original behavior; a real predicate
+# turns "take the first n" into "take the first n usable, skipping/discarding the rest" ------------
+
+def test_take_up_to_with_no_verifier_behaves_exactly_like_slicing():
+    candidates = [_gradeable_task(f"t{i}") for i in range(5)]
+    taken, remaining = calibrate_module._take_up_to(candidates, 3, None)
+    assert taken == candidates[:3]
+    assert remaining == candidates[3:]
+
+
+def test_take_up_to_with_no_verifier_and_not_enough_candidates_takes_them_all():
+    candidates = [_gradeable_task(f"t{i}") for i in range(2)]
+    taken, remaining = calibrate_module._take_up_to(candidates, 5, None)
+    assert taken == candidates
+    assert remaining == []
+
+
+def test_take_up_to_skips_invalid_candidates_and_keeps_pulling_until_quota_is_met():
+    candidates = [_gradeable_task(f"t{i}") for i in range(6)]
+    invalid_ids = {"t1", "t3"}
+    taken, remaining = calibrate_module._take_up_to(candidates, 3, lambda t: t.task_id not in invalid_ids)
+
+    assert [t.task_id for t in taken] == ["t0", "t2", "t4"]  # t1/t3 skipped, pulled further to reach 3
+    # t5 was never examined (quota was already met at t4) — still available for backfill elsewhere.
+    assert [t.task_id for t in remaining] == ["t5"]
+
+
+def test_take_up_to_returns_a_shortfall_when_every_candidate_is_rejected():
+    candidates = [_gradeable_task(f"t{i}") for i in range(3)]
+    taken, remaining = calibrate_module._take_up_to(candidates, 2, lambda t: False)
+    assert taken == []
+    assert remaining == []  # every candidate was examined and rejected, none left to offer elsewhere
+
+
+# --- verify_ground_truth: registry-cached, live-graded only on a miss -----------------------------
+
+def test_verify_ground_truth_uses_the_cached_verdict_without_grading_on_a_hit(monkeypatch):
+    task = _gradeable_task("t1", source="swe-gym")
+    digest = gt_registry.compute_task_digest(task)
+    registry = {"schema_version": 1, "entries": {}}
+    gt_registry.upsert(
+        registry, task_id="t1", source="swe-gym", prompt_digest=digest,
+        reference_outcome="pass", reference_detail="", null_outcome="fail", null_detail="",
+        verdict="valid",
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("should not grade — the registry already has a fresh verdict")
+
+    monkeypatch.setattr(calibrate_module, "grade_reference", fail_if_called)
+    monkeypatch.setattr(calibrate_module, "grade_null", fail_if_called)
+
+    verdict = calibrate_module.verify_ground_truth(task, _calibration_config(), registry)
+    assert verdict == "valid"
+
+
+def test_verify_ground_truth_grades_and_upserts_on_a_cache_miss(monkeypatch, tmp_path):
+    task = _gradeable_task("t1", source="swe-gym")
+    registry = {"schema_version": 1, "entries": {}}
+
+    monkeypatch.setattr(calibrate_module, "grade_reference", lambda t, timeout: GradeResult(outcome="pass"))
+    monkeypatch.setattr(calibrate_module, "grade_null", lambda t, timeout: GradeResult(outcome="fail"))
+
+    verdict = calibrate_module.verify_ground_truth(task, _calibration_config(), registry, tmp_path / "registry.json")
+
+    assert verdict == "valid"
+    entry = registry["entries"]["t1"]
+    assert entry["reference_outcome"] == "pass"
+    assert entry["null_outcome"] == "fail"
+    assert entry["verdict"] == "valid"
+
+
+def test_verify_ground_truth_writes_the_registry_to_disk_immediately_on_a_cache_miss(monkeypatch, tmp_path):
+    # Confirmed real: a select-verified-tasks run was killed after ~40 minutes of real grading with
+    # the registry file's mtime never having moved once, because the old design only wrote once at
+    # the very end. Every new verification must be durable immediately, not batched.
+    task = _gradeable_task("t1", source="swe-gym")
+    registry = {"schema_version": 1, "entries": {}}
+    registry_path = tmp_path / "registry.json"
+    monkeypatch.setattr(calibrate_module, "grade_reference", lambda t, timeout: GradeResult(outcome="pass"))
+    monkeypatch.setattr(calibrate_module, "grade_null", lambda t, timeout: GradeResult(outcome="fail"))
+
+    calibrate_module.verify_ground_truth(task, _calibration_config(), registry, registry_path)
+
+    assert registry_path.exists()
+    on_disk = gt_registry.load_registry(registry_path)
+    assert on_disk["entries"]["t1"]["verdict"] == "valid"
+
+
+def test_verify_ground_truth_does_not_write_on_a_cache_hit(monkeypatch, tmp_path):
+    task = _gradeable_task("t1", source="swe-gym")
+    digest = gt_registry.compute_task_digest(task)
+    registry = {"schema_version": 1, "entries": {}}
+    gt_registry.upsert(
+        registry, task_id="t1", source="swe-gym", prompt_digest=digest,
+        reference_outcome="pass", reference_detail="", null_outcome="fail", null_detail="",
+        verdict="valid",
+    )
+    registry_path = tmp_path / "registry.json"  # deliberately never created
+
+    calibrate_module.verify_ground_truth(task, _calibration_config(), registry, registry_path)
+
+    assert not registry_path.exists()  # nothing changed, so nothing was written
+
+
+def test_verify_ground_truth_marks_a_bad_reference_as_invalid(monkeypatch, tmp_path):
+    task = _gradeable_task("t1", source="swe-gym")
+    registry = {"schema_version": 1, "entries": {}}
+    monkeypatch.setattr(calibrate_module, "grade_reference", lambda t, timeout: GradeResult(outcome="fail"))
+    monkeypatch.setattr(calibrate_module, "grade_null", lambda t, timeout: GradeResult(outcome="fail"))
+
+    verdict = calibrate_module.verify_ground_truth(task, _calibration_config(), registry, tmp_path / "registry.json")
+
+    assert verdict == "invalid"
+    assert registry["entries"]["t1"]["verdict"] == "invalid"
+
+
+def test_verify_ground_truth_re_verifies_when_the_cached_digest_is_stale(monkeypatch, tmp_path):
+    task = _gradeable_task("t1", source="swe-gym")
+    registry = {"schema_version": 1, "entries": {}}
+    gt_registry.upsert(
+        registry, task_id="t1", source="swe-gym", prompt_digest="sha256:stale-digest-from-a-different-prompt",
+        reference_outcome="pass", reference_detail="", null_outcome="fail", null_detail="",
+        verdict="valid",
+    )
+    monkeypatch.setattr(calibrate_module, "grade_reference", lambda t, timeout: GradeResult(outcome="fail"))
+    monkeypatch.setattr(calibrate_module, "grade_null", lambda t, timeout: GradeResult(outcome="fail"))
+
+    verdict = calibrate_module.verify_ground_truth(task, _calibration_config(), registry, tmp_path / "registry.json")
+
+    assert verdict == "invalid"  # re-graded fresh, not the stale cached "valid"
+
+
+# --- backfill_registry_from_details_csv: recover already-paid-for verifications from an old run --
+
+def _write_details_csv(path, rows: list[dict]) -> None:
+    import csv as csv_module
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv_module.DictWriter(f, fieldnames=[
+            "task_id", "source", "cluster_id", "split", "model_id", "provider",
+            "outcome", "detail", "solution", "duration_ms", "input_tokens", "output_tokens", "cost_usd", "turns",
+        ])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def _control_row(task_id: str, source: str, model_id: str, outcome: str, detail: str = "") -> dict:
+    return {
+        "task_id": task_id, "source": source, "cluster_id": 0, "split": "calibration", "model_id": model_id,
+        "provider": "stub", "outcome": outcome, "detail": detail, "solution": "", "duration_ms": 0,
+        "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "turns": 0,
+    }
+
+
+def test_backfill_registry_from_details_csv_adds_an_entry_for_a_task_with_both_controls(tmp_path, monkeypatch):
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": [_gradeable_task("bcb0", source="bigcodebench")]})
+    csv_path = tmp_path / "details.csv"
+    _write_details_csv(csv_path, [
+        _control_row("bcb0", "bigcodebench", "reference-oracle", "pass"),
+        _control_row("bcb0", "bigcodebench", "null-baseline", "fail"),
+    ])
+    registry = {"schema_version": 1, "entries": {}}
+
+    added = calibrate_module.backfill_registry_from_details_csv(csv_path, registry)
+
+    assert added == 1
+    assert registry["entries"]["bcb0"]["verdict"] == "valid"
+
+
+def test_backfill_registry_from_details_csv_marks_bad_ground_truth_as_invalid(tmp_path, monkeypatch):
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": [_gradeable_task("bcb0", source="bigcodebench")]})
+    csv_path = tmp_path / "details.csv"
+    _write_details_csv(csv_path, [
+        _control_row("bcb0", "bigcodebench", "reference-oracle", "fail"),
+        _control_row("bcb0", "bigcodebench", "null-baseline", "fail"),
+    ])
+    registry = {"schema_version": 1, "entries": {}}
+
+    added = calibrate_module.backfill_registry_from_details_csv(csv_path, registry)
+
+    assert added == 1
+    assert registry["entries"]["bcb0"]["verdict"] == "invalid"
+
+
+def test_backfill_registry_from_details_csv_skips_a_task_missing_one_control(tmp_path, monkeypatch):
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": [_gradeable_task("bcb0", source="bigcodebench")]})
+    csv_path = tmp_path / "details.csv"
+    _write_details_csv(csv_path, [
+        _control_row("bcb0", "bigcodebench", "reference-oracle", "pass"),
+        # no null-baseline row for bcb0 — e.g. an incremental --model run that dropped controls.
+    ])
+    registry = {"schema_version": 1, "entries": {}}
+
+    added = calibrate_module.backfill_registry_from_details_csv(csv_path, registry)
+
+    assert added == 0
+    assert registry["entries"] == {}
+
+
+def test_backfill_registry_from_details_csv_skips_a_task_no_longer_in_the_gradeable_pool(tmp_path, monkeypatch):
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": []})  # dataset drift: bcb0 no longer exists
+    csv_path = tmp_path / "details.csv"
+    _write_details_csv(csv_path, [
+        _control_row("bcb0", "bigcodebench", "reference-oracle", "pass"),
+        _control_row("bcb0", "bigcodebench", "null-baseline", "fail"),
+    ])
+    registry = {"schema_version": 1, "entries": {}}
+
+    added = calibrate_module.backfill_registry_from_details_csv(csv_path, registry)
+
+    assert added == 0
+    assert registry["entries"] == {}
+
+
+def test_backfill_registry_from_details_csv_never_overwrites_an_existing_fresh_entry(tmp_path, monkeypatch):
+    task = _gradeable_task("bcb0", source="bigcodebench")
+    _stub_gradeable_tasks(monkeypatch, {"bigcodebench": [task]})
+    csv_path = tmp_path / "details.csv"
+    # The CSV says invalid; the registry already has a fresh (matching-digest), different verdict.
+    _write_details_csv(csv_path, [
+        _control_row("bcb0", "bigcodebench", "reference-oracle", "fail"),
+        _control_row("bcb0", "bigcodebench", "null-baseline", "fail"),
+    ])
+    registry = {"schema_version": 1, "entries": {}}
+    digest = gt_registry.compute_task_digest(task)
+    gt_registry.upsert(
+        registry, task_id="bcb0", source="bigcodebench", prompt_digest=digest,
+        reference_outcome="pass", reference_detail="", null_outcome="fail", null_detail="",
+        verdict="valid",
+    )
+
+    added = calibrate_module.backfill_registry_from_details_csv(csv_path, registry)
+
+    assert added == 0
+    assert registry["entries"]["bcb0"]["verdict"] == "valid"  # untouched, not overwritten by the CSV
+
+
+# --- select_verified_tasks: like select_tasks, but skips ground-truth-invalid candidates ----------
+
+def test_select_verified_tasks_requires_category_mix():
+    try:
+        calibrate_module.select_verified_tasks(_calibration_config(), _cluster_map(k=1), _task_cluster_map("x", []), {})
+        assert False, "expected a ValueError"
+    except ValueError as e:
+        assert "category_mix" in str(e)
+
+
+def test_select_verified_tasks_skips_ground_truth_invalid_candidates(monkeypatch):
+    tasks = {"bigcodebench": [_gradeable_task(f"bcb{i}", source="bigcodebench") for i in range(6)]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [(f"bcb{i}", "bigcodebench", 0) for i in range(6)])
+    config = _config_with_category_mix(
+        {"repo_python": 0.0, "multilingual": 0.0, "standalone": 1.0}, tasks_per_cluster=3, gradeable_sources=["bigcodebench"],
+    )
+    invalid_ids = {"bcb0", "bcb2"}
+    monkeypatch.setattr(
+        calibrate_module, "verify_ground_truth",
+        lambda task, cfg, registry, registry_path=None: "invalid" if task.task_id in invalid_ids else "valid",
+    )
+
+    selected = calibrate_module.select_verified_tasks(config, cluster_map, task_map, {})
+
+    assert len(selected) == 3
+    assert all(s.task.task_id not in invalid_ids for s in selected)
+
+
+def test_select_verified_tasks_reports_a_shortfall_when_too_few_valid_candidates_exist(monkeypatch):
+    tasks = {"bigcodebench": [_gradeable_task(f"bcb{i}", source="bigcodebench") for i in range(3)]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [(f"bcb{i}", "bigcodebench", 0) for i in range(3)])
+    config = _config_with_category_mix(
+        {"repo_python": 0.0, "multilingual": 0.0, "standalone": 1.0}, tasks_per_cluster=3, gradeable_sources=["bigcodebench"],
+    )
+    # Only 1 of 3 candidates is valid — quota of 3 can never be met, regardless of backfill (there's
+    # nowhere else to backfill from: every task is "standalone" in this fixture).
+    monkeypatch.setattr(calibrate_module, "verify_ground_truth", lambda task, cfg, registry, registry_path=None: (
+        "valid" if task.task_id == "bcb1" else "invalid"
+    ))
+
+    selected = calibrate_module.select_verified_tasks(config, cluster_map, task_map, {})
+
+    assert len(selected) == 1
+    assert selected[0].task.task_id == "bcb1"
+
+
+def test_select_verified_tasks_never_calls_verify_ground_truth_more_than_once_needed(monkeypatch):
+    # Once quota is met, remaining candidates must not be examined at all — each verification is a
+    # real grading call (Docker for repo-context sources), so checking more than necessary is real
+    # wasted cost, not just a style concern.
+    tasks = {"bigcodebench": [_gradeable_task(f"bcb{i}", source="bigcodebench") for i in range(10)]}
+    _stub_gradeable_tasks(monkeypatch, tasks)
+    cluster_map = _cluster_map(k=1)
+    task_map = _task_cluster_map("clustermap-x", [(f"bcb{i}", "bigcodebench", 0) for i in range(10)])
+    config = _config_with_category_mix(
+        {"repo_python": 0.0, "multilingual": 0.0, "standalone": 1.0}, tasks_per_cluster=2, gradeable_sources=["bigcodebench"],
+    )
+    calls = []
+
+    def fake_verify(task, cfg, registry, registry_path=None):
+        calls.append(task.task_id)
+        return "valid"
+
+    monkeypatch.setattr(calibrate_module, "verify_ground_truth", fake_verify)
+    selected = calibrate_module.select_verified_tasks(config, cluster_map, task_map, {})
+
+    assert len(selected) == 2
+    assert len(calls) == 2  # not all 10 — stopped as soon as quota was met
 
 
 def _selected(task_id: str, cluster_id: int) -> SelectedTask:
