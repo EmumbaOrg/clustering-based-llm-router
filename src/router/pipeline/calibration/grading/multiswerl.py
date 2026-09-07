@@ -35,6 +35,7 @@ overall exit code is unreliable", "Lazygit needs a git identity", "Test-name sub
 """
 from __future__ import annotations
 
+import re
 import shlex
 import uuid
 from dataclasses import dataclass
@@ -296,6 +297,33 @@ def _setup_script(task: Task, nonce: str) -> str:
     )
 
 
+# A run of 6+ digits inside a subtest name is a strong signal of a per-run-random value (a temp
+# snapshot-dir suffix, a PID, a timestamp) rather than meaningful test identity — confirmed real on
+# istio__istio-51797: `TestProfileDiff`'s subtests embed a literal `/tmp/data-snapshot-<random>`
+# path, so the SAME passing test prints a DIFFERENT name every run. An exact-string match against
+# the dataset's one frozen recording of that name can then never succeed again, even when the test
+# genuinely passes — reproduced live: applying the gold fix and running the real test showed
+# `--- PASS: TestProfileDiff/case_3_"...data-snapshot-2625524999..."` where the dataset recorded
+# `...data-snapshot-2015670355...`. See docs/engineering-notes.md, "Non-reproducible random values
+# in recorded test names".
+_RANDOM_VALUE_RE = re.compile(r"\d{6,}")
+
+
+def _wildcard_random_values(name: str) -> str:
+    """Builds an ERE (`grep -E`) pattern that matches `name` literally, except any run of 6+
+    digits is widened to `\\d+` — tolerating a different random value each run without weakening
+    the match on anything else. For a name with no such run (the overwhelming common case), this
+    is byte-identical to `re.escape(name)`, i.e. an exact match, same as before this existed."""
+    parts = []
+    pos = 0
+    for m in _RANDOM_VALUE_RE.finditer(name):
+        parts.append(re.escape(name[pos:m.start()]))
+        parts.append(r"[0-9]+")
+        pos = m.end()
+    parts.append(re.escape(name[pos:]))
+    return "".join(parts)
+
+
 def _run_test_stage(
     task: Task,
     nonce: str,
@@ -311,11 +339,13 @@ def _run_test_stage(
     `=== RUN` count, both of which are unreliable here. See docs/engineering-notes.md, "Go's
     overall exit code is unreliable" and "Lazygit needs a git identity".
 
-    `grep -F -f` (patterns read from a file, matched literally) is used instead of interpolating
+    `grep -E -f` (patterns read from a file, one ERE per line) is used instead of interpolating
     test names into the shell command, since real test names can contain characters that would
-    need shell escaping (e.g. `TestPostingsForMatchers/n!~"(1|2.5)"`). `go test -run` still exits 0
-    on zero matches (see "Zero test matches still exit 0"), which is what the "not every
-    check_name got a PASS" branch below reports as HARNESS.
+    need shell escaping (e.g. `TestPostingsForMatchers/n!~"(1|2.5)"`) — each pattern is built by
+    `_wildcard_random_values`, which regex-escapes the name so it still matches literally, widening
+    only any run of 6+ digits (see that function's docstring). `go test -run` still exits 0 on zero
+    matches (see "Zero test matches still exit 0"), which is what the "not every check_name got a
+    PASS" branch below reports as HARNESS.
 
     `harness_detail_suffix` (non-empty only for the discriminating stage) distinguishes the
     expected n2p-only case from a genuine harness gap in the reported detail; outcome
@@ -338,9 +368,9 @@ def _run_test_stage(
     # Append " (" to each pattern (the text `go test -v` always prints right after a test name) so
     # a shorter name's pattern can't match as a substring of a longer name's result line (e.g.
     # `TestAddTree` vs. `TestAddTree2`) — see docs/engineering-notes.md, "Test-name substring
-    # collisions".
-    pass_patterns = "".join(f"--- PASS: {name} (\n" for name in check_names)
-    fail_patterns = "".join(f"--- FAIL: {name} (\n" for name in check_names)
+    # collisions". The "(" itself is regex-escaped since patterns are now ERE, not fixed strings.
+    pass_patterns = "".join(f"--- PASS: {_wildcard_random_values(name)} \\(\n" for name in check_names)
+    fail_patterns = "".join(f"--- FAIL: {_wildcard_random_values(name)} \\(\n" for name in check_names)
 
     return (
         f"{dockerexec.write_file_cmd(pattern, pattern_file)}\n"
@@ -348,8 +378,8 @@ def _run_test_stage(
         f"{dockerexec.write_file_cmd(fail_patterns, fail_patterns_file)}\n"
         f'cd {repo_dir} && go test ./... -run "$(cat {pattern_file})" -v > {log_file} 2>&1\n'
         f"{total_var}=$(wc -l < {pass_patterns_file})\n"
-        f"{pass_var}=$(grep -F -o -f {pass_patterns_file} {log_file} | sort -u | wc -l)\n"
-        f"{fail_var}=$(grep -F -o -f {fail_patterns_file} {log_file} | sort -u | wc -l)\n"
+        f"{pass_var}=$(grep -E -o -f {pass_patterns_file} {log_file} | sort -u | wc -l)\n"
+        f"{fail_var}=$(grep -E -o -f {fail_patterns_file} {log_file} | sort -u | wc -l)\n"
         f'if [ "${fail_var}" -gt 0 ]; then {fail_cmd}; '
         f'elif [ "${pass_var}" -ne "${total_var}" ]; then {harness_cmd}; fi\n'
     ) + on_pass

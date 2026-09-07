@@ -172,13 +172,16 @@ def test_run_test_stage_reports_pass_fail_and_harness_off_per_test_pass_fail_lin
     # The overall exit code and a blanket `=== RUN` count can misattribute failures unrelated to
     # the actual target test (an unrelated package failing to compile; a sibling subtest panicking
     # under the same top-level name) — the script must check each target test's OWN `--- PASS`/
-    # `--- FAIL` line, via patterns read from a file (grep -F -f), never interpolated into the
-    # shell command directly (real test names can contain quotes/parens/etc).
-    assert "grep -F -o -f" in script
-    # " (" anchor (not a bare name) — Go test names routinely share prefixes (e.g. TestFoo/TestFoo2)
-    # and a substring match without this would let one test's PASS line get counted for another's.
-    assert _b64("--- PASS: TestFoo (\n") in script
-    assert _b64("--- FAIL: TestFoo (\n") in script
+    # `--- FAIL` line, via patterns read from a file (grep -E -f), never interpolated into the
+    # shell command directly (real test names can contain quotes/parens/etc). ERE, not fixed
+    # strings, since _wildcard_random_values needs regex to tolerate a run-specific random value —
+    # see docs/engineering-notes.md, "Non-reproducible random values in recorded test names".
+    assert "grep -E -o -f" in script
+    # "\(" anchor (regex-escaped, not a bare "(") — Go test names routinely share prefixes (e.g.
+    # TestFoo/TestFoo2) and a substring match without this would let one test's PASS line get
+    # counted for another's.
+    assert _b64("--- PASS: TestFoo \\(\n") in script
+    assert _b64("--- FAIL: TestFoo \\(\n") in script
     # A passing stage must fall through to whatever comes next, verbatim.
     assert script.endswith("NEXT\n")
 
@@ -199,8 +202,70 @@ def test_run_test_stage_check_names_use_the_full_untruncated_name_not_the_run_pa
         _task(), "nonce", ["TestIntegration"], ["TestIntegration/foo/bar"], "mystage", on_pass=""
     )
     assert _b64("^(TestIntegration)$") in script
-    assert _b64("--- PASS: TestIntegration/foo/bar (\n") in script
-    assert _b64("--- FAIL: TestIntegration/foo/bar (\n") in script
+    assert _b64("--- PASS: TestIntegration/foo/bar \\(\n") in script
+    assert _b64("--- FAIL: TestIntegration/foo/bar \\(\n") in script
+
+
+# --- non-reproducible random values in recorded test names --------------------------------------
+
+def test_wildcard_random_values_leaves_an_ordinary_name_untouched():
+    # No digit run of 6+ -> byte-identical to the plain name, i.e. still an exact match — this
+    # must not change behavior for the overwhelming common case.
+    assert multiswerl._wildcard_random_values("TestFoo") == "TestFoo"
+    assert multiswerl._wildcard_random_values("TestIntegration/foo/bar") == "TestIntegration/foo/bar"
+
+
+def test_wildcard_random_values_escapes_regex_special_characters():
+    # Real Go subtest names can contain literal regex metacharacters (quotes, periods, hyphens)
+    # that must be matched literally, not interpreted as regex syntax.
+    pattern = multiswerl._wildcard_random_values("TestBuildDefaultCluster/static_external_cluster_with_._in_the_name")
+    assert pattern == r"TestBuildDefaultCluster/static_external_cluster_with_\._in_the_name"
+
+
+def test_wildcard_random_values_widens_a_long_digit_run_to_match_any_digits():
+    # Confirmed real on istio__istio-51797: a subtest embeds a randomly-generated temp snapshot
+    # directory number that's DIFFERENT every run, so the dataset's one frozen recording of it can
+    # never exact-match a fresh run's genuinely-passing test.
+    name = 'TestProfileDiff/case_3_"profile_diff_default_unknown-profile_--manifests_/tmp/data-snapshot-2015670355/manifests"'
+    pattern = multiswerl._wildcard_random_values(name)
+    assert "2015670355" not in pattern
+    assert "[0-9]+" in pattern
+    # A short digit run (below the 6-digit threshold) is real test identity, not a random value —
+    # must stay literal.
+    assert multiswerl._wildcard_random_values("TestCase42") == "TestCase42"
+
+
+def test_run_test_stage_matches_a_check_name_with_a_different_random_value_at_runtime():
+    # End-to-end: the pattern built for a name with an embedded random value must still match a
+    # go test -v log line carrying a DIFFERENT random value in that same position — this is the
+    # actual bug (reproduced live on istio__istio-51797) this fix closes.
+    recorded_name = 'TestProfileDiff/case_3_"profile_diff_default_unknown-profile_--manifests_/tmp/data-snapshot-2015670355/manifests"'
+    script = multiswerl._run_test_stage(_task(), "nonce", ["TestProfileDiff"], [recorded_name], "mystage", on_pass="")
+
+    import base64
+    import re
+    import subprocess
+    import tempfile
+
+    # Pull the base64-encoded pass_patterns content straight out of the generated script.
+    match = re.search(r"echo (\S+) \| base64 -d > /tmp/mystage_pass_patterns\.txt", script)
+    assert match, "could not find the pass_patterns write in the generated script"
+    pattern_text = base64.b64decode(match.group(1)).decode("utf-8")
+
+    live_log_line = (
+        '    --- PASS: TestProfileDiff/case_3_"profile_diff_default_unknown-profile_--manifests_'
+        '/tmp/data-snapshot-2625524999/manifests" (0.03s)\n'
+    )
+    with tempfile.NamedTemporaryFile("w", suffix=".txt") as pat_file, tempfile.NamedTemporaryFile("w", suffix=".txt") as log_file:
+        pat_file.write(pattern_text)
+        pat_file.flush()
+        log_file.write(live_log_line)
+        log_file.flush()
+        result = subprocess.run(
+            ["grep", "-E", "-o", "-f", pat_file.name, log_file.name], capture_output=True, text=True, check=False,
+        )
+
+    assert result.stdout.strip() != ""
 
 
 def test_discriminating_stage_reports_harness_when_no_discriminating_tests_exist():
