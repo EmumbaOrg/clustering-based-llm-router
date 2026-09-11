@@ -19,21 +19,27 @@
 
 models:
   # ── Grader-validation controls (not real models; zero cost, no API, no LLM) ────────────────
-  - model_id: reference-oracle
-    provider: stub
-    runner: reference
-    cost_input: 0
-    cost_output: 0
-    context_window: 0
-    max_tokens: 0
+  # Commented out for calibration runs against an already ground-truth-verified pin (see
+  # select-verified-tasks / ground_truth_registry.json) — re-grading reference/null per task here
+  # is then redundant with what the registry already confirmed, and skipping them is a supported,
+  # documented path: _ground_truth_invalid(None, None) treats "control absent from this run's
+  # roster" as "can't tell, not invalid," so real models still grade normally. Re-enable these two
+  # entries for any run against a pin that did NOT go through select-verified-tasks.
+  # - model_id: reference-oracle
+  #   provider: stub
+  #   runner: reference
+  #   cost_input: 0
+  #   cost_output: 0
+  #   context_window: 0
+  #   max_tokens: 0
 
-  - model_id: null-baseline
-    provider: stub
-    runner: "null"   # quoted — bare null is a YAML keyword and would parse as None
-    cost_input: 0
-    cost_output: 0
-    context_window: 0
-    max_tokens: 0
+  # - model_id: null-baseline
+  #   provider: stub
+  #   runner: "null"   # quoted — bare null is a YAML keyword and would parse as None
+  #   cost_input: 0
+  #   cost_output: 0
+  #   context_window: 0
+  #   max_tokens: 0
 
   # ── Local llama.cpp candidates (dev/testing only — see README "Aligning config/models.yaml" ─
   # section). Each provider below needs a matching `~/.pi/agent/models.json` entry with a
@@ -115,13 +121,13 @@ models:
   # OpenAI's own published $1.75/$14.00 per 1M tokens (standard mode, not the 2x "fast" mode),
   # checked live against developers.openai.com/api/docs/pricing and cross-verified against
   # OpenRouter's own published per-token price for openai/gpt-5.3-codex — both agreed exactly.
-  - model_id: gpt-5.3-codex
-    provider: openai
-    runner: pi
-    cost_input: 0.00175
-    cost_output: 0.014
-    context_window: 400000
-    max_tokens: 128000
+  # - model_id: gpt-5.3-codex
+  #   provider: openai
+  #   runner: pi
+  #   cost_input: 0.00175
+  #   cost_output: 0.014
+  #   context_window: 400000
+  #   max_tokens: 128000
 
   # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
   # Commented out so calibration doesn't attempt them. Uncomment as keys become available.
