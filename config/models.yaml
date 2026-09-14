@@ -63,6 +63,23 @@ models:
     context_window: 8192
     max_tokens: 2048
 
+  # Added and validated 2026-09-11, as a larger (14B) alternative to Llama-3.1-8B-Instruct above.
+  # Same "Qwen2.5-Coder never gets real tool_calls" issue does NOT apply here — this is the plain
+  # Qwen2.5-14B-**Instruct** (non-Coder) chat template, which llama.cpp's autoparser handles
+  # correctly. Confirmed via direct curl on this machine: a single tool call, two parallel tool
+  # calls with correctly-typed (bool/int, not stringified) nested arguments, and a full
+  # tool-result round-trip all returned real `message.tool_calls` / `finish_reason: "tool_calls"`
+  # with no leaked tags. Only one heavy local llama.cpp server should run at a time (see
+  # docs/engineering-notes.md on swap-thrash) — don't run this alongside llama-3.1-8b-instruct's
+  # server.
+  - model_id: qwen2.5-14b-instruct
+    provider: local-qwen2514b
+    runner: pi
+    cost_input: 0.00005
+    cost_output: 0.00005
+    context_window: 16384
+    max_tokens: 2048
+
   # ── Anthropic, native Pi provider (no ~/.pi/agent/models.json entry needed) ────────────────
   # `provider: anthropic` is built into Pi itself — confirmed via `pi auth check --provider
   # anthropic` returning `not_ready` (a recognized-but-unauthenticated provider), not an
