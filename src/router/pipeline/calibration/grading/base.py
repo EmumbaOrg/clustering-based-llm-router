@@ -1,21 +1,8 @@
 """Shared grading infrastructure: the Outcome taxonomy and a subprocess+timeout+temp-cwd runner
-every grader builds on.
-
-A task that fails because OUR sandbox lacks a library, or times out on our slow CPU, is NOT the
-model failing — conflating the two would corrupt every error rate the router later trusts. So
-grading scripts built by each grader module print a single `RESULT_<nonce>: <TAG> [detail]` line to
-stdout as their last action, and this module classifies that line into an Outcome rather than
-trusting a bare exit code — which can't tell "candidate code raised an exception" (a real FAIL,
-since a broken solution crashing IS what a wrong answer looks like) apart from "our harness
-couldn't even start" (an environment problem, excluded from error rates). The nonce (see
-`NONCE_PLACEHOLDER`) is generated fresh per call, same reasoning as `dockerexec.py`'s own nonce: the
-candidate code this classifies is `exec()`'d in the same process, so a fixed sentinel would be
-forgeable by anything the candidate happens to print.
-
-Isolation note: this runs candidate-generated code via `exec()` in a subprocess with a timeout and
-a throwaway temp cwd — the same approach the benchmarks' own reference harnesses use. That's
-process isolation, not a security sandbox; see the pipeline README for when Docker is warranted
-instead.
+every self-contained grader builds on. Grading scripts print a single `RESULT_<nonce>: <TAG>
+[detail]` line as their last action; this module classifies that line rather than trusting a bare
+exit code, so an environment problem (missing library, timeout) is never miscounted as the model
+being wrong.
 """
 from __future__ import annotations
 
@@ -60,10 +47,9 @@ class GradeResult:
     detail: str = ""
 
 
-# Every grading script template (bigcodebench.py, ds1000.py) writes its sentinel as
-# `RESULT_NONCE_PLACEHOLDER:` (this literal text) — `run_graded_script` substitutes it with a fresh
-# `uuid4().hex` per call before the script ever runs, mirroring why `dockerexec.py`'s Docker-based
-# graders use a per-call nonce. See docs/engineering-notes.md, "Base grading sentinel nonce".
+# Grading script templates write their sentinel as `RESULT_NONCE_PLACEHOLDER:` — `run_graded_script`
+# substitutes it with a fresh `uuid4().hex` per call, so a fixed sentinel can't be forged by
+# anything the exec()'d candidate code happens to print.
 NONCE_PLACEHOLDER = "NONCE_PLACEHOLDER"
 
 
@@ -72,13 +58,9 @@ def _result_line_pattern(nonce: str) -> re.Pattern[str]:
 
 
 def run_graded_script(script: str, timeout_seconds: int, extra_files: dict[str, bytes] | None = None) -> GradeResult:
-    """`extra_files`, if given, is written into the same temp directory before the script runs
-    (e.g. a reference image for a comparison-based grader).
-
-    `script` must use `NONCE_PLACEHOLDER` (this module's constant) everywhere its `RESULT:` sentinel
-    would otherwise go bare — substituted here via plain string replacement (not `.format()`, so it
-    can't collide with the script's own f-string braces) into a real per-call nonce before the
-    script is written to disk."""
+    """`extra_files`, if given, is written into the same temp directory before the script runs.
+    `script` must use `NONCE_PLACEHOLDER` for its sentinel, substituted here (plain string
+    replacement, not `.format()`) into a real per-call nonce before running."""
     nonce = uuid.uuid4().hex
     script = script.replace(NONCE_PLACEHOLDER, nonce)
     result_line = _result_line_pattern(nonce)

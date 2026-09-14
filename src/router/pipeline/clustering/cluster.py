@@ -35,7 +35,7 @@ class ClusterResult:
 
 def run_kmeans(vectors: np.ndarray, k: int, seed: int, n_init: int) -> ClusterResult:
     # n_init is passed explicitly (never "auto") — sklearn's "auto" resolves to a single run for
-    # the default k-means++ init, silently defeating the spec's "at least 10 initializations."
+    # the default k-means++ init, silently defeating the requirement of multiple initializations.
     model = KMeans(n_clusters=k, n_init=n_init, random_state=seed)
     labels = model.fit_predict(vectors)
     centroids = model.cluster_centers_.astype(np.float64)  # inherits input dtype otherwise

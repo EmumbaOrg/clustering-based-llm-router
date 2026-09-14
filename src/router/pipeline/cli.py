@@ -259,12 +259,8 @@ def validate_graders(
     source: list[str] | None = _SOURCE_OPTION,
 ) -> None:
     """GATE: run the reference (gold solution) and null (empty solution) controls over a small
-    sample per gradeable source. reference must score ~100% pass, null ~0% pass — this is what
-    proves the grader itself is correct, independent of any model's actual coding ability. If this
-    gate fails, nothing downstream (calibration, evaluation) means anything.
-
-    Uses `calibrate.py`'s `grade_reference`/`grade_null` — the SAME dispatch calibration itself
-    uses — so an unwired source raises immediately instead of being silently skipped."""
+    sample per gradeable source. reference must score ~100% pass, null ~0% pass — this proves the
+    grader itself is correct, independent of any model's actual coding ability."""
     calibration_config = load_calibration_config()
     sources = source or calibration_config.gradeable_sources
     # random.sample, not [:n] — a source grouped by repo/instance (e.g. swe-smith's 128 repos)
@@ -298,15 +294,8 @@ def select_verified_tasks_command(
     """Builds a ground-truth-PRE-verified pinned task selection: every candidate is checked
     (reference/null controls, cached in the ground-truth registry) before being counted, so the
     resulting pin never includes a task with already-known-bad ground truth. Requires
-    config/calibration.yaml's category_mix to be set — this only supports category-aware
-    selections.
-
-    Slow — every not-yet-verified candidate costs a real grading call (Docker for repo-context
-    sources) — meant to be run occasionally, not as part of routine `calibrate`. The ordinary
-    `calibrate`/`select_tasks` path is unchanged by this and stays fast. Writes both a normal
-    pinned selection (feed it to `calibrate --tasks-file <pin>` exactly as any other pin) and the
-    updated ground-truth registry, so a task verified here is never re-checked by a future run of
-    this command."""
+    config/calibration.yaml's category_mix to be set. Slow — meant to be run occasionally, not as
+    part of routine `calibrate` — and writes a normal pinned selection plus the updated registry."""
     if not CLUSTER_MAP_PATH.exists():
         raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
     if not TASK_CLUSTER_MAP_PATH.exists():

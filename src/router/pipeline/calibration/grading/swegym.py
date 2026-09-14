@@ -1,44 +1,13 @@
 """Grader for SWE-Gym — Docker-based, built on `dockerexec.py`'s sentinel protocol, mirroring
-`swesmith.py`'s shape closely but with different row semantics.
+`swesmith.py`'s shape closely but with different row semantics: **`patch` here is the GOLD FIX**,
+not a bug-injecting diff — `base_commit` is already the buggy, pre-fix state the prebuilt image is
+built at, and a separate `test_patch` field carries the test changes needed to exercise
+FAIL_TO_PASS/PASS_TO_PASS, applied in every mode.
 
-Confirmed empirically (Docker Hub API + real `docker pull`/`docker run` against `getmoto/moto` and
-`pandas-dev/pandas` instances) rather than assumed from the row schema alone:
-
-1. **Prebuilt per-instance Docker images exist and are public**, under Docker Hub namespace
-   `xingyaoww/sweb.eval.x86_64.{instance_id}` with `__` replaced by `_s_` (dunders aren't allowed
-   in Docker Hub image names) — confirmed for every one of the 11 repos in this dataset. SWE-Gym
-   rows don't carry an `image_name` field the way swe-smith's do, so the tag is constructed instead
-   of read; see `_image`.
-2. **No repo-specific `install`/environment-setup step is needed at grade time** — every prebuilt
-   image already has its package editable-installed. See docs/engineering-notes.md, "SWE-Gym /
-   pandas meson rebuild".
-3. **Working dir is always `/testbed`, conda env is always named `testbed`** — same universal
-   convention as swesmith's images, though the exact activation script's path differs (confirmed
-   directly, not assumed identical): `source /opt/miniconda3/bin/activate`, not
-   `/opt/miniconda3/etc/profile.d/conda.sh`.
-4. **Plain `git apply` is sufficient** — no `patch --fuzz` fallback needed. Verified across one
-   real instance from each of the 11 repos in this dataset: every `test_patch` and gold `patch`
-   applied cleanly.
-5. **A small fraction of rows (~2.8%, confirmed by direct count) have a `FAIL_TO_PASS`/
-   `PASS_TO_PASS` id pytest can't collect as given** — a non-ASCII character (e.g. an emoji in a
-   parametrize case) recorded literally at dataset-collection time, while the grading image's own
-   installed pytest version escapes it when generating node ids. Caught via pytest's exit codes 4
-   ("usage error") / 5 ("no tests collected"), routed to `HARNESS` rather than `FAIL` — see
-   `_pytest_script`. Discovered via a real `validate-graders` run (not assumed), a direct
-   consequence of passing exact node ids rather than replicating the official harness's whole-file
-   grading (see the "deliberate simplification" note below).
-
-Row semantics differ from swesmith in one important way: **`patch` here is the GOLD FIX**, not a
-bug-injecting diff — `base_commit` is already the buggy, pre-fix state the image is built at. A
-separate `test_patch` field (absent from swesmith) carries the test changes needed to actually
-exercise `FAIL_TO_PASS`/`PASS_TO_PASS` and must be applied in every mode.
-
-Like swesmith's grader, this passes `FAIL_TO_PASS + PASS_TO_PASS` directly as pytest node-id
-arguments rather than replicating the official harness's whole-file-plus-log-parsing approach —
-verified valid (not just convenient) by checking that these fields are standard pytest node-id
-strings across a getmoto/mypy/pandas sample, independent of what each repo's own `test_cmd`
-convention happens to be upstream. Trade-off: no per-test granularity within one run, in exchange
-for reusing `dockerexec.py`'s sentinel/classify protocol unchanged.
+Images aren't named in the row; `_image` constructs the Docker Hub tag from `instance_id`. Passes
+FAIL_TO_PASS + PASS_TO_PASS directly as pytest node-id arguments rather than replicating the
+official harness's whole-file-plus-log-parsing approach — no per-test granularity within one run,
+in exchange for reusing `dockerexec.py`'s sentinel/classify protocol unchanged.
 """
 from __future__ import annotations
 
@@ -48,7 +17,7 @@ from . import dockerexec
 from .base import GradeResult, Task
 
 DOCKER_TIMEOUT_SECONDS = dockerexec.DOCKER_TIMEOUT_SECONDS
-REPO_DIR = "/testbed"  # confirmed against real getmoto/moto and pandas-dev/pandas instances
+REPO_DIR = "/testbed"
 CONDA_ACTIVATE = "source /opt/miniconda3/bin/activate && conda activate testbed"
 
 
@@ -71,8 +40,7 @@ def _setup_script(task: Task, nonce: str) -> str:
 
 def _pytest_script(task: Task, nonce: str) -> str:
     """Run the test suite and report PASS/FAIL off its exit code. `dockerexec.pytest_collect_then_run`
-    handles the case where some `FAIL_TO_PASS`/`PASS_TO_PASS` node ids can't be collected as given —
-    see docs/engineering-notes.md, "Pytest collection mismatch (swegym/swesmith)"."""
+    handles the case where some `FAIL_TO_PASS`/`PASS_TO_PASS` node ids can't be collected as given."""
     return dockerexec.pytest_collect_then_run(
         node_ids=task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"],
         nonce=nonce,
@@ -83,14 +51,9 @@ def _pytest_script(task: Task, nonce: str) -> str:
 
 
 def grade(task: Task, solution: str, timeout_seconds: int = DOCKER_TIMEOUT_SECONDS) -> GradeResult:
-    """`solution` is a forward-apply unified diff — the shape a real candidate/agent produces,
-    applied on top of the test-patched baseline. An inapplicable candidate diff is `fail` (the
-    model's own failure), not `error_harness`.
-
-    Excludes any path `test_patch` already touches from the candidate's own patch — see
-    `dockerexec.apply_patch_or_fail_cmd`'s docstring for why this is safe (no gold fix ever needs
-    those paths) and necessary (the agent's worktree never has `test_patch` applied, so a
-    same-file edit is captured against a baseline that no longer matches at grading time)."""
+    """`solution` is a forward-apply unified diff, applied on top of the test-patched baseline.
+    An inapplicable candidate diff is `fail` (the model's own failure), not `error_harness`. Any
+    path `test_patch` already touches is excluded from the candidate's own patch."""
     if not solution.strip():
         return GradeResult(outcome="fail", detail="empty patch — bug remains unfixed")
 

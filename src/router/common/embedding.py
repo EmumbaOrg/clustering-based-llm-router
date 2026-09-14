@@ -1,7 +1,5 @@
-"""Text preprocessing + encoding, shared by the pipeline (batch corpus embedding) and the runtime
-(single-query embedding via `embed_one`) so both always agree on the exact same rule.
-
-No server, no HTTP call — the encoder runs in-process via sentence-transformers.
+"""Text preprocessing + encoding, shared by the pipeline and the runtime so both always agree on
+the exact same rule. In-process via sentence-transformers — no server, no HTTP call.
 """
 from __future__ import annotations
 
@@ -22,18 +20,14 @@ def normalize_line_endings(text: str) -> str:
 
 
 def prepare_embedding_input(text: str, max_chars: int) -> str:
-    """Deliberately no case folding and no whitespace collapsing — indentation and casing are
-    signal for a code-oriented embedding model. If you change this rule, update embedding.yaml's
-    `input` block to match: it's copied verbatim into cluster-map.json so any future consumer
-    applies the exact same rule to a new query, and the two must never drift apart silently.
-    """
+    """No case folding, no whitespace collapsing — indentation/casing are signal for a code
+    embedding model. Keep in sync with embedding.yaml's `input` block if you change this."""
     normalized = normalize_line_endings(text).strip()
     if len(normalized) <= max_chars:
         return normalized
     return normalized[:max_chars]
 
 
-# Measured empirically — see docs/engineering-notes.md, "Embedding batch size".
 DEFAULT_BATCH_SIZE = 4
 
 

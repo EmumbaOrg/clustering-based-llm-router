@@ -1,34 +1,19 @@
 """Grader for BigCodeBench-Instruct — self-contained: exec(code_prompt + solution) then exec(test)
-into the SAME namespace (row 1's test calls `random.seed(42)` without importing `random` itself,
-relying on the solution module's globals being shared), then run `unittest.TestCases`. No repo
-checkout, no Docker.
+into the same namespace, then run `unittest.TestCases`. No repo checkout, no Docker.
 
-Solution contract: a fragment to append directly after `code_prompt` (an indented function body,
-matching `canonical_solution`'s own shape) — NOT a complete standalone script. `code_prompt` ends
-mid-signature (`def task_func(...):\n`), so an empty/missing solution is a SyntaxError, which is
-graded `fail`, not a harness error — a candidate that produced nothing failed the task.
+Solution contract: a fragment appended directly after `code_prompt` (an indented function body),
+not a complete standalone script — an empty/missing solution is a SyntaxError, graded `fail`.
 
-Known simplification: any ImportError/ModuleNotFoundError anywhere during grading (harness setup
-OR candidate code) is classified error_missing_dep rather than fail. Models overwhelmingly import
-real, common libraries for these tasks (numpy/pandas/etc.); a genuinely nonexistent module is a
-much stronger signal of an incomplete grading environment than of a deliberate model mistake. See
-pipeline-python/README.md for the accepted limitations of this pass.
-
-Implementation note this simplification depends on: `unittest.TextTestRunner` catches exceptions
-raised *while a test runs* internally and records them in `result.errors` — it does NOT let them
-propagate to an outer try/except. A candidate whose function body only imports a missing package
-when actually CALLED (the common case — the import executes during the test's call, not while
-merely defining the function) would otherwise be misclassified as `fail`. So after a failed run,
-the tracebacks in `result.errors`/`result.failures` are inspected for the missing-dependency
-signature too, not just exceptions raised directly by our own harness setup.
+Any ImportError/ModuleNotFoundError anywhere during grading is classified `error_missing_dep`
+rather than `fail` — including one raised mid-test and caught inside `unittest`'s own result
+object, not just one raised directly by our harness setup.
 """
 from __future__ import annotations
 
 from .base import GradeResult, NONCE_PLACEHOLDER, Task, run_graded_script
 
-# Every "RESULT_NONCE_PLACEHOLDER:" below has that literal text substituted for a real per-call
-# nonce by run_graded_script before this ever runs — see base.py's NONCE_PLACEHOLDER docstring for
-# why a bare "RESULT:" sentinel is forgeable by the candidate code this script itself exec()s.
+# "RESULT_NONCE_PLACEHOLDER:" below is substituted for a real per-call nonce by run_graded_script
+# before this ever runs.
 _GRADE_SCRIPT = r"""
 import sys
 import unittest

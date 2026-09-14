@@ -2,11 +2,10 @@
 profiles.py: same three-function shape (build_*_dict / validate_* / write_*) for the sibling
 artifact.
 
-Validation is two layers, matching ../../../README.md's "Config and artifact schema": standard JSON Schema structural
-checks, plus cross-field invariants the schema can't express on its own (centroid length vs
-dimensions, cluster count vs k, contiguous ascending cluster ids). Both layers actually live in
-../../common/artifacts.py — the runtime is a second consumer of this artifact and must run the
-exact same checks, so they can't be private to this writer. `validate_cluster_map` below is a
+Validation is two layers: standard JSON Schema structural checks, plus cross-field invariants the
+schema can't express on its own (centroid length vs dimensions, cluster count vs k, contiguous
+ascending cluster ids). Both layers live in ../../common/artifacts.py — the runtime is a second
+consumer of this artifact and must run the exact same checks. `validate_cluster_map` below is a
 thin wrapper kept here so call sites and tests don't need to reach into common/.
 """
 from __future__ import annotations

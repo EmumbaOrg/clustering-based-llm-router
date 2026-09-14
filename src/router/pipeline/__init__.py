@@ -1,2 +1,2 @@
-"""The offline pipeline: corpus -> embed -> cluster -> calibrate -> evaluate. See ./cli.py for the
+"""The offline pipeline: corpus -> embed -> build-artifact -> calibrate. See ./cli.py for the
 `router pipeline` command group."""

@@ -1,13 +1,7 @@
 """Loads the corpus from five sources: SWE-smith (sampled 20,000 of ~59,136), SWE-Gym,
-BigCodeBench-Instruct, and DS-1000 (all rows), and Multi-SWE-RL (batch 1 only, ~4,723 multilingual
-instances; C/C++ are corpus-only here, not gradeable).
-
-Multi-SWE-RL is fetched file-by-file via `huggingface_hub.hf_hub_download` rather than
-`load_dataset` — its per-repo-heterogeneous JSONL schema breaks Arrow's loader; see
-`_load_multi_swe_rl`.
-
-Row ids are the SAME stable, dataset-native ids `calibration/tasks.py` uses for `Task.task_id`
-(`stable_task_id`), so a row's cluster label can be joined to a calibration task by id.
+BigCodeBench-Instruct, DS-1000 (all rows), and Multi-SWE-RL (batch 1 only, ~4,723 instances).
+Row ids are the same stable, dataset-native ids `calibration/tasks.py` uses for `Task.task_id`, so
+a row's cluster label can be joined to a calibration task by id.
 """
 from __future__ import annotations
 
@@ -53,9 +47,8 @@ SOURCE_METADATA: dict[str, dict[str, str]] = {
         "field": "prompt",
         "license": "CC-BY-SA-4.0",
     },
-    # Registered LAST deliberately — see docs/engineering-notes.md, "Corpus source order and dedup".
-    # `split`/`field` here don't carry their usual HF meaning (see module docstring); both are still
-    # plain minLength-1 strings in the schema, so this needs no schema change.
+    # Registered LAST deliberately (dedup order). `split`/`field` here don't carry their usual HF
+    # meaning; both are still plain minLength-1 strings in the schema, so this needs no schema change.
     "multi-swe-rl": {
         "hf_id": "ByteDance-Seed/Multi-SWE-RL",
         "split": "data_20240601_20250331",
@@ -69,9 +62,8 @@ SOURCE_METADATA: dict[str, dict[str, str]] = {
 SWE_SMITH_SAMPLE_SIZE = 20_000
 CORPUS_SAMPLE_SEED = 42
 
-# Multi-SWE-RL's initial ~4,723-instance release. A second batch (data_20250401_20250631) exists
-# upstream and is deliberately not pulled — pinning one batch keeps this source reproducible as
-# upstream adds more, matching docs/routing-poc-background-research.md's original ~4,723 figure.
+# Multi-SWE-RL's initial ~4,723-instance release. A second batch exists upstream and is
+# deliberately not pulled — pinning one batch keeps this source reproducible as upstream adds more.
 MULTI_SWE_RL_BATCH = SOURCE_METADATA["multi-swe-rl"]["split"]
 
 # Instance files are `<language>/<org>__<repo>_dataset.jsonl`. Matching the suffix rather than
@@ -79,7 +71,6 @@ MULTI_SWE_RL_BATCH = SOURCE_METADATA["multi-swe-rl"]["split"]
 # dropped ids, not instances) and any future sibling metadata file in the same batch directory.
 _MULTI_SWE_RL_FILE_SUFFIX = "_dataset.jsonl"
 
-# See docs/engineering-notes.md, "Multi-SWE-RL issue text threshold".
 _MULTI_SWE_RL_MIN_ISSUE_CHARS = 80
 
 
@@ -109,8 +100,7 @@ def provenance_for(name: str, rows: int) -> SourceProvenance:
 
 def _extract_multi_swe_rl_text(record: dict) -> str | None:
     # `resolved_issues` (the GitHub issue) is the real problem_statement analogue; top-level
-    # title/body is the PR (solution) and only a fallback — see docs/engineering-notes.md,
-    # "Multi-SWE-RL issue vs PR text".
+    # title/body is the PR (solution) and only a fallback.
     issues = record.get("resolved_issues")
     parts: list[str] = []
     if isinstance(issues, list):
@@ -168,13 +158,8 @@ def _multi_swe_rl_row_id(record: dict) -> str | None:
 
 def _multi_swe_rl_ordered_paths(files: list[tuple[str, int]]) -> list[str]:
     """Smallest-first WITHIN each language, then round-robin ACROSS languages, so a `--sample N`
-    dry run (which stops as soon as N rows exist) stays cheap and still multilingual.
-
-    TRADEOFF: unlike every other source, a CAPPED multi-swe-rl sample is not random — it is biased
-    toward small repos. Fine for a dry run that just needs to exercise the loader; never treat a
-    --sample multi-swe-rl subset as representative. See docs/engineering-notes.md, "Multi-SWE-RL
-    sample bias" for the measured numbers.
-    """
+    dry run stays cheap and still multilingual. Tradeoff: a capped sample is biased toward small
+    repos, not random — never treat it as representative."""
     by_language: dict[str, list[tuple[int, str]]] = defaultdict(list)
     for path, size in files:
         if basename(path).endswith(_MULTI_SWE_RL_FILE_SUFFIX):
@@ -218,7 +203,7 @@ def _load_multi_swe_rl(cap: int | None) -> list[CorpusRow]:
     logger.info(f"loading corpus source multi-swe-rl ({hf_id}, batch={MULTI_SWE_RL_BATCH}, {len(paths)} files)")
 
     # No default cap, unlike swe-smith: all ~4,723 instances are wanted for the language/ecosystem
-    # coverage this source exists to add (docs/routing-poc-background-research.md).
+    # coverage this source exists to add.
     rows: list[CorpusRow] = []
     seen_ids: set[str] = set()
     for i, path in enumerate(paths, start=1):

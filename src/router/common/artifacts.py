@@ -1,11 +1,7 @@
-"""Shared JSON Schema validation + write helpers for pipeline output artifacts (cluster-map.json,
-model-profiles.json).
-
-Both artifacts follow the same two-layer validation shape (see ../../README.md's "Config and
-artifact schema"): standard JSON Schema structural checks, plus cross-field invariants the schema
-can't express on its own. Both layers live here rather than inside the pipeline writers — each schema's own
-`description` field says these invariants "must be re-checked by any consumer before trusting the
-file", and the runtime is a second consumer.
+"""Shared JSON Schema validation + write helpers for the pipeline's output artifacts
+(cluster-map.json, model-profiles.json): schema structural checks plus cross-field invariants the
+schema can't express on its own. Lives here, not in the pipeline writers, since the runtime is a
+second consumer that must re-check both before trusting a file.
 """
 from __future__ import annotations
 
@@ -44,11 +40,9 @@ def write_json_artifact(artifact: dict, path: Path) -> Path:
 
 
 def check_cluster_map_invariants(artifact: dict) -> None:
-    """The three invariants cluster-map.schema.json's own description says it cannot express:
-    clusters.length == kmeans.k, cluster ids contiguous 0..k-1 ascending, and every centroid's
-    length == embedding.dimensions. Also rejects a non-finite centroid value — see
-    docs/engineering-notes.md, "NaN centroid guard".
-    """
+    """Invariants the schema itself can't express: clusters.length == kmeans.k, cluster ids
+    contiguous 0..k-1 ascending, every centroid's length == embedding.dimensions, and no centroid
+    holds a non-finite value."""
     dimensions = artifact["embedding"]["dimensions"]
     k = artifact["kmeans"]["k"]
     clusters = artifact["clusters"]
@@ -71,12 +65,9 @@ def check_cluster_map_invariants(artifact: dict) -> None:
 
 
 def check_profiles_invariants(artifact: dict) -> None:
-    """The invariants model-profiles.schema.json's own description says it cannot express: every
-    cluster key falls within the referenced cluster map's 0..cluster_count-1 range, and
-    number_succeeded + number_failed == number_of_tasks for every global/per-cluster block.
-    `cluster_count` is read with `.get()` — see docs/engineering-notes.md, "profiles.json's
-    cluster_count is optional".
-    """
+    """Invariants the schema itself can't express: every cluster key falls within the referenced
+    cluster map's 0..cluster_count-1 range (`cluster_count` is optional, hence `.get()`), and
+    number_succeeded + number_failed == number_of_tasks for every global/per-cluster block."""
     cluster_count = artifact.get("cluster_count")
     for model in artifact["models"]:
         if cluster_count is not None:

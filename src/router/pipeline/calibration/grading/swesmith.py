@@ -1,29 +1,7 @@
 """Grader for SWE-smith — Docker-based, built on `dockerexec.py`'s sentinel protocol. Each row's
-`image_name` is a prebuilt image with the target repo checked out at its CLEAN state and the test
-suite present — no `test_patch`, no clone needed. (`repo` is a synthetic `swesmith/...` namespace,
-not a real GitHub repo, so cloning isn't an option even in principle — see pipeline README.)
-
-Confirmed empirically against `jyangballin/swesmith.x86_64.oauthlib_1776_oauthlib.1fd52536`:
-
-1. **The image starts clean, not buggy.** `patch` (the row's bug-introducing diff) has NOT been
-   applied yet — `git log` shows a single "Initial commit" and the pre-bug source is what's
-   checked out. Establishing the buggy baseline (`git apply` the row's `patch`, forward) is a
-   setup step every grading mode needs, not something already done for you.
-2. **Tests need a specific conda env activated first.** `python -m pytest` against the base
-   interpreter fails with "No module named pytest" — `conda activate testbed` first is required.
-3. Given (1), the modes are: `grade()` applies the bug forward, then the candidate's own fix diff,
-   then tests. `grade_reference()` applies the bug forward, then REVERSES THE SAME PATCH (`git
-   apply -R`) — a round trip back to the clean state — then tests (expect pass). `grade_null()`
-   applies the bug forward and tests with no fix at all (expect fail).
-
-Docker must be reachable wherever this runs (`docker info` should succeed) — no other special
-setup is required today.
-
-Failure classification, enforced via `dockerexec`'s sentinel protocol rather than trusting the
-container's own exit code: applying the dataset's OWN bug patch (or, in `grade_reference`,
-reversing it) failing is `error_harness` in every mode — it's the dataset's/image's problem, never
-the candidate's. Only the candidate's own patch failing to apply (`grade`, only) is `fail`. The
-actual test run's exit code (0 vs. nonzero) maps to pass/fail identically across all three modes.
+`image_name` is a prebuilt image checked out at its CLEAN (pre-bug) state, so `_setup_script`
+applies `patch` (the bug) forward first. `grade` then applies the candidate's fix; `grade_reference`
+reverses the same patch instead; `grade_null` applies no fix at all.
 """
 from __future__ import annotations
 
@@ -52,8 +30,7 @@ def _setup_script(task: Task, nonce: str) -> str:
 
 def _pytest_script(task: Task, nonce: str) -> str:
     """Run the test suite and report PASS/FAIL off its exit code. Same node-id collection handling
-    as swegym.py's `_pytest_script` — see docs/engineering-notes.md, "Pytest collection mismatch
-    (swegym/swesmith)"."""
+    as swegym.py's `_pytest_script`."""
     return dockerexec.pytest_collect_then_run(
         node_ids=task.row["FAIL_TO_PASS"] + task.row["PASS_TO_PASS"],
         nonce=nonce,

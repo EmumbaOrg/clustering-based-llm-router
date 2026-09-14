@@ -1,15 +1,6 @@
-"""Persistent, cross-run record of ground-truth verification results — which tasks have already
-had their reference/null-baseline controls checked, and whether the result was valid.
-
-Keyed by `task_id` alone, never by which pinned selection a task happens to belong to: ground-truth
-validity is a property of the task itself (does its own gold solution pass its own declared tests,
-in our harness), not of any one selection. A verdict computed today stays useful across a future K
-change, category-mix change, or any other reason a different pinned subset gets drawn from the same
-underlying pools — see docs/engineering-notes.md, "Ground-truth registry is global, not
-per-selection".
-
-Grows accretively from whatever calibration/selection work already runs `grade_reference`/
-`grade_null` for a task — never a separate, dedicated verification sweep. See
+"""Persistent, cross-run record of ground-truth verification results. Keyed by `task_id` alone,
+never by which pinned selection a task belongs to — validity is a property of the task itself, so
+a verdict stays useful across a future k/category-mix change. Grows accretively via
 `calibrate.verify_ground_truth`, the only intended writer.
 """
 from __future__ import annotations
@@ -30,10 +21,8 @@ SCHEMA_VERSION = 1
 
 
 def compute_task_digest(task: Task) -> str:
-    """SHA-256 over the task's own prompt text — same construction as
-    `calibrate.compute_task_selection_digest`, but per-task rather than over a whole selection.
-    A registry entry whose digest no longer matches the task's CURRENT prompt is treated as stale
-    (see `lookup`), not trusted forever — the underlying dataset row could in principle change."""
+    """SHA-256 over the task's own prompt text. An entry whose digest no longer matches the
+    task's current prompt is treated as stale (see `lookup`), not trusted forever."""
     return f"sha256:{hashlib.sha256(task.prompt.encode('utf-8')).hexdigest()}"
 
 

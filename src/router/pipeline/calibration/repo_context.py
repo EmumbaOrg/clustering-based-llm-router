@@ -1,15 +1,7 @@
 """Gives `runner.run_pi` real repo access for sources whose tasks are "fix a bug in this
-repository" rather than a self-contained snippet. Mirrors `grading/dockerexec.py`'s shape and
-philosophy — a small, source-agnostic primitive layer, with per-source dispatch living in
-`_REPO_SOURCES` — but for git, not Docker.
-
-Two-tier caching, same lesson `dockerexec.touch_image` learned the hard way: a **bare clone** is
-cached per repo (keyed by remote URL) and reused across every task/model that touches that repo —
-cloning once, not once per call, is what makes this tractable at all. A disposable **worktree** per
-call (`git worktree add --detach`) gives each `run_pi` invocation an isolated, clean copy without
-re-cloning from network, removed (`remove_worktree`) right after that call finishes regardless of
-outcome. The clone cache is bounded the same way `_MAX_CACHED_IMAGES` bounds Docker images — a git
-mirror is far smaller than a Docker image, so the cap here is larger.
+repository" rather than a self-contained snippet. Two-tier caching: a **bare clone** per repo,
+cached and reused across every task/model that touches it, and a disposable **worktree** per call,
+removed right after that call finishes.
 """
 from __future__ import annotations
 
@@ -142,13 +134,9 @@ def checkout_worktree(cached_clone: Path, ref: str) -> Path:
 
 
 def _inject_swesmith_bug(worktree: Path, task: Task) -> None:
-    """swe-smith's mirror repos (`_swesmith_remote_and_ref`) check out at the CLEAN, pre-bug
-    commit — `task.row["patch"]` is the bug-injection diff that `grading/swesmith.py`'s Docker
-    setup applies forward before anything else happens, so this does the same here. See
-    docs/engineering-notes.md, "SWE-smith bug injection must be committed" for the full root cause.
-
-    Must be committed, not left uncommitted, or `extract_diff()` would fold it into the agent's
-    own diff."""
+    """swe-smith's mirror repos check out at the clean, pre-bug commit — `task.row["patch"]` is
+    the bug-injection diff, applied forward here the same way the Docker grader does. Must be
+    committed, not left uncommitted, or `extract_diff()` would fold it into the agent's own diff."""
     patch = task.row.get("patch")
     if not patch:
         return
@@ -202,18 +190,10 @@ def remove_worktree(cached_clone: Path, worktree: Path) -> None:
 
 
 def extract_diff(worktree: Path) -> str | None:
-    """`git add -A -N .` stages new files as intent-to-add (so `git diff` reports their full
-    content, not just "new file") without actually staging content — then `git diff` captures
-    every change an agent's edit/write tools made against the checked-out ref. Preferred over
-    parsing the agent's text response: a tool-using agent's actual edits, not its prose description
-    of them, are the ground truth for what changed."""
-    # errors="replace": a real calibration run crashed the ENTIRE process (not just this one task)
-    # on `UnicodeDecodeError: 'utf-8' codec can't decode byte 0xfc` — some repo had a non-UTF-8
-    # encoded file (or binary-ish content) in its diff, and Python's default strict decoding under
-    # text=True has no tolerance for that. Replacing the undecodable bytes means that one task's
-    # diff may fail to `git apply` cleanly (same failure shape as any other malformed patch,
-    # already a known/handled outcome) — vastly preferable to losing every remaining task in the
-    # run to one repo's encoding.
+    """`git add -A -N .` stages new files as intent-to-add so `git diff` reports their full
+    content, then captures every change an agent's edit/write tools made — preferred over parsing
+    the agent's text response, since the actual edits are ground truth."""
+    # errors="replace": a non-UTF-8 byte in one repo's diff must not crash the whole run.
     subprocess.run(
         ["git", "add", "-A", "-N", "."],
         cwd=worktree, capture_output=True, text=True, errors="replace",
@@ -224,6 +204,6 @@ def extract_diff(worktree: Path) -> str | None:
         cwd=worktree, capture_output=True, text=True, errors="replace",
         timeout=GIT_TIMEOUT_SECONDS, check=False,
     )
-    # Never apply .strip() to the returned diff text — see docs/engineering-notes.md, "git diff
-    # needs its trailing newline". `.strip()` here is only used to test for "nothing changed."
+    # Never apply .strip() to the returned diff text (git apply needs the trailing newline);
+    # `.strip()` here is only used to test for "nothing changed."
     return proc.stdout if proc.stdout.strip() else None

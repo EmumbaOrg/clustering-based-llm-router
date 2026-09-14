@@ -1,9 +1,6 @@
-"""Assembles, validates, and writes the final model-profiles.json artifact. Mirrors clustering's
-cluster_map.py structure for cluster-map.json: two-layer validation (JSON Schema + cross-field
-invariants the schema can't express — see ../../../README.md's "Config and artifact schema").
-Both layers live in ../../common/artifacts.py, since the runtime is a second consumer of this
-artifact. `validate_profiles` below is a thin wrapper kept here so call sites and tests don't need
-to reach into common/.
+"""Assembles, validates, and writes the final model-profiles.json artifact. Validation itself lives
+in common/artifacts.py (the runtime is a second consumer); `validate_profiles` here is a thin
+wrapper so call sites don't need to reach into common/.
 """
 from __future__ import annotations
 
@@ -87,14 +84,9 @@ _TASK_SELECTION_COMPATIBILITY_FIELDS = ("gradeable_sources", "tasks_per_cluster"
 
 
 def merge_profiles_dict(existing_artifact: dict, new_artifact: dict) -> dict:
-    """Appends/replaces `new_artifact`'s model entries into `existing_artifact` — the incremental
-    single-model calibration workflow the spec calls for ("a new model can be onboarded by running
-    only the calibration suite") and `task_selection`'s own schema description anticipates
-    ("How the calibration task pool was chosen, for reproducibility"). Both artifacts must share
-    the same cluster map and task-selection parameters — a mismatch means cluster id N wouldn't
-    mean the same thing in both, exactly the failure mode the schema's task_selection field exists
-    to let a caller detect; caught here as a hard error rather than silently producing a profiles
-    file whose entries aren't mutually comparable."""
+    """Appends/replaces `new_artifact`'s model entries into `existing_artifact`, for incrementally
+    onboarding one model. Both artifacts must share the same cluster map and task-selection
+    parameters — a mismatch is a hard error, not a silently-incomparable merge."""
     if existing_artifact["cluster_map_id"] != new_artifact["cluster_map_id"]:
         raise ValueError(
             f"cannot merge: existing model-profiles.json was built against cluster map "

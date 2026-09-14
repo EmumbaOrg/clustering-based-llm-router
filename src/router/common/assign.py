@@ -1,11 +1,6 @@
-"""Nearest-centroid cluster assignment for a new embedding vector.
-
-Shared by ../pipeline (calibration/evaluation reads cluster-map.json to assign held-out tasks) and
-../runtime (the live router assigns one incoming prompt). Both read centroids from the same
-cluster-map.json and must use the exact same tie-break/argmin rule, which is why this lives in
-common/ rather than being reimplemented on either side.
-
-Distance is SQUARED Euclidean (no sqrt) — monotone with true distance, so it's fine for comparison.
+"""Nearest-centroid cluster assignment for a new embedding vector. Shared by pipeline and runtime
+so both use the exact same tie-break/argmin rule against the same cluster-map.json centroids.
+Distance is SQUARED Euclidean (no sqrt) — monotone with true distance, fine for comparison.
 """
 from __future__ import annotations
 

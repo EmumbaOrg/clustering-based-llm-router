@@ -1,6 +1,5 @@
 """Loads and hard-validates everything a routing decision needs: both artifacts, the candidate
-roster, and lambda. See docs/specs/2026-08-10-python-runtime-implementation-plan.md (Phase 2) for
-the reasoning behind each check below. Every check here raises rather than degrades.
+roster, and lambda. Every check here raises rather than degrades.
 """
 from __future__ import annotations
 
@@ -45,9 +44,7 @@ def _read_json(path: Path, what: str) -> dict:
 
 def _embedding_config_from_artifact(raw_map: dict) -> EmbeddingConfig:
     """Builds the EmbeddingConfig the runtime must actually embed with — from the artifact's
-    `embedding` block, never config/embedding.yaml directly. This is the highest-risk silent-drift
-    point in the runtime design — see docs/engineering-notes.md, "Embedding config source of
-    truth" before touching this."""
+    `embedding` block, never config/embedding.yaml directly."""
     emb = raw_map["embedding"]
     truncation = TruncationConfig(**emb["input"]["truncation"])
     input_config = EmbeddingInputConfig(normalisation=emb["input"]["normalisation"], truncation=truncation)
@@ -61,10 +58,8 @@ def _embedding_config_from_artifact(raw_map: dict) -> EmbeddingConfig:
 
 
 def _compute_digest(lambda_: float, embedding_model_id: str, cluster_map_id: str, profiles_id: str, candidates: list[ModelConfig]) -> str:
-    """Pins everything that fed the decision besides the embedding vector itself. Byte-exact
-    embeddings aren't reproducible across runs (fp16 vs fp32, batch composition, kernel
-    differences) — what's reproducible is the decision GIVEN the vector, so this digest is what
-    makes "did anything change between run A and run B" answerable."""
+    """Pins everything that fed the decision besides the embedding vector itself — byte-exact
+    embeddings aren't reproducible across runs, but the decision given the vector is."""
     payload = {
         "lambda": lambda_,
         "embedding_model_id": embedding_model_id,

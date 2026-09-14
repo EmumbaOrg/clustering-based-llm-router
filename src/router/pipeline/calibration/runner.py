@@ -1,16 +1,8 @@
 """Invokes the Pi coding agent headlessly (`pi -p`) to produce a candidate solution for a task
-against a configured model. This is the ONLY code path that calls a real agent.
-
-The `reference`/`null` grader-validation controls do NOT go through this module — they're
-synthesized directly by calibrate.py, source by source, without invoking Pi at all, which keeps
-them fast, free, and independent of agent/model behavior.
-
-Extracting "the solution" from an agent's free-form response is inherently fuzzy — we take the
-first fenced code block, falling back to the whole response if none is fenced. For sources
-`repo_context.py` can check out, this is sidestepped instead: the agent gets a real, isolated
-working tree and its own edit/write tools, and the solution is captured via `git diff` — text
-extraction stays only as the fallback for a response with no repo context or no tool use.
-
+against a configured model — the only code path that calls a real agent (`reference`/`null`
+controls are synthesized directly by calibrate.py instead). For sources `repo_context.py` can
+check out, the solution is captured via `git diff` on a real worktree; otherwise it falls back to
+extracting the first fenced code block from the agent's text response.
 """
 from __future__ import annotations
 
@@ -63,9 +55,8 @@ _INSTRUCTIONS = {
 # told to use them directly rather than hand-write a diff from memory. Only sources with a
 # _REPO_SOURCES entry (repo_context.py) ever reach this path.
 #
-# Deliberately has no "summarize the change or include a diff" escape hatch — see
-# docs/engineering-notes.md, "No "summarize instead" escape hatch" for why that option is a real
-# bug, not just imprecise wording.
+# Deliberately has no "summarize the change or include a diff" escape hatch — that option is a
+# real bug, not just imprecise wording.
 _CONTEXT_INSTRUCTIONS = {
     "swe-smith": (
         "The repository is checked out in your current working directory, at the state before "
@@ -100,8 +91,7 @@ _CONTEXT_INSTRUCTIONS = {
 }
 
 # Used instead of _CONTEXT_INSTRUCTIONS when the model config says `supports_tool_calls: false`
-# (local llama.cpp providers) — see docs/engineering-notes.md, "No tool calls on local (llama.cpp)
-# models".
+# (local llama.cpp providers).
 _CONTEXT_INSTRUCTIONS_NO_TOOLS = {
     "swe-smith": (
         "The repository is checked out in your current working directory, at the state before "
@@ -130,7 +120,7 @@ _CONTEXT_INSTRUCTIONS_NO_TOOLS = {
 @dataclasses.dataclass(frozen=True)
 class TokenUsage:
     """Pi's own reported usage/cost for one `pi -p` call, read from its `--mode json` event stream
-    rather than estimated locally — see docs/engineering-notes.md, "Pi cost is authoritative"."""
+    rather than estimated locally — Pi's own number is treated as authoritative."""
     input_tokens: int
     output_tokens: int
     cost_usd: float
@@ -146,8 +136,8 @@ class RunResult:
     raw_response: str = ""
     context_unavailable: bool = False  # repo_context clone/checkout failed before pi ran — routes
     # to error_harness.
-    harness_error: bool = False  # provider rejected the call — see docs/engineering-notes.md,
-    # "Pi exits 0 on a provider-level error". `detail` carries the provider's error message.
+    harness_error: bool = False  # provider rejected the call (Pi itself still exits 0); `detail`
+    # carries the provider's error message.
     timed_out: bool = False  # OUR subprocess timeout fired, distinct from a grader's own
     # error_timeout (the TEST run, not the model call).
     usage: TokenUsage | None = None  # None when pi's stdout wasn't parseable JSON — a genuinely
@@ -167,12 +157,10 @@ def build_prompt(task: Task, has_repo_context: bool = False, supports_tool_calls
 def extract_solution(response: str) -> str | None:
     match = _CODE_BLOCK_RE.search(response)
     if match:
-        # `.strip("\n")` only — a bare `.strip()` here would also eat leading INDENTATION off the
-        # first real line (it strips all leading whitespace, not just blank lines). That's fatal
-        # for bigcodebench: the grader concatenates `code_prompt + solution` directly (code_prompt
-        # ends mid-signature, e.g. "def task_func(...):\n"), so a solution missing its first
-        # line's indentation always raises IndentationError regardless of whether the model's
-        # logic was right. Confirmed empirically this session against real calibration output.
+        # `.strip("\n")` only — a bare `.strip()` would also eat leading INDENTATION off the first
+        # real line, which is fatal for bigcodebench: the grader concatenates `code_prompt +
+        # solution` directly (code_prompt ends mid-signature), so a de-indented first line always
+        # raises IndentationError regardless of whether the model's logic was right.
         extracted = match.group(1).strip("\n")
         return extracted or None
     stripped = response.strip()
@@ -180,18 +168,11 @@ def extract_solution(response: str) -> str | None:
 
 
 def _parse_json_stream(stdout: str) -> tuple[str | None, TokenUsage | None, str | None]:
-    """Parses `pi --mode json`'s newline-delimited event stream, returning the final assistant
-    message's text, the call's total usage/cost, and an API-level error message if the provider
-    itself rejected the call (Pi's own exit code does not reflect this — see
-    docs/engineering-notes.md, "Pi exits 0 on a provider-level error").
-
-    `agent_end` is always the last event and carries the full conversation, so it alone has
-    everything needed. Usage is summed across EVERY assistant message, not read off the last one
-    alone — see "Pi usage is summed per turn, not read from the last message" for why that matters.
-
-    Returns (None, None, None) on anything that isn't this NDJSON shape — e.g. a test's plain-text
-    stdout fixture, or a real failure — so callers fall back to treating `stdout` as the raw
-    response, exactly like before this format existed."""
+    """Parses `pi --mode json`'s event stream: the final assistant message's text, total usage/cost
+    (summed across every assistant message, not just the last), and an API-level error message if
+    the provider rejected the call (Pi's own exit code doesn't reflect this). Returns
+    (None, None, None) on anything that isn't this NDJSON shape, so callers fall back to treating
+    `stdout` as the raw response."""
     agent_end = None
     for line in stdout.splitlines():
         line = line.strip()
@@ -277,13 +258,9 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int) -> RunResult:
             "--no-prompt-templates",
             "--provider", model.provider,
             "--model", model.model_id,
-            # NDJSON event stream instead of plain text — the only way to read back Pi's own
-            # per-call usage/cost (see TokenUsage/_parse_json_stream). Solution extraction still
-            # works exactly as before: _parse_json_stream falls back to (None, None) on anything
-            # that isn't this shape, and extract_solution then runs on raw stdout same as always.
+            # NDJSON event stream — the only way to read back Pi's own per-call usage/cost.
             "--mode", "json",
         ]
-        # See docs/engineering-notes.md, "--no-tools is required whenever there's no worktree".
         if not (has_repo_context and model.supports_tool_calls):
             args.append("--no-tools")
 
@@ -306,13 +283,9 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int) -> RunResult:
                 f"pi call failed (exit {proc.returncode}) after {duration_s}s: "
                 f"{model.model_id} on task {task.task_id} — {proc.stderr[-300:].strip()}"
             )
-            # harness_error=True, not a bare solution=None: per "Pi exits 0 on a provider-level
-            # error" above, Pi's own convention is to exit 0 even when the PROVIDER/model itself
-            # fails, reporting that through its JSON error protocol instead (see error_message
-            # below). A nonzero exit is therefore Pi's own process failing (crash, OOM, disk full),
-            # not the model producing nothing — without this flag it fell through to
-            # error_no_solution, a GRADED outcome, wrongly counting an infra failure against the
-            # model's error rate.
+            # Pi exits 0 even when the provider/model itself fails, so a nonzero exit here means
+            # Pi's own process failed (crash, OOM, disk full) — harness_error, not the model
+            # producing nothing.
             return RunResult(
                 solution=None, detail=f"pi exit {proc.returncode}: {proc.stderr[-500:]}", raw_response=proc.stdout,
                 harness_error=True,

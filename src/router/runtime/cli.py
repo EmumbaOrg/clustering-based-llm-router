@@ -1,6 +1,5 @@
 """The `router runtime` command group: manual/offline testing of the routing decision from the
-command line — no HTTP service, no host agent in front of it. See
-docs/specs/2026-08-10-python-runtime-implementation-plan.md (Phase 4).
+command line — no HTTP service, no host agent in front of it.
 """
 from __future__ import annotations
 

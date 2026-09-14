@@ -1,29 +1,15 @@
 """Grader for DS-1000 — self-contained: exec(code_context) to load its own `test_execution` (and
-`test_string`, when present) functions, then call them with the candidate solution string. No
-repo checkout, no Docker.
-
-Both grading functions run when present — `test_string` (159 rows) asserts a required API
-appears in the solution text; skipping it lets a hardcoded answer pass `test_execution` alone.
-
-Solution contract: the snippet to splice into `code_context`'s `[insert]` placeholder — the
-splicing itself happens inside `test_execution`, defined by the row's own `code_context`, so this
-grader never needs to know the placeholder convention itself.
-
-Matplotlib-library rows are excluded from task selection entirely (see calibrate.py), not handled
-here — their `exec_test` compares rendered PNGs against a reference image that would first need
-to be rendered from `reference_code`, which is more machinery than this pass's scope covers. See
-pipeline-python/README.md.
-
-Known simplification shared with bigcodebench.py: any ImportError/ModuleNotFoundError anywhere
-during grading is classified error_missing_dep rather than fail.
+`test_string`, when present) functions, then call them with the candidate solution string. No repo
+checkout, no Docker. Matplotlib-library rows (PNG comparison) are excluded from task selection
+entirely, not handled here. Same ImportError/ModuleNotFoundError -> `error_missing_dep`
+simplification as bigcodebench.py.
 """
 from __future__ import annotations
 
 from .base import GradeResult, NONCE_PLACEHOLDER, Task, run_graded_script
 
-# Every "RESULT_NONCE_PLACEHOLDER:" below has that literal text substituted for a real per-call
-# nonce by run_graded_script before this ever runs — see base.py's NONCE_PLACEHOLDER docstring for
-# why a bare "RESULT:" sentinel is forgeable by the candidate code this script itself exec()s.
+# "RESULT_NONCE_PLACEHOLDER:" below is substituted for a real per-call nonce by run_graded_script
+# before this ever runs.
 _GRADE_SCRIPT = r"""
 import sys
 

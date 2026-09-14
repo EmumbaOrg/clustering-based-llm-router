@@ -1,21 +1,10 @@
 """Shared Docker-based grading infrastructure — one `docker run`, one shell script piped over
-stdin, one sentinel line the script echoes as its last action before exiting 0.
-
-Two invariants this module exists to enforce (see docs/... calibration plan for the bugs this
-fixes in the code that predates it):
-
-1. **`fail` is reachable only via an in-container `FAIL` sentinel.** Anything else — a dead
-   daemon, a missing image, a crashed script that never got to report — is OUR environment's
-   fault, not the candidate's, and must classify as `error_harness` (excluded from error rates),
-   never `fail` (counted as a wrong answer).
-2. **The script is never passed as a single argv element.** Linux caps a single argv element at
-   131,072 bytes (`MAX_ARG_STRLEN`); a large patch base64'd into a `bash -c <script>` argv can
-   exceed that and crash `execve` with `OSError(E2BIG)`. Streaming the script over stdin instead
-   has no such limit.
-
-The **nonce** (caller-supplied, e.g. `uuid4().hex`) exists because pytest echoes captured test
-stdout and the candidate's own code is arbitrary — a fixed sentinel string would be forgeable by a
-patch that simply prints it.
+stdin, one sentinel line the script echoes as its last action before exiting 0. `fail` is reachable
+only via an in-container `FAIL` sentinel; anything else (a dead daemon, a missing image, a crashed
+script) is OUR environment's fault and classifies as `error_harness`, never `fail`. The script is
+streamed over stdin rather than passed as a `bash -c` argv element, avoiding Linux's ~128KB argv
+size cap. The **nonce** (caller-supplied, e.g. `uuid4().hex`) exists because the candidate's own
+code is arbitrary — a fixed sentinel string would be forgeable by a patch that simply prints it.
 """
 from __future__ import annotations
 
@@ -32,8 +21,7 @@ logger = logging.getLogger(__name__)
 
 DOCKER_TIMEOUT_SECONDS = 300  # image pull (if not cached) + container run
 
-# Bounds how many distinct pulled images stay resident at once (see touch_image). See
-# docs/engineering-notes.md, "Dockerexec image cache sizing".
+# Bounds how many distinct pulled images stay resident at once (see touch_image).
 _MAX_CACHED_IMAGES = 15
 _recently_used_images: OrderedDict[str, None] = OrderedDict()
 
@@ -84,26 +72,9 @@ def pytest_collect_then_run(
 ) -> str:
     """Shared by swegym.py and swesmith.py's `_pytest_script` — both pass every declared
     FAIL_TO_PASS/PASS_TO_PASS node id to pytest in a single batch, and pytest fails the WHOLE
-    invocation (exit 4 "usage error" / 5 "no tests collected") if even one id can't be collected,
-    losing all signal for the task over one bad id. See docs/engineering-notes.md, "Pytest
-    collection mismatch (swegym/swesmith)".
-
-    Splits into an explicit collect-then-execute shape instead of "run for real, retry on
-    failure" so the potentially-slow execution step runs at most once, by construction — a
-    `--collect-only` pass can never execute a test body, so it's cheap regardless of suite size:
-
-    1. `--collect-only` against every declared id.
-    2. Check each id individually against that pass's own `ERROR: not found: <repo_dir>/<id>`
-       lines — an exact full-line match (`grep -x`), not a substring one, since a substring match
-       would let one valid id be wrongly excluded just for being a literal prefix of a different,
-       genuinely-bad id's line.
-    3. If every id turns out uncollectable, report HARNESS immediately — no point invoking pytest
-       again on an empty set.
-    4. Otherwise run the REAL pytest pass exactly once, against only the survivors. Its own exit
-       code still gets the same 0 / 4-or-5 / else handling as a safety net for a collection
-       failure step 2 didn't happen to explain per-id (e.g. a session-wide conftest import error),
-       and the excluded-id count (if any) is folded into the reported detail so it's visible
-       without re-deriving it from a discarded log."""
+    invocation if even one id can't be collected, losing all signal over one bad id. Runs a cheap
+    `--collect-only` pass first to exclude uncollectable ids, then the real pytest pass exactly
+    once against only the survivors, folding the excluded-id count into the reported detail."""
     ids_file, collect_log, valid_file = "/tmp/node_ids.txt", "/tmp/collect.log", "/tmp/valid_ids.txt"
     prefix = sentinel(nonce)
     harness_uncollectable = report_cmd(nonce, "HARNESS", "pytest could not collect the specified test ids")
@@ -152,9 +123,7 @@ _DIFF_GIT_HEADER_RE = re.compile(r"^diff --git a/(\S+) b/\S+", re.MULTILINE)
 
 def diff_touched_paths(diff_text: str) -> list[str]:
     """Every file path a unified diff touches, parsed from its `diff --git a/<path> b/<path>`
-    headers. Used to build `apply_patch_or_fail_cmd`'s `exclude_paths` — see swegym.py/
-    multiswerl.py's `grade()`, which exclude any path the task's own `test_patch` already owns from
-    the candidate's patch."""
+    headers. Used to build `apply_patch_or_fail_cmd`'s `exclude_paths`."""
     return sorted(set(_DIFF_GIT_HEADER_RE.findall(diff_text)))
 
 
@@ -164,27 +133,13 @@ def apply_patch_or_fail_cmd(
 ) -> str:
     """`git apply <patch_path> || FAIL`, folding git's own real error message into the detail
     instead of discarding it for a static string. Used for the CANDIDATE's own patch only —
-    test_patch/bug_patch/gold-patch applies stay on their existing static HARNESS messages (a
-    dataset/harness problem regardless of git's specific error there). Without the real error, a
-    candidate's apply failure gives no way to tell "the diff is malformed" from "the diff doesn't
-    match this baseline" after the fact.
+    test_patch/bug_patch/gold-patch applies stay on their existing static HARNESS messages.
 
     `exclude_paths` (swegym.py/multiswerl.py only, via `--exclude=<path>`) skips any hunk targeting
-    a file the task's own `test_patch` already touches. Confirmed real: an agent's own worktree
-    never has `test_patch` applied (only swe-smith's bug injection gets that treatment — see
-    docs/engineering-notes.md, "Candidate diffs colliding with test_patch"), so a candidate's diff
-    is captured against a file state that no longer matches once grading applies `test_patch` first
-    — reproduced live on real tasks (`checkstyle-6939`, `dask-10784`), both agent-authored hunks
-    landing in a file `test_patch` also rewrites. Confirmed separately across every gold fix in a
-    real run (76/76) that a correct fix never needs to touch a `test_patch` file, so excluding those
-    paths from the candidate's patch can never drop anything the fix actually required — this is
-    strictly a grading-time change; the agent's own worktree is never touched, so `test_patch`
-    (effectively the expected test assertions) is never exposed during solving.
-
-    `2>{err_file}` isolates git's stderr from the rest of the script's own stdout — `tr`+`cut`
-    collapses it to one line and caps it at 500 chars, matching `report_cmd`'s own single-line
-    convention (an embedded newline would otherwise look like additional, unrelated output lines
-    to `classify`'s line-by-line scan)."""
+    a file the task's own `test_patch` already touches — an agent's own worktree never has
+    `test_patch` applied, so a candidate's diff is captured against a file state that no longer
+    matches once grading applies `test_patch` first; a correct fix never needs to touch a
+    `test_patch` file, so excluding those paths can never drop anything the fix actually required."""
     err_file = "/tmp/apply_err.txt"
     prefix = sentinel(nonce)
     exclude_flags = "".join(f" --exclude={shlex.quote(path)}" for path in (exclude_paths or []))
@@ -236,12 +191,8 @@ def run(
     """Runs `script` inside `image` over stdin (constant-size argv — fixes the E2BIG risk) and
     classifies the result. Writing the script to a file before executing it (rather than piping
     straight into `bash -s`) also stops any in-container command from accidentally consuming
-    script bytes off stdin.
-
-    `volumes` (host path -> container path) is optional and additive — omitted entirely by default,
-    so existing callers (swesmith.py, swegym.py) are unaffected. multiswerl.py uses it to mount a
-    persistent Go build cache across otherwise-fresh `--rm` containers (see its own module
-    docstring for why repeated cold compiles of the same repo are the dominant cost there)."""
+    script bytes off stdin. `volumes` (host path -> container path) is optional and additive —
+    multiswerl.py uses it to mount a persistent Go build cache."""
     volume_args = [arg for host_path, container_path in (volumes or {}).items() for arg in ("-v", f"{host_path}:{container_path}")]
     # Named so a timed-out container can actually be found and killed (see below). The nonce is
     # already unique per call and hex-only, so it's a valid container name with no collision risk.
@@ -260,7 +211,7 @@ def run(
     except subprocess.TimeoutExpired:
         # Killing the `docker run` CLIENT does not stop the container — the daemon owns its
         # lifecycle, so without this explicit kill a timed-out container keeps running in the
-        # background. See docs/engineering-notes.md, "Dockerexec timeout kill".
+        # background.
         kill_container(container_name)
         return GradeResult(outcome="error_timeout", detail=f"exceeded {timeout_seconds}s")
     except FileNotFoundError:
@@ -296,15 +247,9 @@ def cleanup_image(image: str) -> None:
 def touch_image(image: str) -> None:
     """Call after a grading run against `image` finishes. Marks it as most-recently-used and, only
     once more than `_MAX_CACHED_IMAGES` distinct images are resident, evicts the least-recently-used
-    one — NOT `image` itself, which was just used and is the most likely of all of them to be
-    needed again soon (e.g. `validate-graders` grading the same task's reference then null control
-    in quick succession, or `calibrate` grading it once per model).
-
-    Deliberately not "clean up right after every call": with calibration's models-outer/tasks-inner
-    loop, that would re-pull the same multi-GB image once per model instead of once per run. An
-    unbounded cache (never cleaning up at all) trades that for unbounded disk growth across a long
-    run touching many distinct repos. This bounds resident disk to a fixed ceiling
-    (`_MAX_CACHED_IMAGES` images) while keeping recently-used images warm."""
+    one — never `image` itself, since it's the most likely to be needed again soon. Bounds resident
+    disk to a fixed ceiling while keeping recently-used images warm, instead of re-pulling a
+    multi-GB image every call or letting the cache grow unbounded."""
     if image in _recently_used_images:
         _recently_used_images.move_to_end(image)
     else:

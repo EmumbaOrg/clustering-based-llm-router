@@ -1,12 +1,6 @@
-"""Loads full task rows (including ground truth) for calibration/evaluation — distinct from
-corpus.py, which loads text-only rows for the clustering corpus. Task ids here are STABLE
-dataset-native identifiers (`task_id` / `instance_id` / `metadata.problem_id`), not positional
-post-shuffle indices, so a task can be referenced across separate runs without depending on load
-order.
-
-Only the gradeable sources (see config/calibration.yaml) are covered. swe-smith, swe-gym, and
-multi-swe-rl's Go/JS/TS/Java/Rust slices are all wired below (see grading/swesmith.py,
-grading/swegym.py, grading/multiswerl.py).
+"""Loads full task rows (including ground truth) for calibration — distinct from corpus.py, which
+loads text-only rows for the clustering corpus. Task ids are stable, dataset-native identifiers,
+not positional post-shuffle indices, so a task can be referenced across separate runs.
 """
 from __future__ import annotations
 
@@ -79,8 +73,7 @@ def _ds1000_tasks() -> list[Task]:
 
 
 # Matches corpus.py's own SWE_SMITH_SAMPLE_SIZE (same seed 42, same filter) so this loader walks
-# the identical shuffled sequence used to build task-cluster-map.json's swe-smith cluster labels —
-# see docs/engineering-notes.md, "SWE-smith task pool cap".
+# the identical shuffled sequence used to build task-cluster-map.json's swe-smith cluster labels.
 SWESMITH_TASK_POOL_CAP = 20_000
 _SWESMITH_POOL_SEED = 42
 
@@ -134,8 +127,7 @@ def _swegym_tasks() -> list[Task]:
     return tasks
 
 
-# Keeps only the fields grading/repo_context actually touch — see docs/engineering-notes.md,
-# "Multi-SWE-RL field trim". Each entry below names its reader so this stays checkable.
+# Keeps only the fields grading/repo_context actually touch. Each entry names its reader below.
 _MULTI_SWE_RL_GRADED_FIELDS = frozenset({
     "instance_id",  # not read by the grader — kept as the row's own stable id, and only ~21 B/row
     "org", "repo", "number",  # grading/multiswerl.py: _image / _repo_dir

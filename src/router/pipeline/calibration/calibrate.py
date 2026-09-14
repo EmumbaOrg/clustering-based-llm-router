@@ -82,12 +82,11 @@ def _expected_solution(task: Task) -> str:
 class SelectedTask:
     task: Task
     cluster_id: int
-    split: str  # always "calibration" for now, kept for schema/consumer compatibility — see
-    # docs/engineering-notes.md, "Holdout split removed"
+    split: str  # always "calibration" for now, kept for schema/consumer compatibility
 
 
-# Fixed source->category mapping for spec §5.1's "aim for the following distribution" — a property
-# of what each dataset IS, not a tunable; config only controls the target ratios (category_mix).
+# Fixed source->category mapping — a property of what each dataset IS, not a tunable; config only
+# controls the target ratios (category_mix).
 CATEGORY_SOURCES: dict[str, list[str]] = {
     "repo_python": ["swe-smith", "swe-gym"],
     "multilingual": ["multi-swe-rl"],
@@ -127,14 +126,10 @@ def _validate_category_mix(category_mix: dict[str, float]) -> None:
 
 
 def _take_up_to(candidates: list[Task], n: int, verify: Callable[[Task], bool] | None) -> tuple[list[Task], list[Task]]:
-    """Returns (taken, remaining) — `taken` is the first `n` USABLE candidates (all of them, in
-    order, if `verify` is `None`; the first `n` for which `verify(task)` is true otherwise), and
-    `remaining` is whatever in `candidates` was never examined, so it can still be offered as
-    backfill surplus to a different category without re-examining (or re-verifying) anything.
-
-    A candidate `verify` rejects is dropped for good — never re-offered as surplus — since
-    rejecting it just recorded (via `verify`'s own side effect, see `calibrate_verified_tasks`)
-    that it's not usable at all, not merely unlucky for this particular category/quota."""
+    """Returns (taken, remaining): the first `n` usable candidates (all of them if `verify` is
+    `None`, else the first `n` passing `verify`), and whatever was never examined so it can still
+    be offered as backfill surplus. A candidate `verify` rejects is dropped for good, never
+    re-offered."""
     if verify is None:
         return candidates[:n], candidates[n:]
     taken: list[Task] = []
@@ -151,18 +146,9 @@ def _select_with_category_mix(
     verify: Callable[[Task], bool] | None = None,
 ) -> tuple[list[Task], dict[str, int]]:
     """Splits `budget` across categories by `category_mix`'s ratios, then backfills any category's
-    shortfall from other categories' surplus in the same cluster (a cluster naturally dominated by
-    one source may have nothing to give another). Returns (chosen, shortfalls) — shortfalls maps
-    category -> how much of its quota went unfilled, for logging; `chosen` can still total less
-    than `budget` if every category in this cluster is already exhausted.
-
-    `verify` (optional) turns "take the first `quota` candidates" into "take the first `quota`
-    USABLE candidates, skipping and permanently discarding any it rejects, pulling further into the
-    shuffled pool as needed" — see `_take_up_to`. `None` (the default, used by `select_tasks`)
-    preserves the exact original behavior: unconditional, no extra work. Passing a real predicate
-    (see `calibrate_verified_tasks`) is what turns this from "select, then separately filter and
-    hope enough survive" into "select exactly `budget` already-known-good tasks per category,
-    verifying lazily — only as many candidates as actually needed, never the whole pool"."""
+    shortfall from other categories' surplus in the same cluster. Returns (chosen, shortfalls).
+    `verify` (optional, via `_take_up_to`) skips and permanently discards any candidate it rejects
+    instead of taking the first `quota` unconditionally."""
     by_category: dict[str, list[Task]] = {}
     for task in tasks_in_cluster:
         category = _SOURCE_CATEGORY.get(task.source)
@@ -220,10 +206,8 @@ def _group_gradeable_tasks_by_cluster(
     calibration_config: CalibrationConfig, cluster_map: ClusterMap, task_cluster_map: dict,
 ) -> tuple[dict[int, list[Task]], int]:
     """Shared setup for `select_tasks`/`select_verified_tasks`: validates `task_cluster_map` was
-    built against the SAME `cluster_map` (a stale/mismatched mapping would silently make cluster
-    ids mean different things than the centroids `cluster_map` carries, which must fail loudly
-    rather than produce a quietly-wrong selection), then loads every gradeable source's full row
-    data and groups it by cluster. Returns (by_cluster, k)."""
+    built against the same `cluster_map`, then loads every gradeable source's rows and groups them
+    by cluster. Returns (by_cluster, k)."""
     if task_cluster_map["cluster_map_id"] != cluster_map.artifact_id:
         raise ValueError(
             f"task-cluster-map.json was built against cluster map {task_cluster_map['cluster_map_id']!r}, "
@@ -279,17 +263,9 @@ def select_tasks(
     task_cluster_map: dict,
 ) -> list[SelectedTask]:
     """Stratified-by-cluster task selection, driven by the full task->cluster mapping computed once
-    at `build-artifact` time (`clustering/task_cluster_map.py`) rather than a per-run random
-    pre-filter — see docs/engineering-notes.md, "Task-cluster mapping replaced a per-run random
-    pre-filter" for why. When `calibration_config.category_mix` is set, each cluster's
-    `tasks_per_cluster` budget is further split by category (see `_select_with_category_mix`) per
-    spec §5.1; left empty (the default), behavior is a flat shuffle-and-cap per cluster.
-
-    Fast and pure — no grading calls, no Docker. Ground-truth validity of what comes out is only
-    discovered later, mid-calibration (`_ground_truth_invalid`'s in-run skip). For a selection
-    that's already pre-verified, see `select_verified_tasks` — a separate, explicit, slower entry
-    point; this function's behavior and callers (routine `calibrate` runs loading a pin) are
-    unchanged by that existing."""
+    at `build-artifact` time. When `category_mix` is set, each cluster's budget is further split by
+    category; left empty, it's a flat shuffle-and-cap per cluster. Fast and pure — no grading
+    calls. See `select_verified_tasks` for a slower, pre-verified alternative."""
     if calibration_config.category_mix:
         _validate_category_mix(calibration_config.category_mix)
     rng = random.Random(calibration_config.seed)
@@ -328,22 +304,9 @@ def select_verified_tasks(
     registry: dict,
     registry_path: Path = ground_truth_registry.REGISTRY_PATH,
 ) -> list[SelectedTask]:
-    """Like `select_tasks`, but every candidate is ground-truth-verified (via `verify_ground_truth`
-    — registry-cached, live-graded only on a cache miss) before being counted toward its cluster's
-    category quota — see `_select_with_category_mix`'s `verify` parameter. A task the verification
-    rejects is skipped and never re-offered, including as backfill surplus for a different
-    category; `select_tasks` itself is untouched by this — routine `calibrate` runs stay fast.
-
-    Requires `calibration_config.category_mix` (a flat, uncategorized verified selection isn't a
-    real use case this supports yet — every caller so far wants the category-mix targeting).
-    `tasks_per_cluster` is the same per-cluster budget `select_tasks` uses; asking for a bigger
-    overall pin means raising it (see `cli.py`'s `select-verified-tasks` command), the same lever
-    `select_tasks` already exposes.
-
-    `registry` is mutated in place AND written to `registry_path` after every new verification (see
-    `verify_ground_truth`) — a run touching hundreds of tasks over hours must not risk losing
-    everything to a crash near the end; callers still get the final in-memory `registry` back for
-    logging, but don't need to write it again themselves for correctness."""
+    """Like `select_tasks`, but every candidate is ground-truth-verified (registry-cached) before
+    counting toward its cluster's quota. Requires `category_mix`. `registry` is written to
+    `registry_path` after every new verification, so a long run survives a mid-run crash."""
     if not calibration_config.category_mix:
         raise ValueError("select_verified_tasks requires calibration_config.category_mix to be set")
     _validate_category_mix(calibration_config.category_mix)
@@ -456,11 +419,9 @@ def load_task_selection(path: Path) -> list[SelectedTask]:
 def run_and_grade(
     task: Task, model: ModelConfig, calibration_config: CalibrationConfig,
 ) -> tuple[GradeResult, str | None, runner_mod.TokenUsage | None]:
-    """Returns (GradeResult, solution, usage) — `solution` is what the candidate actually produced
-    (falling back to the raw agent response when extraction failed), `usage` is Pi's reported
-    token/cost usage, or None for `reference`/`null` or an unparseable `pi` call. Kept as a tuple
-    rather than folded into `GradeResult` so that type stays the small, stable one graders/tests
-    already build on."""
+    """Returns (GradeResult, solution, usage) — `solution` is what the candidate actually produced,
+    `usage` is Pi's reported token/cost usage (None for `reference`/`null`). Kept as a tuple rather
+    than folded into `GradeResult` so that type stays small and stable."""
     grader = _GRADERS.get(task.source)
     if grader is None:
         raise ValueError(f"no grader for source {task.source!r}")
@@ -483,8 +444,6 @@ def run_and_grade(
             # Repo clone/checkout failed before pi was ever invoked.
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.harness_error:
-            # Pi exits 0 even on a provider-level error — see docs/engineering-notes.md,
-            # "Pi exits 0 on a provider-level error".
             result = GradeResult(outcome="error_harness", detail=run_result.detail)
         elif run_result.timed_out:
             # Our own subprocess timeout, distinct from a grader's own error_timeout (the test run).
@@ -579,7 +538,7 @@ class ModelCalibrationResult:
 
 def image_affinity_key(task: Task) -> tuple[str, str]:
     """Sort key that groups tasks sharing a Docker image next to each other, so consecutive grading
-    calls hit a warm image instead of re-pulling. See docs/engineering-notes.md, "Image affinity"."""
+    calls hit a warm image instead of re-pulling."""
     return (task.source, str(task.row.get("image_name") or task.row.get("repo") or task.task_id))
 
 
@@ -638,19 +597,14 @@ def _solutions_dir(details_csv_path: Path) -> Path:
     return details_csv_path.parent / "solutions" / details_csv_path.stem
 
 
-# `run_and_grade`'s pi branch falls back to `run_result.raw_response` (Pi's raw `--mode json`
-# stdout, e.g. `{"type":"session",...}` one JSON object per line) whenever no solution could be
-# extracted — see its own docstring. That raw stdout is never mistakable for a real diff/code
-# solution, so it's used here purely to pick a filename extension that doesn't claim to be a diff
-# when it isn't. Never affects grading, which already treats this text identically either way.
+# Marks Pi's raw `--mode json` stdout (one JSON object per line) so a persisted "solution" that's
+# actually unparsed event-stream text doesn't get a `.diff` extension. Never affects grading.
 _RAW_PI_EVENT_STREAM_PREFIX = '{"type":'
 
 
 def _persist_full_solution(solutions_dir: Path, task_id: str, model_id: str, solution: str) -> None:
-    """Only called when `_csv_preview` truncated `solution` — see docs/engineering-notes.md,
-    "Large solution truncation". Uses a `.raw.txt` extension instead of `.diff` when `solution` is
-    actually Pi's raw, unparsed event-stream stdout rather than a real diff/code solution, so
-    browsing this directory doesn't show a `.diff` file that isn't one."""
+    """Only called when `_csv_preview` truncated `solution`. Uses `.raw.txt` instead of `.diff`
+    when `solution` is actually Pi's raw event-stream stdout, not a real diff/code solution."""
     solutions_dir.mkdir(parents=True, exist_ok=True)
     safe_task_id = _UNSAFE_FILENAME_CHARS.sub("_", task_id)
     safe_model_id = _UNSAFE_FILENAME_CHARS.sub("_", model_id)
@@ -678,11 +632,9 @@ class _CalibrationDetailsWriter:
 
 
 def _ground_truth_invalid(reference_outcome: str | None, null_outcome: str | None) -> bool:
-    """True once BOTH controls have actually run for this task and either says the ground truth is
-    bad: the gold solution didn't pass (`reference_outcome != "pass"`) or an empty solution
-    incorrectly did (`null_outcome == "pass"`). Either argument still `None` (a control wasn't in
-    this run's roster at all — e.g. a `--model`-scoped incremental run drops both) means "can't
-    tell," not "invalid" — real models still run in that case, same as before this existed."""
+    """True once both controls have run for this task and either says the ground truth is bad: the
+    gold solution didn't pass, or an empty solution incorrectly did. Either argument still `None`
+    (control absent from this run's roster) means "can't tell," not "invalid"."""
     if reference_outcome is None or null_outcome is None:
         return False
     return reference_outcome != "pass" or null_outcome == "pass"
@@ -692,22 +644,10 @@ def verify_ground_truth(
     task: Task, calibration_config: CalibrationConfig, registry: dict,
     registry_path: Path = ground_truth_registry.REGISTRY_PATH,
 ) -> str:
-    """Returns `"valid"` or `"invalid"` for `task`, consulting `registry` first (a task already
-    verified with a matching prompt digest costs zero grading calls) and running the real
-    `grade_reference`/`grade_null` controls — upserting the result back into `registry` — only on a
-    cache miss.
-
-    Writes `registry` to `registry_path` immediately after every cache-miss upsert (never on a
-    cache hit — nothing changed) — a real, Docker-based verification run can take hours, and this
-    environment has a genuine history of crashing mid-run (credit exhaustion, encoding bugs); a
-    write here costs milliseconds against a grading call that costs seconds to minutes, so batching
-    writes to save on I/O would be a bad trade. Same discipline as `_CalibrationDetailsWriter`'s
-    per-row flush, for the same reason: confirmed real — a `select-verified-tasks` run was killed
-    after ~40 minutes of grading with the registry file's mtime never having moved once.
-
-    This is the only intended way `registry` gets new entries — it grows accretively from whatever
-    selection/calibration work already needs a task's ground truth, never from a separate,
-    dedicated verification sweep. See `ground_truth_registry`'s module docstring."""
+    """Returns `"valid"` or `"invalid"` for `task`: consults `registry` first (a cache hit costs
+    zero grading calls), otherwise runs the real `grade_reference`/`grade_null` controls and
+    upserts the result. Writes `registry` to `registry_path` immediately after every cache-miss
+    upsert, so a long run doesn't lose everything to a mid-run crash."""
     digest = ground_truth_registry.compute_task_digest(task)
     cached = ground_truth_registry.lookup(registry, task.task_id, digest)
     if cached is not None:
@@ -737,20 +677,9 @@ def calibrate_models(
     models: list[ModelConfig], selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
     details_csv_path: Path | None = None,
 ) -> tuple[list[ModelCalibrationResult], list[CalibrationDetailRow]]:
-    """Runs every (task, model) pair TASKS-OUTER / MODELS-INNER, then aggregates per model. This
-    loop order is a deliberate optimization for Docker-image cache hit rate — see
-    docs/engineering-notes.md, "Tasks-outer / models-inner loop order" for the measured GB/TB
-    figures.
-
-    Within a task's inner loop, controls are graded first; if together they show this task's
-    ground truth is bad (`_ground_truth_invalid`), every real model for that task is skipped with a
-    synthesized `error_harness` result instead of a real grading call — see "Ground-truth-invalid
-    skip rate" for the measured skip rate. `index`/`total` still count a skipped call so `[i/total]`
-    progress stays consistent with the logged total.
-
-    Otherwise purely a reordering: statistics are computed after the fact by `_aggregate_outcomes`,
-    so results are identical to a models-outer run, and determinism is unaffected since task
-    selection (and its RNG) already happened in `select_tasks`."""
+    """Runs every (task, model) pair TASKS-OUTER / MODELS-INNER (a deliberate optimization for
+    Docker-image cache hit rate), then aggregates per model. Controls are graded first per task;
+    if they show bad ground truth, every real model for that task is skipped as `error_harness`."""
     calibration_only = sorted(
         (st for st in selected_tasks if st.split == "calibration"),
         key=lambda st: image_affinity_key(st.task),

@@ -69,7 +69,7 @@ class ModelConfig:
     cost_output: float
     context_window: int
     max_tokens: int
-    supports_tool_calls: bool = True  # False for local llama.cpp providers — see docs/engineering-notes.md, "No tool calls on local (llama.cpp) models"
+    supports_tool_calls: bool = True  # False for local llama.cpp providers
 
     @property
     def is_control(self) -> bool:
@@ -93,7 +93,7 @@ class CalibrationConfig:
     lambda_sweep: list[float]
     # Optional per-source grading timeout overrides (Docker-based sources only); absent/empty falls back to task_timeout_seconds.
     task_timeout_overrides: dict[str, int] = dataclasses.field(default_factory=dict)
-    # Optional {category: fraction} sampling target per spec §5.1; absent/empty keeps flat stratified-by-cluster sampling (see calibrate.py's CATEGORY_SOURCES).
+    # Optional {category: fraction} sampling target; absent/empty keeps flat stratified-by-cluster sampling (see calibrate.py's CATEGORY_SOURCES).
     category_mix: dict[str, float] = dataclasses.field(default_factory=dict)
 
     def grading_timeout_for(self, source: str) -> int:

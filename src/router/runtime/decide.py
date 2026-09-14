@@ -1,10 +1,7 @@
 """Orchestrates one routing decision: embed -> assign -> score -> select.
 
 Split into `decide_from_vector` (pure, no model download) and `decide` (adds the embedding call)
-deliberately: every rule except the encoder call — assignment, scoring, tie-breaks, the
-cluster-to-global fallback, the decision record itself — is covered by fast tests against a
-hand-authored k=3/dim=4 fixture pair. See
-docs/specs/2026-08-10-python-runtime-implementation-plan.md (Phase 3).
+so everything except the encoder call is covered by fast, fixture-based tests.
 """
 from __future__ import annotations
 
