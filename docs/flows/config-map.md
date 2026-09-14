@@ -52,7 +52,9 @@ The largest config, controlling:
 - `smoothing.method`/`prior_weight` — see [scoring-formula.md](scoring-formula.md) for the shrinkage
   math this drives.
 - `seed` — deterministic task selection.
-- `lambda_sweep` — the lambda values evaluation sweeps over (not used by `calibrate` itself).
+- `lambda_sweep` — a reference set of lambda values worth trying one at a time via
+  `router runtime decide --lambda` (not used by `calibrate` itself, and nothing sweeps it
+  automatically).
 
 ## `models.yaml` → `calibrate` AND the runtime
 

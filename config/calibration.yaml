@@ -82,8 +82,8 @@ smoothing:
 # meant to use a genuinely separate benchmark (SWE-bench Verified/Multilingual/Live), not a slice
 # of the same corpus used for calibration/clustering — a within-corpus holdout was never what the
 # spec called for, so it's removed for now rather than kept as machinery with no real purpose.
-# evaluate.py's holdout-based replay is dormant until it's wired up against a real external
-# benchmark instead.
+# The holdout-based replay this used to feed (pipeline/evaluate.py, `router pipeline evaluate`)
+# has been removed entirely rather than left dormant.
 
 # Deterministic task selection.
 seed: 42

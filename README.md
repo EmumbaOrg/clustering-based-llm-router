@@ -5,8 +5,7 @@ a coding-task corpus, and pick the model minimising `predicted_error + lambda * 
 using per-cluster error rates measured by calibration. Two parts, both pure Python:
 
 1. **The offline pipeline** (`src/router/pipeline/`) — builds the corpus, embeds it, runs K-means,
-   calibrates per-model per-cluster error rates, and evaluates the routing formula over a held-out
-   split.
+   and calibrates per-model per-cluster error rates.
 2. **The online runtime** (`src/router/runtime/`) — given one live prompt, embeds it, assigns it
    to a cluster, and selects a model.
 
@@ -25,32 +24,36 @@ using per-cluster error rates measured by calibration. Two parts, both pure Pyth
 
 **Can be skipped initially** — none of this is needed to run `corpus` → `embed` →
 `build-artifact`, or to run the test suite. It's only needed once you get to
-`validate-graders`/`calibrate`/`evaluate`:
+`validate-graders`/`calibrate`:
 
 - **Node.js >= 22.19.0 + npm**, to install the
   [Pi coding agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) CLI
   (`npm install -g @earendil-works/pi-coding-agent`, engine requirement per its own
   `package.json`) — see "Aligning `config/models.yaml` with the Pi coding agent" below.
-- **Docker** — required for `swe-smith` and `swe-gym`, both `gradeable_sources` now enabled in
-  `config/calibration.yaml` (`bigcodebench`/`ds1000` alone don't need it — they're self-contained).
-  `docker info` must succeed on whichever host runs `validate-graders`/`calibrate`/`evaluate`; no
-  further setup beyond a running daemon. SWE-smith images are large (~3.2-3.5GB measured) and span
-  ~128 repos; SWE-Gym images span its own 11 repos and vary more widely (moto ~2.9GB, pandas
-  ~6.5GB measured) — `grading/dockerexec.py` keeps a bounded LRU cache of the 15 most recently used
-  images (~50GB ceiling, shared across both sources) rather than either accumulating every one ever
-  pulled or re-pulling on every single grading call; a `calibrate` run touching more than 15
-  distinct tasks will still see some re-pulls once the cache rolls over. Budget real wall-clock
-  time for this — a handful of tasks can take 10+ minutes when images aren't already cached, and a
-  SWE-Gym task whose patch touches pandas' build config can trigger a several-minute Cython rebuild
-  on top of that (automatic, via the image's own editable-install build backend — see
-  `grading/swegym.py`'s module docstring).
-- **Outbound access to github.com**, for the `pi` runner against swe-smith/swe-gym:
+- **Docker** — required for `swe-smith`, `swe-gym`, and `multi-swe-rl` (its Go/JS/TS/Java/Rust
+  slices — C/C++ rows are corpus-only, not gradeable), all three `gradeable_sources` now enabled
+  in `config/calibration.yaml` (`bigcodebench`/`ds1000` alone don't need it — they're
+  self-contained). `docker info` must succeed on whichever host runs `validate-graders`/`calibrate`;
+  no further setup beyond a running daemon. SWE-smith images are large (~3.2-3.5GB measured) and
+  span ~128 repos; SWE-Gym images span its own 11 repos and vary more widely (moto ~2.9GB, pandas
+  ~6.5GB measured); Multi-SWE-RL images vary by repo/language too — `grading/dockerexec.py` keeps a
+  bounded LRU cache of the 15 most recently used images (~50GB ceiling, shared across all three
+  sources) rather than either accumulating every one ever pulled or re-pulling on every single
+  grading call; a `calibrate` run touching more than 15 distinct tasks will still see some
+  re-pulls once the cache rolls over. Budget real wall-clock time for this — a handful of tasks can
+  take 10+ minutes when images aren't already cached, a SWE-Gym task whose patch touches pandas'
+  build config can trigger a several-minute Cython rebuild on top of that (automatic, via the
+  image's own editable-install build backend — see `grading/swegym.py`'s module docstring), and a
+  large Multi-SWE-RL repo (Go/Rust) can take several minutes per grading call on its own (see
+  `grading/multiswerl.py`'s module docstring).
+- **Outbound access to github.com**, for the `pi` runner against swe-smith/swe-gym/multi-swe-rl:
   `repo_context.py` clones each task's real repo (swe-smith's `swesmith/{owner}__{project}.{hash}`
-  mirror, or swe-gym's own upstream repo at `base_commit` — both real, public GitHub repos — see
-  "What the pipeline does" below) so the agent gets real repo access instead of a bare paragraph.
-  Bare clones are cached per repo under `.cache/repo_context/clones/` (bounded LRU, same idea as
-  the Docker image cache above); a disposable `git worktree` per task is what the agent's tools
-  actually see, removed again once that task's `pi` call finishes.
+  mirror, swe-gym's own upstream repo at `base_commit`, or multi-swe-rl's own upstream repo — all
+  real, public GitHub repos — see "What the pipeline does" below) so the agent gets real repo
+  access instead of a bare paragraph. Bare clones are cached per repo under
+  `.cache/repo_context/clones/` (bounded LRU, same idea as the Docker image cache above); a
+  disposable `git worktree` per task is what the agent's tools actually see, removed again once
+  that task's `pi` call finishes.
 - **A GPU** — entirely optional. `torch` is pinned to the CPU-only wheel in this repo (see below);
   a GPU only makes `embed` faster, and needs its own `torch` install to take advantage of.
 
@@ -66,10 +69,14 @@ From here, see "Running the pipeline" below.
 
 ## Design
 
-A standalone, Python-only project: the offline pipeline and a from-scratch Python runtime, so the
-routing logic that must agree between calibration/evaluation and live routing — nearest-centroid
-assignment, the scoring formula — is one shared module (`src/router/common/`), not two
-implementations kept in sync by hand.
+A standalone, Python-only project: the offline pipeline and a from-scratch Python runtime share one
+module (`src/router/common/`) for anything both sides must agree on, rather than two
+implementations kept in sync by hand — config loading, artifact schema validation, and
+nearest-centroid cluster assignment (`common/assign.py`, called from both `pipeline/visualize.py`
+and `runtime/decide.py`) are genuinely used on both sides today. The scoring formula
+(`common/scoring.py`) lives here for the same reason — it's meant to be shared with any future
+offline consumer that needs to replay a routing decision — even though `runtime/decide.py` is its
+only real caller right now.
 
 ## Runtime status
 
@@ -83,7 +90,8 @@ uv run router runtime decide --prompt "..." --lambda 0.05
 - `runtime/context.py` — `load_routing_context` loads both artifacts and hard-fails on ~13 rules
   (schema/version/geometry, non-finite centroids, `profiles.cluster_map_id != cluster_map.artifact_id`,
   the configured embedding model disagreeing with the artifact's, a candidate with no calibration
-  profile, a non-positive lambda, and more) before any decision is possible. A reproducibility
+  profile, a negative or non-finite lambda (zero is valid — `runtime validate` deliberately passes
+  `lambda_=0.0`), and more) before any decision is possible. A reproducibility
   digest (`sha256` over lambda + both artifact ids + the candidate roster) is computed once here.
 - `runtime/decide.py` — `decide_from_vector` (pure: assign -> score -> select -> audit record) and
   `decide` (adds the `common/embedding.embed_one` call). Logs a WARNING whenever the selection
@@ -134,20 +142,25 @@ uv run router pipeline run-all --k 24
 Intermediate files (`corpus.jsonl`, `embeddings.npz`) are written to `.cache/` at the repo root —
 not `artifacts/`, since they're working files, not the final artifact.
 
-Calibration and evaluation, once `artifacts/cluster-map.json` exists:
+Calibration, once `artifacts/cluster-map.json` exists:
 
 ```bash
 # GATE — run this first. If reference isn't ~100% and null isn't ~0%, stop; nothing below means anything.
 uv run router pipeline validate-graders
 
 uv run router pipeline calibrate   # writes artifacts/model-profiles.json
-uv run router pipeline evaluate    # holdout run + lambda-sweep report
 ```
 
-`evaluate` executes real model calls for every holdout task against every non-control model in
+`calibrate` executes real model calls for every selected task against every non-control model in
 `config/models.yaml` — for a `runner: pi` entry that means a live `pi -p` subprocess per task, so
 whatever it points at must be reachable first — see "Aligning `config/models.yaml` with the Pi
-coding agent" below.
+coding agent" below. `calibrate --tasks-file <pin> --model <id>` onboards one new model
+incrementally against an existing `model-profiles.json` instead of re-running every model from
+scratch; `select-verified-tasks --target N` builds a ground-truth-pre-verified pinned selection
+(slower — real grading calls up front — meant to be run occasionally, not routinely);
+`visualize-clusters` plots a 2D PCA sanity-check of where sampled tasks actually land against the
+real centroids; `embed --per-source-sample N` gives a source-balanced sample instead of `--sample`'s
+plain prefix cap. Full flag reference for every command: [docs/flows/cli-reference.md](docs/flows/cli-reference.md).
 
 ### Aligning `config/models.yaml` with the Pi coding agent
 
@@ -203,10 +216,13 @@ at all — they're synthesized directly in `calibrate.py`, not run through `pi`.
    | DS-1000 | 1,000 (all) | CC-BY-SA-4.0 |
    | Multi-SWE-RL | ~4,723 (all of batch `data_20240601_20250331`) | unverified — see below |
 
-   **Multi-SWE-RL is a clustering-corpus source only** — there's no grader for it (that would need
-   a per-repo Docker image per instance), so `config/calibration.yaml`'s `gradeable_sources` never
-   lists it. It also can't use the generic `load_dataset(hf_id, split=split)` path the other four
-   sources share: its batch-1 files have per-repo-heterogeneous nested fields, and Arrow schema
+   **Multi-SWE-RL is gradeable, but only partially** — `grading/multiswerl.py` grades its Go, JS,
+   TS, Java, and Rust slices (Docker-based, same `dockerexec.py` sentinel protocol as swe-smith/
+   swe-gym), and `config/calibration.yaml`'s `gradeable_sources` lists it alongside them. Only its
+   C and C++ rows are corpus-only — not gradeable yet (not a hard technical limit, just not
+   implemented) — so they're filtered out in `tasks.py`'s loader before ever becoming a gradeable
+   task. It also can't use the generic `load_dataset(hf_id, split=split)`
+   path the other four sources share: its batch-1 files have per-repo-heterogeneous nested fields, and Arrow schema
    unification across them fails outright (`TypeError: Couldn't cast array of type string to
    null`) — the same reason the HF dataset viewer is broken for this dataset. `corpus.py` instead
    fetches each file individually via `huggingface_hub.hf_hub_download` and parses it with plain
@@ -256,15 +272,10 @@ at all — they're synthesized directly in `calibrate.py`, not run through `pi`.
    (including the `reference`/`null` controls) against them, and writes the smoothed per-cluster
    error rates to `model-profiles.json`.
 
-6. **`evaluate`** — re-selects the same deterministic split, runs the *held-out* tasks against
-   every model, and reports resolution rate / mean cost / model-selection distribution across
-   `config/calibration.yaml`'s `lambda_sweep`, plus always-strongest / always-cheapest / oracle
-   baselines. Routing decisions use only the calibration profiles, never anything from the holdout
-   run itself — the same constraint a live router would have.
-
-**swe-smith and swe-gym tasks give the `pi` agent real repo access, not just a paragraph.**
-`repo_context.py` clones the task's real repo (swe-smith's GitHub mirror at `HEAD`, or swe-gym's
-own upstream repo at `base_commit`) and checks out a disposable `git worktree` for each `run_pi`
+**swe-smith, swe-gym, and multi-swe-rl tasks give the `pi` agent real repo access, not just a
+paragraph.** `repo_context.py` clones the task's real repo (swe-smith's GitHub mirror at `HEAD`,
+swe-gym's own upstream repo at `base_commit`, or multi-swe-rl's own upstream repo) and checks out
+a disposable `git worktree` for each `run_pi`
 call, so the agent's already-enabled read/bash/edit/write tools have a real, isolated working tree
 to explore and fix rather than nothing to point them at. The resulting solution is captured via
 `git diff` on that worktree — a tool-using agent's actual edits, not a hand-written diff parsed
@@ -315,8 +326,11 @@ validation alone doesn't guarantee them.
 
 ## Logging
 
-Every command logs progress through Python's stdlib `logging` — not `print`, not ad-hoc output.
-Configured once per invocation by the CLI's Typer callback (`--log-level`, default `INFO`).
+Every `router pipeline` command logs progress through Python's stdlib `logging` — not `print`, not
+ad-hoc output. Configured once per invocation by `router pipeline`'s Typer callback (`--log-level`,
+default `INFO`; `--log-file`). `router runtime` (`decide`/`validate`) has no such callback and no
+log-level/log-file flags — its output is the plain `typer.echo` text (or `--json`) shown in
+"Running the pipeline" above, not the `logging` module.
 
 Deliberately plain — one console handler (`stderr`), one readable line per call, no structured
 fields: `logger.info("loaded 1140 rows from bigcodebench")`. Call sites inline any detail worth
@@ -324,21 +338,19 @@ keeping directly into the message string rather than attaching it as a separate 
 nothing to configure or look up beyond reading the line itself.
 
 A log **file** is opt-in via `--log-file <path>` (appended to, not overwritten, so re-running a
-command doesn't erase an earlier run) — useful for `calibrate`/`evaluate`, which can run long
-enough that you want a persistent record to grep through afterward rather than relying on terminal
-scrollback:
+command doesn't erase an earlier run) — useful for `calibrate`, which can run long enough that you
+want a persistent record to grep through afterward rather than relying on terminal scrollback:
 ```bash
 uv run router pipeline --log-level DEBUG --log-file calibrate.log calibrate
 ```
-With `--log-level DEBUG`, `calibrate`/`evaluate` also log the expected vs. actual solution for
-every `runner: pi` task (`calibrate.py`'s `run_and_grade`) — useful for seeing exactly what a model
+With `--log-level DEBUG`, `calibrate` also logs the expected vs. actual solution for every
+`runner: pi` task (`calibrate.py`'s `run_and_grade`) — useful for seeing exactly what a model
 produced when a task unexpectedly failed.
 
 Level guidance applied consistently across the pipeline: **INFO** for stage boundaries and
 per-item progress (the bulk of it — per-source/per-k/per-task, including a running progress
-fraction for the two loops that run one real model/grading call per task —
-`calibrate_model`/`run_holdout_outcomes`, via the shared `run_and_grade` dispatcher and
-`runner.py`'s `run_pi`); **WARNING** for excluded grading outcomes
+fraction for the loop that runs one real model/grading call per task — `calibrate_model`, via the
+shared `run_and_grade` dispatcher and `runner.py`'s `run_pi`); **WARNING** for excluded grading outcomes
 (`error_missing_dep`/`error_timeout`/`error_harness`) and a timed-out `pi` call — an environment
 problem worth surfacing the moment it happens, not just in the final aggregate dict; **ERROR** for
 hard failures (schema validation, a missing `pi` binary).
@@ -358,7 +370,7 @@ src/router/
   pipeline/          # the offline pipeline — see "What the pipeline does" above
     cli.py              # the `router pipeline` command group
     corpus.py           # dataset loading: tagging, exact dedup
-    evaluate.py          # holdout replay of the routing formula, lambda sweep, baselines
+    visualize.py        # 2D PCA cluster-visualization plot
     clustering/           # K-means + cluster-map.json assembly
     calibration/           # task selection -> grade -> smoothed rates -> model-profiles.json
       grading/               # one grader per data source

@@ -23,7 +23,6 @@ from ..common.config import (
 )
 from ..common.logging_config import configure_logging
 from . import corpus as corpus_mod
-from . import evaluate as evaluate_mod
 from . import visualize as visualize_mod
 from .calibration import calibrate as calibrate_mod
 from .calibration import ground_truth_registry
@@ -34,7 +33,7 @@ from .clustering import cluster as cluster_mod
 from .clustering import cluster_map as cluster_map_mod
 from .clustering import task_cluster_map as task_cluster_map_mod
 
-app = typer.Typer(help="The offline pipeline: corpus -> embed -> build-artifact -> calibrate -> evaluate.")
+app = typer.Typer(help="The offline pipeline: corpus -> embed -> build-artifact -> calibrate.")
 
 
 @app.callback()
@@ -286,27 +285,6 @@ def validate_graders(
         )
 
 
-@app.command("backfill-ground-truth-registry")
-def backfill_ground_truth_registry_command(
-    details_csv: Path = typer.Option(
-        ..., "--details-csv",
-        help="A calibration-details-*.csv from a prior run — its reference-oracle/null-baseline "
-        "rows are recovered into the registry instead of being re-graded from scratch.",
-    ),
-) -> None:
-    """Recovers ground-truth verifications already paid for in a prior calibration run into the
-    persistent registry `select-verified-tasks` consults, so that work isn't wasted. Idempotent and
-    safe to run repeatedly (including against multiple old CSVs) — never overwrites an existing,
-    still-fresh entry, only fills in tasks the registry doesn't already have."""
-    if not details_csv.exists():
-        raise typer.BadParameter(f"{details_csv} not found.")
-    registry = ground_truth_registry.load_registry()
-    before = len(registry["entries"])
-    added = calibrate_mod.backfill_registry_from_details_csv(details_csv, registry)
-    ground_truth_registry.write_registry(registry)
-    typer.echo(f"Backfilled {added} new registry entries from {details_csv} ({before} -> {len(registry['entries'])} total)")
-
-
 @app.command("select-verified-tasks")
 def select_verified_tasks_command(
     target: int = typer.Option(
@@ -458,42 +436,3 @@ def calibrate(
     profiles_mod.validate_profiles(artifact)
     path = profiles_mod.write_profiles(artifact)
     typer.echo(f"Wrote validated artifact to {path}")
-
-
-@app.command()
-def evaluate(
-    tasks_file: Path | None = typer.Option(
-        None, "--tasks-file",
-        help="Reuse a pinned task selection (ideally the exact one the calibrate run this "
-        "evaluates auto-wrote) instead of re-selecting. Without it, this re-selects fresh and "
-        "relies on select_tasks() being deterministic given an unchanged config/cluster map/"
-        "task-cluster-map — a pin removes that dependency entirely.",
-    ),
-) -> None:
-    """Re-run the (same, ideally pinned) task split's holdout tasks and report the resolution/cost table."""
-    if not PROFILES_PATH.exists():
-        raise typer.BadParameter(f"{PROFILES_PATH} not found — run `calibrate` first.")
-    if not CLUSTER_MAP_PATH.exists():
-        raise typer.BadParameter(f"{CLUSTER_MAP_PATH} not found — run `build-artifact` first.")
-
-    _, _, calibration_config, models, selected = _load_selected_tasks(tasks_file)
-    profiles_artifact = json.loads(PROFILES_PATH.read_text(encoding="utf-8"))
-    profiles_by_model = {m["model_id"]: m for m in profiles_artifact["models"]}
-
-    typer.echo("Running holdout tasks against every model...")
-    holdout_outcomes = evaluate_mod.run_holdout_outcomes(selected, models, calibration_config)
-
-    report = evaluate_mod.evaluate(selected, models, profiles_by_model, calibration_config, holdout_outcomes)
-    typer.echo(f"\nHoldout tasks: {report.holdout_task_count}")
-    typer.echo(
-        f"Always-strongest ({report.always_strongest.get('model_id')}): "
-        f"{report.always_strongest.get('resolution_rate', 0):.1%}"
-    )
-    typer.echo(
-        f"Always-cheapest ({report.always_cheapest.get('model_id')}): "
-        f"{report.always_cheapest.get('resolution_rate', 0):.1%}"
-    )
-    typer.echo(f"Oracle: {report.oracle_resolution_rate:.1%}")
-    typer.echo("\nlambda   resolution   mean_cost   selection")
-    for lr in report.lambda_results:
-        typer.echo(f"{lr.lambda_:<8} {lr.resolution_rate:<12.1%} {lr.mean_cost:<11.4f} {lr.selection_counts}")

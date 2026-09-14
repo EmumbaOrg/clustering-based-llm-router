@@ -1,7 +1,8 @@
 """The routing-score arithmetic: predicted_error + lambda * normalised_cost -> selected model.
 
-Shared between ../pipeline/evaluate.py and ../runtime so both use the exact same formula and
-tie-break rule — otherwise offline evaluation stops describing what the runtime actually does.
+Lives in common/ (not runtime/) so it's available to any future offline consumer that needs to
+replay a routing decision without re-implementing the arithmetic by hand — ../runtime/decide.py is
+its only real caller today.
 """
 from __future__ import annotations
 

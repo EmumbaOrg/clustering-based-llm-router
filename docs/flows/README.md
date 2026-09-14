@@ -14,6 +14,7 @@ dedicated page:
 - [runtime-validation.md](runtime-validation.md) — the runtime's ~13 hard-fail rules, in full
 - [grading-protocol.md](grading-protocol.md) — the Docker sentinel/nonce protocol lifecycle
 - [config-map.md](config-map.md) — which `config/*.yaml` feeds which stage
+- [cli-reference.md](cli-reference.md) — every CLI command and flag, what it does, why you'd use it
 
 ## 1. Offline pipeline flow
 
@@ -150,7 +151,8 @@ flowchart TD
     DK3 --> DK4{"sentinel tag?"}
     DK4 -->|PASS| R1[pass]
     DK4 -->|FAIL| R2[fail]
-    DK4 -->|missing / unrecognized| R3["error_harness<br/>(container/setup problem, not the candidate)"]
+    DK4 -->|"HARNESS<br/>(explicitly emitted: patch/setup step failed)"| R3[error_harness]
+    DK4 -->|"no sentinel at all / unrecognized tag<br/>(script crashed before reporting)"| R4[error_harness]
 
     classDef excluded fill:#e2e8f0,stroke:#475569;
     class NG excluded
@@ -162,11 +164,16 @@ flowchart TD
 2. **Docker repo-context sources** (`grading/swesmith.py`, `grading/swegym.py`,
    `grading/multiswerl.py`) — all three build on `grading/dockerexec.py`'s shared sentinel
    protocol: an in-container script applies the relevant patch, runs the test stage, and echoes a
-   fresh per-call nonce + outcome tag (`PASS`/`FAIL`) as the very last thing it does before exiting
-   0 regardless of outcome — the sentinel line itself carries the real result, and candidate code
-   can't forge it without guessing that call's fresh nonce. No sentinel, or an unrecognized tag,
-   means the *harness* failed (bad image, setup crash, timeout), not the candidate — classified
-   `error_harness`, excluded from the model's error rate rather than counted as a wrong answer.
+   fresh per-call nonce + outcome tag as the very last thing it does before exiting 0 regardless of
+   outcome — the sentinel line itself carries the real result, and candidate code can't forge it
+   without guessing that call's fresh nonce. The tag is one of `PASS`, `FAIL`, or `HARNESS` —
+   `HARNESS` is explicitly emitted whenever a setup/patch step fails (dataset's own patch not
+   applying, missing repo dir, etc.), which is how *most* `error_harness` results actually arrive,
+   not just an edge case. No sentinel at all, or an unrecognized tag, is the rarer fallback path —
+   the script crashed before it could report anything, so `classify()` falls back to scanning for
+   known daemon/image-error signatures. Either way it's classified `error_harness`, excluded from
+   the model's error rate rather than counted as a wrong answer, since it's the *harness* that
+   failed (bad image, setup crash, timeout), not the candidate.
    *Full protocol lifecycle: [grading-protocol.md](grading-protocol.md).*
 3. **Multi-SWE-RL's language split** — only the Go, JS, TS, Java, and Rust slices are gradeable
    (`multiswerl.py`); C and C++ rows are filtered out in `tasks.py`'s loader *before* a `Task` is

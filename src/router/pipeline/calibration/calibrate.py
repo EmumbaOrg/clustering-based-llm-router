@@ -733,57 +733,6 @@ def verify_ground_truth(
     return verdict
 
 
-def backfill_registry_from_details_csv(csv_path: Path, registry: dict) -> int:
-    """Recovers ground-truth verifications already paid for in a prior calibration run's details
-    CSV into `registry`, instead of re-grading them from scratch via `verify_ground_truth` —
-    idempotent and safe to run against any old CSV at any time: only adds an entry for a task that
-    both (a) has both `reference-oracle` and `null-baseline` rows in this CSV, and (b) isn't
-    ALREADY registered with a matching prompt digest — an existing, still-fresh entry (e.g. from a
-    live verification in a later run) is never overwritten by older CSV data.
-
-    The CSV itself doesn't carry prompt text, so a task's CURRENT prompt (needed to compute the
-    digest that makes a cache hit trustworthy) is loaded fresh per source, same mechanism
-    `select_tasks`/`load_task_selection` already use — a task the CSV mentions that's no longer in
-    its source's gradeable pool (dataset drift) is skipped, not an error.
-
-    Returns the number of NEW entries added."""
-    rows = list(csv.DictReader(csv_path.open(encoding="utf-8")))
-    reference_rows = {r["task_id"]: r for r in rows if r["model_id"] == "reference-oracle"}
-    null_rows = {r["task_id"]: r for r in rows if r["model_id"] == "null-baseline"}
-    both = sorted(set(reference_rows) & set(null_rows))
-
-    sources = {reference_rows[task_id]["source"] for task_id in both}
-    task_by_id: dict[str, Task] = {}
-    for source in sources:
-        for task in load_gradeable_tasks(source):
-            task_by_id[task.task_id] = task
-
-    added = 0
-    for task_id in both:
-        task = task_by_id.get(task_id)
-        if task is None:
-            continue
-        digest = ground_truth_registry.compute_task_digest(task)
-        if ground_truth_registry.lookup(registry, task_id, digest) is not None:
-            continue
-        reference_row = reference_rows[task_id]
-        null_row = null_rows[task_id]
-        verdict = "invalid" if _ground_truth_invalid(reference_row["outcome"], null_row["outcome"]) else "valid"
-        ground_truth_registry.upsert(
-            registry,
-            task_id=task_id,
-            source=task.source,
-            prompt_digest=digest,
-            reference_outcome=reference_row["outcome"],
-            reference_detail=reference_row["detail"],
-            null_outcome=null_row["outcome"],
-            null_detail=null_row["detail"],
-            verdict=verdict,
-        )
-        added += 1
-    return added
-
-
 def calibrate_models(
     models: list[ModelConfig], selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
     details_csv_path: Path | None = None,

@@ -1,8 +1,8 @@
 # The scoring formula, worked out
 
 `routing_score = predicted_error + lambda * normalised_cost` (`common/scoring.py::score_candidates`)
-— shared between the offline evaluator and the online runtime so both use the exact same formula
-and tie-break rule.
+— the formula and tie-break rule `runtime/decide.py` uses to turn one assigned cluster and a set of
+calibrated candidates into a routing decision.
 
 ```mermaid
 flowchart TD
@@ -65,27 +65,30 @@ See [outcomes.md](outcomes.md) for which outcomes (`pass`/`fail`/`error_no_solut
 
 ## 3. Worked example
 
-Three candidates scored for cluster 4, `lambda = 0.05`:
+Three **illustrative** candidates (fictional ids and prices — not `config/models.yaml` entries;
+real prices there drift over time, so this example deliberately doesn't tie itself to any specific
+real model) scored for cluster 4, `lambda = 0.05`:
 
 | Model | `cost_input`+`cost_output` ($/1k) | $/1M | `smoothed_error_rate` (cluster 4) |
 |---|---|---|---|
-| `gpt-5-nano` | 0.0003 | 0.30 | 0.18 |
-| `claude-haiku-4.5` | 0.006 | 6.00 | 0.09 |
-| `gpt-5.6-luna` (no cluster-4 coverage) | 0.010 | 10.00 | 0.14 (global fallback) |
+| `model-cheap` | 0.0003 | 0.30 | 0.18 |
+| `model-mid` | 0.006 | 6.00 | 0.09 |
+| `model-premium` (no cluster-4 coverage) | 0.010 | 10.00 | 0.14 (global fallback) |
 
 Normalising the 3 prices (min 0.30, max 10.00, span 9.70):
 
 | Model | `normalised_cost` | `routing_score = error + 0.05 * norm_cost` |
 |---|---|---|
-| `gpt-5-nano` | (0.30-0.30)/9.70 = **0.000** | 0.18 + 0.05×0.000 = **0.1800** |
-| `claude-haiku-4.5` | (6.00-0.30)/9.70 = **0.588** | 0.09 + 0.05×0.588 = **0.1194** |
-| `gpt-5.6-luna` | (10.00-0.30)/9.70 = **1.000** | 0.14 + 0.05×1.000 = **0.1900** |
+| `model-cheap` | (0.30-0.30)/9.70 = **0.000** | 0.18 + 0.05×0.000 = **0.1800** |
+| `model-mid` | (6.00-0.30)/9.70 = **0.588** | 0.09 + 0.05×0.588 = **0.1194** |
+| `model-premium` | (10.00-0.30)/9.70 = **1.000** | 0.14 + 0.05×1.000 = **0.1900** |
 
-`select_model` picks the minimum `routing_score` — **`claude-haiku-4.5` wins** here even though
-it's 20x more expensive than `gpt-5-nano`, because its cluster-specific error rate is low enough
-that the `lambda`-weighted cost penalty doesn't overcome it. Raise `lambda` and the cheap-but-less-
-accurate `gpt-5-nano` would eventually win instead — that crossover is exactly what
-`config/calibration.yaml`'s `lambda_sweep` is for measuring during evaluation.
+`select_model` picks the minimum `routing_score` — **`model-mid` wins** here even though it's 20x
+more expensive than `model-cheap`, because its cluster-specific error rate is low enough that the
+`lambda`-weighted cost penalty doesn't overcome it. Raise `lambda` and the cheap-but-less-accurate
+`model-cheap` would eventually win instead — that crossover is exactly what
+`config/calibration.yaml`'s `lambda_sweep` names a reference set of values for, to try one at a
+time via `router runtime decide --lambda`.
 
 ## 4. Tie-break
 
