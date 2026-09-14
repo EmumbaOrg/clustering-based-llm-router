@@ -44,8 +44,11 @@ htmlcov/
 .coverage.*
 .cache
 
-# Design/planning docs — kept locally, not tracked in git.
-/docs/
+# Design/planning docs — kept locally, not tracked in git. docs/flows/ is the one exception:
+# generated architecture-flow reference docs, tracked so they're available to whoever clones the
+# repo, not just this machine.
+/docs/*
+!/docs/flows/
 
 # Pipeline output artifacts — machine-generated, regenerable by re-running the pipeline (see
 # README.md). artifacts-schema/ (the JSON Schema contracts) is NOT covered by this and stays
