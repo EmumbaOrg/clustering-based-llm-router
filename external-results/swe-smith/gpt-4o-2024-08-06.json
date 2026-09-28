@@ -1,0 +1,648 @@
+{
+  "schema_version": 1,
+  "model_id": "gpt-4o-2024-08-06",
+  "source": {
+    "dataset": "SWE-bench/SWE-smith-trajectories",
+    "source_model_name": "gpt-4o-2024-08-06",
+    "fetched_at": "2026-09-25T04:47:32.930185+00:00"
+  },
+  "notes": "Binary pass/fail signal only. 'resolved_at_least_once' means at least one sampled trajectory for this task succeeded \u2014 an instance can have multiple trajectories, so this is an upper bound on single-attempt success rate, not one deterministic run's outcome.",
+  "tasks": [
+    {
+      "task_id": "dask__dask.5f61e423.pr_6749",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_4800",
+      "cluster_id": 9,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_10422",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6387",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_4860",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "conan-io__conan.86f29e13.pr_9431",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_51936",
+      "cluster_id": 6,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_9240",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_6911",
+      "cluster_id": 14,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_6895",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_54687",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "facebookresearch__hydra.0f03eb60.pr_2543",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "conan-io__conan.86f29e13.pr_15931",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pydantic__pydantic.acb0f10f.pr_8965",
+      "cluster_id": 2,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_10441",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_8860",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_50173",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_54186",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_52194",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_907",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5109",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_49766",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5794",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_54189",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_11632",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_6849",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_49395",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "iterative__dvc.1d6ea681.pr_3727",
+      "cluster_id": 8,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_8920",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "facebookresearch__hydra.0f03eb60.pr_1915",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_6034",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_5183",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_5640",
+      "cluster_id": 5,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "pydantic__pydantic.acb0f10f.pr_8316",
+      "cluster_id": 2,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "iterative__dvc.1d6ea681.pr_3891",
+      "cluster_id": 21,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_2238",
+      "cluster_id": 19,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_7331",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_58335",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6299",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_10972",
+      "cluster_id": 22,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6509",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_57173",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_7490",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_15155",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_47804",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_4344",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5072",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "conan-io__conan.86f29e13.pr_14164",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5582",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "facebookresearch__hydra.0f03eb60.pr_1551",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_4950",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5601",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6355",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_50988",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_53856",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_57089",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5699",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_7081",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_8954",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_56194",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "iterative__dvc.1d6ea681.pr_5188",
+      "cluster_id": 8,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_57121",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_11567",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_57488",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pydantic__pydantic.acb0f10f.pr_8072",
+      "cluster_id": 2,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "iterative__dvc.1d6ea681.pr_5888",
+      "cluster_id": 8,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "conan-io__conan.86f29e13.pr_15422",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6352",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5258",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "iterative__dvc.1d6ea681.pr_5839",
+      "cluster_id": 12,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_54087",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_7894",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_16061",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_4109",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_2696",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_51741",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_52518",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_5617",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_58028",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6204",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_3690",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_10424",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "modin-project__modin.8c7799fd.pr_7189",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5020",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_10036",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_53122",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_6756",
+      "cluster_id": 11,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_10430",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_11135",
+      "cluster_id": 9,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "conan-io__conan.86f29e13.pr_14795",
+      "cluster_id": 10,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_5348",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pydantic__pydantic.acb0f10f.pr_8567",
+      "cluster_id": 2,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "conan-io__conan.86f29e13.pr_15109",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_7191",
+      "cluster_id": 18,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6226",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "dask__dask.5f61e423.pr_7138",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_50331",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6159",
+      "cluster_id": 10,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_3547",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "python__mypy.e93f06ce.pr_11972",
+      "cluster_id": 11,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_4583",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_7061",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "pandas-dev__pandas.95280573.pr_47780",
+      "cluster_id": 14,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "iterative__dvc.1d6ea681.pr_4778",
+      "cluster_id": 8,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "getmoto__moto.694ce1f4.pr_6469",
+      "cluster_id": 0,
+      "outcome": "pass",
+      "source_value": true
+    },
+    {
+      "task_id": "Project-MONAI__MONAI.a09c1f08.pr_4796",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": false
+    }
+  ]
+}

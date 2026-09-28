@@ -1,0 +1,6846 @@
+{
+  "schema_version": 1,
+  "model_id": "llama-3.1-8b-instruct",
+  "source": {
+    "dataset": "bigcode/bigcodebench-perf",
+    "source_model_name": "Llama-3.1-8B-Instruct",
+    "fetched_at": "2026-09-25T04:47:32.930185+00:00"
+  },
+  "notes": "Binary pass/fail signal only \u2014 no error_missing_dep/error_timeout/error_harness distinction available from this external source, unlike a real calibration run.",
+  "tasks": [
+    {
+      "task_id": "BigCodeBench/0",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/2",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/3",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/4",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/5",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/6",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/7",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/8",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/9",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/10",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/11",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/12",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/13",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/14",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/15",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/16",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/17",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/18",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/19",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/20",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/21",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/22",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/23",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/24",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/25",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/26",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/27",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/28",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/29",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/30",
+      "cluster_id": 2,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/31",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/32",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/33",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/34",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/35",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/36",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/37",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/38",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/39",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/40",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/41",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/42",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/43",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/44",
+      "cluster_id": 6,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/45",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/46",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/47",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/48",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/49",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/50",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/51",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/52",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/53",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/54",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/55",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/56",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/57",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/58",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/59",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/60",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/61",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/62",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/63",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/64",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/65",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/66",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/67",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/68",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/69",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/70",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/71",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/72",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/73",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/74",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/75",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/76",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/77",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/78",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/79",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/80",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/81",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/82",
+      "cluster_id": 20,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/83",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/84",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/85",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/86",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/87",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/88",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/89",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/90",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/91",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/92",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/93",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/94",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/95",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/96",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/97",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/98",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/99",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/100",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/101",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/102",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/103",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/104",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/105",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/106",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/107",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/108",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/109",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/110",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/111",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/112",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/113",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/114",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/115",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/116",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/117",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/118",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/119",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/120",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/121",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/122",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/123",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/124",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/125",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/126",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/127",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/128",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/129",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/130",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/131",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/132",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/133",
+      "cluster_id": 6,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/134",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/135",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/136",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/137",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/138",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/139",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/140",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/141",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/142",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/143",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/144",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/145",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/146",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/147",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/148",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/149",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/150",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/151",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/152",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/153",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/154",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/155",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/156",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/157",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/158",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/159",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/160",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/161",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/162",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/163",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/164",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/165",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/166",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/167",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/168",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/169",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/170",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/171",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/172",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/173",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/174",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/175",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/176",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/177",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/178",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/179",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/180",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/181",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/182",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/183",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/184",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/185",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/186",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/187",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/188",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/189",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/190",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/191",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/192",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/193",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/194",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/195",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/196",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/197",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/198",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/199",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/200",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/201",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/202",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/203",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/204",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/205",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/206",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/207",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/208",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/209",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/210",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/211",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/212",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/213",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/214",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/215",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/216",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/217",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/218",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/219",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/220",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/221",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/222",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/223",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/224",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/225",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/226",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/227",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/228",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/229",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/230",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/231",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/232",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/233",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/234",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/235",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/236",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/237",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/238",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/239",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/240",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/241",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/242",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/243",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/244",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/245",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/246",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/247",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/248",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/249",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/250",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/251",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/252",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/253",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/254",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/255",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/256",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/257",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/258",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/259",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/260",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/261",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/262",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/263",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/264",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/265",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/266",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/267",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/268",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/269",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/270",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/271",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/272",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/273",
+      "cluster_id": 10,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/274",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/275",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/276",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/277",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/278",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/279",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/280",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/281",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/282",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/283",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/284",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/285",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/286",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/287",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/288",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/289",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/290",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/291",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/292",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/293",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/294",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/295",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/296",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/297",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/298",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/299",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/300",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/301",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/302",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/303",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/304",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/305",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/306",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/307",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/308",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/309",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/310",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/311",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/312",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/313",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/314",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/315",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/316",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/317",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/318",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/319",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/320",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/321",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/322",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/323",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/324",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/325",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/326",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/327",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/328",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/329",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/330",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/331",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/332",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/333",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/334",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/335",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/336",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/337",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/338",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/339",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/340",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/341",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/342",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/343",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/344",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/345",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/346",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/347",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/348",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/349",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/350",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/351",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/352",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/353",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/354",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/355",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/356",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/357",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/358",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/359",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/360",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/361",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/362",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/363",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/364",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/365",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/366",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/367",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/368",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/369",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/370",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/371",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/372",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/373",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/374",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/375",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/376",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/377",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/378",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/379",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/380",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/381",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/382",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/383",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/384",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/385",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/386",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/387",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/388",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/389",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/390",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/391",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/392",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/393",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/394",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/395",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/396",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/397",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/398",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/399",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/400",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/401",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/402",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/403",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/404",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/405",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/406",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/407",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/408",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/409",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/410",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/411",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/412",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/413",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/414",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/415",
+      "cluster_id": 6,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/416",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/417",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/418",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/419",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/420",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/421",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/422",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/423",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/424",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/425",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/426",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/427",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/428",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/429",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/430",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/431",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/432",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/433",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/434",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/435",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/436",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/437",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/438",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/439",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/440",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/441",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/442",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/443",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/444",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/445",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/446",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/447",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/448",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/449",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/450",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/451",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/452",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/453",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/454",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/455",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/456",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/457",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/458",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/459",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/460",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/461",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/462",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/463",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/464",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/465",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/466",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/467",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/468",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/469",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/470",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/471",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/472",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/473",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/474",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/475",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/476",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/477",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/478",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/479",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/480",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/481",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/482",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/483",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/484",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/485",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/486",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/487",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/488",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/489",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/490",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/491",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/492",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/493",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/494",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/495",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/496",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/497",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/498",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/499",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/500",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/501",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/502",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/503",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/504",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/505",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/506",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/507",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/508",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/509",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/510",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/511",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/512",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/513",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/514",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/515",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/516",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/517",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/518",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/519",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/520",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/521",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/522",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/523",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/524",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/525",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/526",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/527",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/528",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/529",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/530",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/531",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/532",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/533",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/534",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/535",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/536",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/537",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/538",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/539",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/540",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/541",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/542",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/543",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/544",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/545",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/546",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/547",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/548",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/549",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/550",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/551",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/552",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/553",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/554",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/555",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/556",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/557",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/558",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/559",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/560",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/561",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/562",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/563",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/564",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/565",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/566",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/567",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/568",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/569",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/570",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/571",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/572",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/573",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/574",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/575",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/576",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/577",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/578",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/579",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/580",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/581",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/582",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/583",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/584",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/585",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/586",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/587",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/588",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/589",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/590",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/591",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/592",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/593",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/594",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/595",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/596",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/597",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/598",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/599",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/600",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/601",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/602",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/603",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/604",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/605",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/606",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/607",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/608",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/609",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/610",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/611",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/612",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/613",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/614",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/615",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/616",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/617",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/618",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/619",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/620",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/621",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/622",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/623",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/624",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/625",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/626",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/627",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/628",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/629",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/630",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/631",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/632",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/633",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/634",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/635",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/636",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/637",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/638",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/639",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/640",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/641",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/642",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/643",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/644",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/645",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/646",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/647",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/648",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/649",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/650",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/651",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/652",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/653",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/654",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/655",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/656",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/657",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/658",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/659",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/660",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/661",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/662",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/663",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/664",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/665",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/666",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/667",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/668",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/669",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/670",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/671",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/672",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/673",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/674",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/675",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/676",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/677",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/678",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/679",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/680",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/681",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/682",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/683",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/684",
+      "cluster_id": 6,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/685",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/686",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/687",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/688",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/689",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/690",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/691",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/692",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/693",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/694",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/695",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/696",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/697",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/698",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/699",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/700",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/701",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/702",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/703",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/704",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/705",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/706",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/707",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/708",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/709",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/710",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/711",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/712",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/713",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/714",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/715",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/716",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/717",
+      "cluster_id": 11,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/718",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/719",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/720",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/721",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/722",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/723",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/724",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/725",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/726",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/727",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/728",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/729",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/730",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/731",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/732",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/733",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/734",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/735",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/736",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/737",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/738",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/739",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/740",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/741",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/742",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/743",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/744",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/745",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/746",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/747",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/748",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/749",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/750",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/751",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/752",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/753",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/754",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/755",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/756",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/757",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/758",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/759",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/760",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/761",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/762",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/763",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/764",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/765",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/766",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/767",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/768",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/769",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/770",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/771",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/772",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/773",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/774",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/775",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/776",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/777",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/778",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/779",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/780",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/781",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/782",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/783",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/784",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/785",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/786",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/787",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/788",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/789",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/790",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/791",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/792",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/793",
+      "cluster_id": 15,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/794",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/795",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/796",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/797",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/798",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/799",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/800",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/801",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/802",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/803",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/804",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/805",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/806",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/807",
+      "cluster_id": 15,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/808",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/809",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/810",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/811",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/812",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/813",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/814",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/815",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/816",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/817",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/818",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/819",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/820",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/821",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/822",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/823",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/824",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/825",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/826",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/827",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/828",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/829",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/830",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/831",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/832",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/833",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/834",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/835",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/836",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/837",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/838",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/839",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/840",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/841",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/842",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/843",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/844",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/845",
+      "cluster_id": 5,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/846",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/847",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/848",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/849",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/850",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/851",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/852",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/853",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/854",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/855",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/856",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/857",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/858",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/859",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/860",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/861",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/862",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/863",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/864",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/865",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/866",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/867",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/868",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/869",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/870",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/871",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/872",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/873",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/874",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/875",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/876",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/877",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/878",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/879",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/880",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/881",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/882",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/883",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/884",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/885",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/886",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/887",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/888",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/889",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/890",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/891",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/892",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/893",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/894",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/895",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/896",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/897",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/898",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/899",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/900",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/901",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/902",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/903",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/904",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/905",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/906",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/907",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/908",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/909",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/910",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/911",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/912",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/913",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/914",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/915",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/916",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/917",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/918",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/919",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/920",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/921",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/922",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/923",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/924",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/925",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/926",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/927",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/928",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/929",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/930",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/931",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/932",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/933",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/934",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/935",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/936",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/937",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/938",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/939",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/940",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/941",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/942",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/943",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/944",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/945",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/946",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/947",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/948",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/949",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/950",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/951",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/952",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/953",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/954",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/955",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/956",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/957",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/958",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/959",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/960",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/961",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/962",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/963",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/964",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/965",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/966",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/967",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/968",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/969",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/970",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/971",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/972",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/973",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/974",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/975",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/976",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/977",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/978",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/979",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/980",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/981",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/982",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/983",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/984",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/985",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/986",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/987",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/988",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/989",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/990",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/991",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/992",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/993",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/994",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/995",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/996",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/997",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/998",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/999",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1000",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1001",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1002",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1003",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1004",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1005",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1006",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1007",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1008",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1009",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1010",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1011",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1012",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1013",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1014",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1015",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1016",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1017",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1018",
+      "cluster_id": 17,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1019",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1020",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1021",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1022",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1023",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1024",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1025",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1026",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1027",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1028",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1029",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1030",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1031",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1032",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1033",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1034",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1035",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1036",
+      "cluster_id": 6,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1037",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1038",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1039",
+      "cluster_id": 4,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1040",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1041",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1042",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1043",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1044",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1045",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1046",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1047",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1048",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1049",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1050",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1051",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1052",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1053",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1054",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1055",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1056",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1057",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1058",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1059",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1060",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1061",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1062",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1063",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1064",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1065",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1066",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1067",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1068",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1069",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1070",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1071",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1072",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1073",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1074",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1075",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1076",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1077",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1078",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1079",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1080",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1081",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1082",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1083",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1084",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1085",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1086",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1087",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1088",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1089",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1090",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1091",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1092",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1093",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1094",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1095",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1096",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1097",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1098",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1099",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1100",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1101",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1102",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1103",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1104",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1105",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1106",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1107",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1108",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1109",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1110",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1111",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1112",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1113",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1114",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1115",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1116",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1117",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1118",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1119",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1120",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1122",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1123",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1124",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1125",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1126",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1127",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1128",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1129",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1130",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1131",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1132",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1133",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1134",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1135",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1136",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1137",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    },
+    {
+      "task_id": "BigCodeBench/1138",
+      "cluster_id": 7,
+      "outcome": "pass",
+      "source_value": 1
+    },
+    {
+      "task_id": "BigCodeBench/1139",
+      "cluster_id": 7,
+      "outcome": "fail",
+      "source_value": 0
+    }
+  ]
+}
