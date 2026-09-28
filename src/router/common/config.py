@@ -70,6 +70,7 @@ class ModelConfig:
     context_window: int
     max_tokens: int
     supports_tool_calls: bool = True  # False for local llama.cpp providers
+    thinking: str | None = None  # Pi's --thinking level: off/minimal/low/medium/high/xhigh/max; None leaves the model's own default in place
 
     @property
     def is_control(self) -> bool:

@@ -261,6 +261,8 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int) -> RunResult:
             # NDJSON event stream — the only way to read back Pi's own per-call usage/cost.
             "--mode", "json",
         ]
+        if model.thinking is not None:
+            args += ["--thinking", model.thinking]
         if not (has_repo_context and model.supports_tool_calls):
             args.append("--no-tools")
 

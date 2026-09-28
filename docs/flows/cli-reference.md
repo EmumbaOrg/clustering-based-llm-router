@@ -105,6 +105,10 @@ for the full inner-loop diagram.
 **Effect of omitting both flags:** a full fresh run — new stratified task selection, every model in
 the roster graded, a brand-new `model-profiles.json` written (not merged).
 
+A full run (or a single `--model` onboarding run) can take hours — see
+[running-calibration.md](running-calibration.md) for how to run it detached from the terminal with
+a safe pause/resume/tail workflow.
+
 ## `router runtime validate`
 
 Loads both artifacts against `config/models.yaml`'s candidate roster and reports coverage — no

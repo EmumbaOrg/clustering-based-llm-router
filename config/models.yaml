@@ -110,7 +110,8 @@ models:
   # variant) — that's `pi --list-models luna`'s reported ceiling for THIS provider mapping, and
   # matches OpenAI's own pricing page: requests over 272K input tokens get a 2x/1.5x price
   # multiplier, i.e. 272K is the standard-rate window, not the model's absolute max.
-  # Per instruction: gpt-5.6-luna ONLY — no other model from the gpt-5.6/gpt-5 family is enabled.
+  # Per instruction: gpt-5.6-luna and gpt-5.6-sol are enabled from the gpt-5.6/gpt-5 family; no
+  # other model from it is.
   - model_id: gpt-5.6-luna
     provider: openai
     runner: pi
@@ -118,6 +119,22 @@ models:
     cost_output: 0.0012
     context_window: 272000
     max_tokens: 128000
+
+  # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
+  # Verified live via `pi --list-models sol`: provider=openai, context=272K, max-out=128K,
+  # thinking=yes, matching the values below exactly. cost_input/cost_output are OpenAI's own
+  # published $2.00/$10.00 per 1M tokens, cross-checked against OpenRouter's live catalog for
+  # openai/gpt-5.6-sol — both agreed exactly. `thinking: medium` per instruction, so reasoning
+  # effort stays fixed for the whole calibration run rather than drifting with the model's own
+  # default.
+  - model_id: gpt-5.6-sol
+    provider: openai
+    runner: pi
+    cost_input: 0.002
+    cost_output: 0.01
+    context_window: 272000
+    max_tokens: 128000
+    thinking: medium
 
   # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
   # Cheapest model in OpenAI's entire current lineup — verified live via `pi --list-models nano`:
@@ -145,6 +162,21 @@ models:
   #   cost_output: 0.014
   #   context_window: 400000
   #   max_tokens: 128000
+
+  # ── Google, via Pi's `openrouter` provider ──────────────────────────────────────────────────
+  # Verified live via `pi --list-models gemma`: provider=openrouter, context=262K, max-out=16.4K,
+  # thinking=yes, tools=yes, matching the values below exactly. cost_input/cost_output are
+  # OpenRouter's own published $0.09/$0.34 per 1M tokens. Real-task-tested (not just catalog
+  # metadata) before enabling: 6 real swe-smith tasks (the dominant 154/240 source in the current
+  # pin) ran end-to-end, including a real 27-turn multi-tool-call session — 4/6 passed, the 2
+  # failures were genuine test failures (pytest), not tool-calling or patch-format breakdowns.
+  - model_id: google/gemma-4-31b-it
+    provider: openrouter
+    runner: pi
+    cost_input: 0.00009
+    cost_output: 0.00034
+    context_window: 262144
+    max_tokens: 16384
 
   # ── Hosted candidates (defined, not yet calibrated — needs API keys and real spend) ────────
   # Commented out so calibration doesn't attempt them. Uncomment as keys become available.
