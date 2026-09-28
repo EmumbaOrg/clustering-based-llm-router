@@ -1,3 +1,4 @@
+import hashlib
 import json
 import random
 
@@ -6,13 +7,21 @@ from router.pipeline.calibration import tasks as tasks_mod
 from router.pipeline.corpus import (
     SOURCE_METADATA,
     CorpusRow,
+    IncrementalSourceSpec,
+    _existing_corpus_keys,
     _extract_multi_swe_rl_text,
     _multi_swe_rl_ordered_paths,
     _multi_swe_rl_row_id,
     _multi_swe_rl_rows_from_lines,
+    add_incremental_source,
+    append_corpus_jsonl,
+    backup_corpus_jsonl,
     dedup_exact,
+    load_incremental_source,
     provenance_for,
     stable_task_id,
+    validate_new_rows,
+    write_corpus_jsonl,
 )
 
 
@@ -45,6 +54,25 @@ def test_provenance_for_known_source_uses_registered_metadata():
     assert provenance.split == SOURCE_METADATA["ds1000"]["split"]
     assert provenance.rows == 42
     assert provenance.license == "CC-BY-SA-4.0"
+
+
+def test_provenance_for_falls_back_to_incremental_sources(monkeypatch):
+    # build-artifact derives provenance from whatever .source values actually appear in the
+    # embedded corpus, which now include incrementally-added sources — this must not KeyError.
+    spec = IncrementalSourceSpec(hf_id="fake/dataset", split="test", field="text", license="MIT")
+    monkeypatch.setitem(corpus_mod.INCREMENTAL_SOURCES, "test-source", spec)
+    provenance = provenance_for("test-source", rows=7)
+    assert provenance.hf_id == "fake/dataset"
+    assert provenance.rows == 7
+    assert provenance.license == "MIT"
+
+
+def test_provenance_for_raises_for_a_name_in_neither_registry():
+    try:
+        provenance_for("not-a-real-source", rows=1)
+        assert False, "expected a KeyError"
+    except KeyError:
+        pass
 
 
 def test_multi_swe_rl_is_registered_with_a_pinned_batch_and_unverified_license():
@@ -309,3 +337,231 @@ def test_stable_task_id_matches_calibration_tasks_py_for_every_gradeable_source(
     for source, row in rows_by_source.items():
         [task] = _tasks_from_single_row(monkeypatch, source, row)
         assert task.task_id == stable_task_id(source, row)
+
+
+# --- Incremental corpus source addition ------------------------------------------------------
+
+
+class _FakeDataset:
+    """Same shape as _OneRowDataset above, but for an arbitrary number of rows."""
+
+    def __init__(self, rows: list[dict]):
+        self._rows = rows
+
+    def __iter__(self):
+        return iter(self._rows)
+
+    def __len__(self):
+        return len(self._rows)
+
+    def shuffle(self, seed):
+        return self
+
+
+def test_existing_corpus_keys_returns_empty_sets_when_file_missing(tmp_path):
+    ids, hashes = _existing_corpus_keys(tmp_path / "no-such-corpus.jsonl")
+    assert ids == set()
+    assert hashes == set()
+
+
+def test_existing_corpus_keys_reads_ids_and_hashes_from_an_existing_file(tmp_path):
+    path = tmp_path / "corpus.jsonl"
+    rows = [
+        CorpusRow(id="a:0", source="a", text="fix the bug"),
+        CorpusRow(id="a:1", source="a", text="add a feature"),
+    ]
+    write_corpus_jsonl(rows, path)
+    ids, hashes = _existing_corpus_keys(path)
+    assert ids == {"a:0", "a:1"}
+    assert len(hashes) == 2  # one hash per distinct text; exact hash values are dedup_exact's concern
+
+
+def test_validate_new_rows_accepts_genuinely_new_rows():
+    existing_ids, existing_hashes = {"a:0"}, {"deadbeef"}
+    new_rows = [CorpusRow(id="b:0", source="b", text="a genuinely new task")]
+    result = validate_new_rows(new_rows, existing_ids, existing_hashes)
+    assert result.accepted == new_rows
+    assert result.skipped_id_collision == []
+    assert result.skipped_duplicate_text == []
+
+
+def test_validate_new_rows_skips_id_collision_with_existing_corpus():
+    existing_ids, existing_hashes = {"b:0"}, set()
+    new_rows = [CorpusRow(id="b:0", source="b", text="a different text this time")]
+    result = validate_new_rows(new_rows, existing_ids, existing_hashes)
+    assert result.accepted == []
+    assert result.skipped_id_collision == new_rows
+
+
+def test_validate_new_rows_skips_duplicate_text_against_existing_corpus_even_with_a_different_id():
+    existing = CorpusRow(id="a:0", source="a", text="fix the bug")
+    existing_ids, existing_hashes = _existing_corpus_keys_from_rows([existing])
+    new_rows = [CorpusRow(id="b:0", source="b", text="fix the bug")]  # same text, different id
+    result = validate_new_rows(new_rows, existing_ids, existing_hashes)
+    assert result.accepted == []
+    assert result.skipped_duplicate_text == new_rows
+
+
+def test_validate_new_rows_skips_the_second_of_two_duplicate_texts_within_the_same_batch():
+    new_rows = [
+        CorpusRow(id="b:0", source="b", text="the same task"),
+        CorpusRow(id="b:1", source="b", text="the same task"),
+    ]
+    result = validate_new_rows(new_rows, set(), set())
+    assert [r.id for r in result.accepted] == ["b:0"]
+    assert [r.id for r in result.skipped_duplicate_text] == ["b:1"]
+
+
+def _existing_corpus_keys_from_rows(rows: list[CorpusRow]) -> tuple[set[str], set[str]]:
+    ids = {r.id for r in rows}
+    hashes = {hashlib.sha256(r.text.strip().encode("utf-8")).hexdigest() for r in rows}
+    return ids, hashes
+
+
+def test_backup_corpus_jsonl_returns_none_when_corpus_does_not_exist(tmp_path):
+    assert backup_corpus_jsonl(tmp_path / "no-such-corpus.jsonl") is None
+
+
+def test_backup_corpus_jsonl_copies_file_byte_for_byte_and_leaves_original_untouched(tmp_path):
+    path = tmp_path / "corpus.jsonl"
+    write_corpus_jsonl([CorpusRow(id="a:0", source="a", text="hello")], path)
+    original_bytes = path.read_bytes()
+
+    backup_path = backup_corpus_jsonl(path)
+
+    assert backup_path is not None
+    assert backup_path.parent == path.parent
+    assert backup_path.name.startswith("corpus-backup-")
+    assert backup_path.read_bytes() == original_bytes
+    assert path.read_bytes() == original_bytes  # backing up must never touch the original
+
+
+def test_append_corpus_jsonl_creates_file_when_missing(tmp_path):
+    path = tmp_path / "corpus.jsonl"
+    rows = [CorpusRow(id="a:0", source="a", text="hello")]
+    append_corpus_jsonl(rows, path)
+    assert read_corpus_jsonl_lines(path) == [{"id": "a:0", "source": "a", "text": "hello"}]
+
+
+def test_append_corpus_jsonl_preserves_existing_bytes_and_only_appends_new_lines(tmp_path):
+    path = tmp_path / "corpus.jsonl"
+    write_corpus_jsonl([CorpusRow(id="a:0", source="a", text="hello")], path)
+    original_bytes = path.read_bytes()
+
+    append_corpus_jsonl([CorpusRow(id="b:0", source="b", text="world")], path)
+
+    new_bytes = path.read_bytes()
+    assert new_bytes.startswith(original_bytes)
+    appended_suffix = new_bytes[len(original_bytes):]
+    assert json.loads(appended_suffix.decode("utf-8")) == {"id": "b:0", "source": "b", "text": "world"}
+
+
+def read_corpus_jsonl_lines(path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_load_incremental_source_raises_for_a_name_already_in_source_metadata():
+    try:
+        load_incremental_source("ds1000")
+        assert False, "expected a ValueError"
+    except ValueError:
+        pass
+
+
+def test_load_incremental_source_raises_for_an_unregistered_name():
+    try:
+        load_incremental_source("not-a-registered-source")
+        assert False, "expected a ValueError"
+    except ValueError:
+        pass
+
+
+def test_load_incremental_source_loads_via_the_generic_path(monkeypatch):
+    spec = IncrementalSourceSpec(hf_id="fake/dataset", split="test", field="text", license="MIT")
+    monkeypatch.setitem(corpus_mod.INCREMENTAL_SOURCES, "test-source", spec)
+    monkeypatch.setattr(
+        corpus_mod, "load_dataset",
+        lambda hf_id, split: _FakeDataset([{"instance_id": "test-source:1", "text": "a task"}]),
+    )
+    monkeypatch.setattr(corpus_mod, "stable_task_id", lambda source, row: row["instance_id"])
+
+    rows = load_incremental_source("test-source")
+
+    assert rows == [CorpusRow(id="test-source:1", source="test-source", text="a task")]
+
+
+def test_add_incremental_source_dry_run_makes_zero_writes_and_creates_no_backup(tmp_path, monkeypatch):
+    corpus_path = tmp_path / "corpus.jsonl"
+    write_corpus_jsonl([CorpusRow(id="a:0", source="a", text="existing task")], corpus_path)
+    original_bytes = corpus_path.read_bytes()
+
+    spec = IncrementalSourceSpec(hf_id="fake/dataset", split="test", field="text", license="MIT")
+    monkeypatch.setitem(corpus_mod.INCREMENTAL_SOURCES, "test-source", spec)
+    monkeypatch.setattr(
+        corpus_mod, "load_dataset",
+        lambda hf_id, split: _FakeDataset([{"instance_id": "test-source:1", "text": "a new task"}]),
+    )
+    monkeypatch.setattr(corpus_mod, "stable_task_id", lambda source, row: row["instance_id"])
+
+    report, result = add_incremental_source("test-source", corpus_path, apply=False)
+
+    assert report.loaded == 1
+    assert report.accepted == 1
+    assert report.applied is False
+    assert report.backup_path is None
+    assert corpus_path.read_bytes() == original_bytes
+    assert list(tmp_path.glob("corpus-backup-*.jsonl")) == []
+
+
+def test_add_incremental_source_apply_backs_up_then_appends_only_accepted_rows(tmp_path, monkeypatch):
+    corpus_path = tmp_path / "corpus.jsonl"
+    write_corpus_jsonl([CorpusRow(id="a:0", source="a", text="existing task")], corpus_path)
+    original_bytes = corpus_path.read_bytes()
+
+    spec = IncrementalSourceSpec(hf_id="fake/dataset", split="test", field="text", license="MIT")
+    monkeypatch.setitem(corpus_mod.INCREMENTAL_SOURCES, "test-source", spec)
+    monkeypatch.setattr(
+        corpus_mod, "load_dataset",
+        lambda hf_id, split: _FakeDataset([
+            {"instance_id": "test-source:1", "text": "a new task"},
+            {"instance_id": "a:0", "text": "a colliding id, must be skipped"},
+        ]),
+    )
+    monkeypatch.setattr(corpus_mod, "stable_task_id", lambda source, row: row["instance_id"])
+
+    report, result = add_incremental_source("test-source", corpus_path, apply=True)
+
+    assert report.accepted == 1
+    assert report.skipped_id_collision == 1
+    assert report.applied is True
+    assert report.backup_path is not None
+    assert report.backup_path.read_bytes() == original_bytes  # backup is the pre-write snapshot
+
+    new_bytes = corpus_path.read_bytes()
+    assert new_bytes.startswith(original_bytes)  # existing line untouched
+    lines = read_corpus_jsonl_lines(corpus_path)
+    assert lines == [
+        {"id": "a:0", "source": "a", "text": "existing task"},
+        {"id": "test-source:1", "source": "test-source", "text": "a new task"},
+    ]
+
+
+def test_add_incremental_source_second_apply_run_is_a_no_op(tmp_path, monkeypatch):
+    corpus_path = tmp_path / "corpus.jsonl"
+    write_corpus_jsonl([CorpusRow(id="a:0", source="a", text="existing task")], corpus_path)
+
+    spec = IncrementalSourceSpec(hf_id="fake/dataset", split="test", field="text", license="MIT")
+    monkeypatch.setitem(corpus_mod.INCREMENTAL_SOURCES, "test-source", spec)
+    monkeypatch.setattr(
+        corpus_mod, "load_dataset",
+        lambda hf_id, split: _FakeDataset([{"instance_id": "test-source:1", "text": "a new task"}]),
+    )
+    monkeypatch.setattr(corpus_mod, "stable_task_id", lambda source, row: row["instance_id"])
+
+    first_report, _ = add_incremental_source("test-source", corpus_path, apply=True)
+    assert first_report.applied is True
+
+    second_report, _ = add_incremental_source("test-source", corpus_path, apply=True)
+    assert second_report.accepted == 0
+    assert second_report.applied is False
+    assert len(list(tmp_path.glob("corpus-backup-*.jsonl"))) == 1  # no second backup made

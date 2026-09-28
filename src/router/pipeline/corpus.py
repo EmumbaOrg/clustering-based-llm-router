@@ -9,8 +9,10 @@ import dataclasses
 import hashlib
 import json
 import logging
+import shutil
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from posixpath import basename, dirname
 
@@ -92,10 +94,20 @@ class SourceProvenance:
 
 
 def provenance_for(name: str, rows: int) -> SourceProvenance:
-    meta = SOURCE_METADATA[name]
-    return SourceProvenance(
-        name=name, hf_id=meta["hf_id"], split=meta["split"], field=meta["field"], rows=rows, license=meta["license"],
-    )
+    """Falls back to INCREMENTAL_SOURCES when `name` isn't a SOURCE_METADATA source — build-artifact
+    derives provenance from whatever `.source` values actually appear in the embedded corpus
+    (cli.py's `_run_build_artifact`), which now include incrementally-added sources too."""
+    if name in SOURCE_METADATA:
+        meta = SOURCE_METADATA[name]
+        return SourceProvenance(
+            name=name, hf_id=meta["hf_id"], split=meta["split"], field=meta["field"], rows=rows, license=meta["license"],
+        )
+    if name in INCREMENTAL_SOURCES:
+        spec = INCREMENTAL_SOURCES[name]
+        return SourceProvenance(
+            name=name, hf_id=spec.hf_id, split=spec.split, field=spec.field, rows=rows, license=spec.license,
+        )
+    raise KeyError(f"{name!r} is registered in neither SOURCE_METADATA nor INCREMENTAL_SOURCES")
 
 
 def _extract_multi_swe_rl_text(record: dict) -> str | None:
@@ -229,12 +241,10 @@ _CUSTOM_LOADERS: dict[str, Callable[[int | None], list[CorpusRow]]] = {
 }
 
 
-def _load_source(name: str, cap: int | None) -> list[CorpusRow]:
-    custom_loader = _CUSTOM_LOADERS.get(name)
-    if custom_loader is not None:
-        return custom_loader(cap)
-
-    meta = SOURCE_METADATA[name]
+def _load_generic(name: str, meta: dict[str, str], cap: int | None) -> list[CorpusRow]:
+    """The load_dataset(hf_id, split=split)-shaped loader body. Takes `meta` explicitly (rather
+    than looking it up in SOURCE_METADATA internally, like this function's predecessor did) so it
+    also works for a source registered in INCREMENTAL_SOURCES instead."""
     logger.info(f"loading corpus source {name} ({meta['hf_id']}, split={meta['split']})")
     ds = load_dataset(meta["hf_id"], split=meta["split"])
 
@@ -265,6 +275,55 @@ def _load_source(name: str, cap: int | None) -> list[CorpusRow]:
         logger.warning(f"{name}: skipped {skipped_no_id} row(s) with a missing or duplicate stable id")
     logger.info(f"loaded {len(rows)} rows from {name} ({meta['license']})")
     return rows
+
+
+def _load_source(name: str, cap: int | None) -> list[CorpusRow]:
+    custom_loader = _CUSTOM_LOADERS.get(name)
+    if custom_loader is not None:
+        return custom_loader(cap)
+    return _load_generic(name, SOURCE_METADATA[name], cap)
+
+
+@dataclasses.dataclass(frozen=True)
+class IncrementalSourceSpec:
+    """Metadata for a source added via `add-corpus-source`, one at a time, after the initial
+    corpus build — deliberately separate from SOURCE_METADATA, whose insertion order carries real
+    dedup-priority meaning (see build_corpus/dedup_exact) that a test locks in place. An
+    incrementally-added source is instead validated against whatever is already on disk at the
+    time it's added (see validate_new_rows), so ordering between entries here has no such meaning.
+
+    A source needing a custom (non-generic-load_dataset) shape still gets an entry here for
+    `license`/reporting, with placeholder hf_id/split/field, and registers its real loader in
+    _CUSTOM_LOADERS — the same extension point multi-swe-rl already uses.
+    """
+
+    hf_id: str
+    split: str
+    field: str
+    license: str
+    cap: int | None = None  # default cap for this source; explicit cap= to load_incremental_source overrides it
+
+
+# Registered here one at a time as new datasets are chosen and validated — never through
+# build_corpus()/SOURCE_METADATA. Empty until a real source is added.
+INCREMENTAL_SOURCES: dict[str, IncrementalSourceSpec] = {}
+
+
+def load_incremental_source(name: str, cap: int | None = None) -> list[CorpusRow]:
+    """Loads ONE registered incremental source's rows, independent of build_corpus() and
+    SOURCE_METADATA. `cap` overrides the spec's own default cap when given (None = the spec's own
+    cap, which may itself be None = the full split)."""
+    if name in SOURCE_METADATA:
+        raise ValueError(f"{name!r} is a build_corpus() source; use the `corpus` command, not incremental add.")
+    if name not in INCREMENTAL_SOURCES:
+        raise ValueError(f"{name!r} is not registered in INCREMENTAL_SOURCES: {sorted(INCREMENTAL_SOURCES)}")
+    spec = INCREMENTAL_SOURCES[name]
+    effective_cap = cap if cap is not None else spec.cap
+    custom_loader = _CUSTOM_LOADERS.get(name)
+    if custom_loader is not None:
+        return custom_loader(effective_cap)
+    meta = {"hf_id": spec.hf_id, "split": spec.split, "field": spec.field, "license": spec.license}
+    return _load_generic(name, meta, effective_cap)
 
 
 def dedup_exact(rows: list[CorpusRow]) -> list[CorpusRow]:
@@ -314,3 +373,125 @@ def read_corpus_jsonl(path: Path) -> list[CorpusRow]:
                 continue
             rows.append(CorpusRow(**json.loads(line)))
     return rows
+
+
+def _text_hash(text: str) -> str:
+    """Same hashing scheme as dedup_exact, factored out so an incrementally-added row is checked
+    for duplication the exact same way the original corpus was deduped."""
+    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
+
+
+def _existing_corpus_keys(path: Path) -> tuple[set[str], set[str]]:
+    """Read-only scan of the current corpus.jsonl via read_corpus_jsonl (never write_corpus_jsonl).
+    Returns (existing_ids, existing_text_hashes). (set(), set()) if the file doesn't exist yet —
+    incremental add still works against an empty/nonexistent corpus."""
+    if not path.exists():
+        return set(), set()
+    ids: set[str] = set()
+    hashes: set[str] = set()
+    for row in read_corpus_jsonl(path):
+        ids.add(row.id)
+        hashes.add(_text_hash(row.text))
+    return ids, hashes
+
+
+@dataclasses.dataclass(frozen=True)
+class IncrementalAddResult:
+    accepted: list[CorpusRow]
+    skipped_id_collision: list[CorpusRow]
+    skipped_duplicate_text: list[CorpusRow]
+
+
+def validate_new_rows(
+    new_rows: list[CorpusRow], existing_ids: set[str], existing_text_hashes: set[str],
+) -> IncrementalAddResult:
+    """Classifies each new row as accepted / skipped_id_collision / skipped_duplicate_text against
+    the existing corpus's id/text-hash sets. Also checks each new row against every OTHER new row
+    already accepted earlier in this same call (seen_ids/seen_hashes grow as rows are accepted), so
+    a within-batch duplicate is caught first-occurrence-wins — the same semantics dedup_exact
+    already applies within a single build_corpus() run. Never mutates or evicts an existing row:
+    the existing corpus always wins an id or text collision, unconditionally."""
+    accepted: list[CorpusRow] = []
+    skipped_id_collision: list[CorpusRow] = []
+    skipped_duplicate_text: list[CorpusRow] = []
+    seen_ids = set(existing_ids)
+    seen_hashes = set(existing_text_hashes)
+    for row in new_rows:
+        if row.id in seen_ids:
+            skipped_id_collision.append(row)
+            continue
+        text_hash = _text_hash(row.text)
+        if text_hash in seen_hashes:
+            skipped_duplicate_text.append(row)
+            continue
+        seen_ids.add(row.id)
+        seen_hashes.add(text_hash)
+        accepted.append(row)
+    return IncrementalAddResult(accepted, skipped_id_collision, skipped_duplicate_text)
+
+
+def backup_corpus_jsonl(path: Path) -> Path | None:
+    """Copies the existing corpus file to a sibling corpus-backup-<UTC timestamp>.jsonl before any
+    append — matches the manual-backup convention already used for this file (e.g.
+    corpus-backup-20260901-161536.jsonl), now automatic. Returns None (no-op) when `path` doesn't
+    exist yet — there's nothing to protect."""
+    if not path.exists():
+        return None
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    backup_path = path.parent / f"corpus-backup-{timestamp}.jsonl"
+    shutil.copy2(path, backup_path)
+    return backup_path
+
+
+def append_corpus_jsonl(rows: list[CorpusRow], path: Path) -> None:
+    """Append-only: 'a' mode, creates the file if missing. Never touches a byte already in the
+    file — this is deliberately NOT write_corpus_jsonl (which is a full 'w'-mode overwrite) reused
+    against a combined row list; that would risk the existing corpus's content, which is exactly
+    what this whole mechanism exists to avoid. Callers are responsible for calling
+    backup_corpus_jsonl(path) first if a backup is wanted — this function doesn't back up on its
+    own, so it stays unit-testable in isolation."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(dataclasses.asdict(row), ensure_ascii=False) + "\n")
+
+
+@dataclasses.dataclass(frozen=True)
+class IncrementalAddReport:
+    source: str
+    loaded: int
+    accepted: int
+    skipped_id_collision: int
+    skipped_duplicate_text: int
+    backup_path: Path | None
+    corpus_path: Path
+    applied: bool
+
+
+def add_incremental_source(
+    name: str, corpus_path: Path, cap: int | None = None, apply: bool = False,
+) -> tuple[IncrementalAddReport, IncrementalAddResult]:
+    """The single entry point for both dry-run (apply=False, the default) and real writes
+    (apply=True): always loads the source and validates it against corpus_path (read-only). Only
+    when apply=True AND there's something to accept does it back up corpus_path and then append —
+    write_corpus_jsonl is never called from this path, so a full-file rewrite is not reachable
+    here. If everything loaded turns out to be a duplicate, no backup is made and nothing is
+    written, which also makes re-running the same apply command a no-op the second time."""
+    new_rows = load_incremental_source(name, cap)
+    existing_ids, existing_hashes = _existing_corpus_keys(corpus_path)
+    result = validate_new_rows(new_rows, existing_ids, existing_hashes)
+
+    backup_path = None
+    applied = False
+    if apply and result.accepted:
+        backup_path = backup_corpus_jsonl(corpus_path)
+        append_corpus_jsonl(result.accepted, corpus_path)
+        applied = True
+
+    report = IncrementalAddReport(
+        source=name, loaded=len(new_rows), accepted=len(result.accepted),
+        skipped_id_collision=len(result.skipped_id_collision),
+        skipped_duplicate_text=len(result.skipped_duplicate_text),
+        backup_path=backup_path, corpus_path=corpus_path, applied=applied,
+    )
+    return report, result

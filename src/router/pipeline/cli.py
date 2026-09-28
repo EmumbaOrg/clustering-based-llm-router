@@ -31,6 +31,7 @@ from .calibration.calibrate import SelectedTask
 from .calibration.tasks import load_gradeable_tasks
 from .clustering import cluster as cluster_mod
 from .clustering import cluster_map as cluster_map_mod
+from .clustering import incremental as incremental_mod
 from .clustering import task_cluster_map as task_cluster_map_mod
 
 app = typer.Typer(help="The offline pipeline: corpus -> embed -> build-artifact -> calibrate.")
@@ -77,6 +78,136 @@ def corpus(
 ) -> None:
     """Build corpus.jsonl."""
     _run_corpus(sample)
+
+
+def _run_add_corpus_source(source: str, cap: int | None, apply: bool) -> None:
+    if source not in corpus_mod.INCREMENTAL_SOURCES:
+        raise typer.BadParameter(
+            f"{source!r} is not registered in corpus.py's INCREMENTAL_SOURCES. "
+            f"Registered: {sorted(corpus_mod.INCREMENTAL_SOURCES)}"
+        )
+    report, _ = corpus_mod.add_incremental_source(source, CORPUS_PATH, cap=cap, apply=apply)
+
+    mode = "APPLY" if apply else "DRY RUN (no writes)"
+    license_ = corpus_mod.INCREMENTAL_SOURCES[source].license
+    typer.echo(f"[{mode}] source={source} ({license_}) corpus={CORPUS_PATH}")
+    typer.echo(f"  loaded: {report.loaded}")
+    typer.echo(f"  {'appended' if apply else 'would append'}: {report.accepted}")
+    typer.echo(f"  skipped (id collision with existing corpus): {report.skipped_id_collision}")
+    typer.echo(f"  skipped (duplicate text vs. existing corpus or this batch): {report.skipped_duplicate_text}")
+    if apply:
+        if report.applied:
+            typer.echo(f"  backup written to: {report.backup_path}")
+            typer.echo(f"  appended {report.accepted} row(s) to {CORPUS_PATH}")
+        else:
+            typer.echo("  nothing to append — no backup made, no write made")
+    else:
+        typer.echo("  dry run only — re-run with --apply to write (a backup is made automatically first)")
+
+
+@app.command("add-corpus-source")
+def add_corpus_source(
+    source: str = typer.Option(..., "--source", help="Name registered in corpus.py's INCREMENTAL_SOURCES."),
+    cap: int | None = typer.Option(
+        None,
+        help="Cap this source at N rows for this run. Omit to use the source's registered default "
+        "cap (or the full split, if uncapped).",
+    ),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Actually write. Without this flag, only reports what would happen — corpus.jsonl is "
+        "read but never touched. With --apply, corpus.jsonl is first backed up (as "
+        "corpus-backup-<UTC timestamp>.jsonl next to it), then the validated new rows are "
+        "appended — the file is never rewritten or reordered.",
+    ),
+) -> None:
+    """Incrementally add ONE new dataset's rows to corpus.jsonl without rebuilding or touching any
+    existing row. Dry-run by default. Embedding/clustering are untouched by this command — re-run
+    `embed` and `build-artifact` separately afterward to pick up the new rows."""
+    _run_add_corpus_source(source, cap, apply)
+
+
+def _incremental_embeddings_path(source: str) -> Path:
+    return WORK_DIR / f"embeddings-{source}.npz"
+
+
+def _run_embed_incremental_source(source: str, apply: bool) -> None:
+    embedding_config = load_embedding_config()
+    embeddings_path = _incremental_embeddings_path(source)
+    report = incremental_mod.embed_incremental_source(
+        source, CORPUS_PATH, embeddings_path, embedding_config, apply=apply,
+    )
+    mode = "APPLY" if apply else "DRY RUN (no writes)"
+    typer.echo(f"[{mode}] source={source} corpus={CORPUS_PATH}")
+    typer.echo(f"  rows loaded from corpus.jsonl: {report.loaded}")
+    if apply:
+        if report.applied:
+            typer.echo(f"  wrote {report.loaded} embeddings to {report.embeddings_path}")
+        else:
+            typer.echo(f"  nothing to embed for source={source!r} — no write made")
+    else:
+        typer.echo(f"  would write to: {report.embeddings_path}")
+        typer.echo("  dry run only — re-run with --apply to write. The shared embeddings.npz is never touched.")
+
+
+@app.command("embed-incremental-source")
+def embed_incremental_source(
+    source: str = typer.Option(..., "--source", help="Name already appended to corpus.jsonl via add-corpus-source."),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Actually write to a source-specific embeddings-<source>.npz. Without this flag, only "
+        "embeds in memory and reports the row count. The shared .cache/embeddings.npz is NEVER "
+        "touched by this command.",
+    ),
+) -> None:
+    """Embed ONE incrementally-added source's rows (read from corpus.jsonl) into their own
+    embeddings-<source>.npz, without touching the shared embeddings.npz. Dry-run by default."""
+    _run_embed_incremental_source(source, apply)
+
+
+def _run_assign_incremental_clusters(source: str, apply: bool) -> None:
+    embedding_config = load_embedding_config()
+    embeddings_path = _incremental_embeddings_path(source)
+    report, result = incremental_mod.assign_incremental_clusters(
+        source, CLUSTER_MAP_PATH, embeddings_path, TASK_CLUSTER_MAP_PATH, embedding_config, apply=apply,
+    )
+    mode = "APPLY" if apply else "DRY RUN (no writes)"
+    typer.echo(f"[{mode}] source={source} cluster-map={CLUSTER_MAP_PATH} (never rewritten)")
+    typer.echo(f"  {'assigned' if apply else 'would assign'}: {report.assigned}")
+    typer.echo(f"  skipped (task_id already in task-cluster-map.json): {report.skipped_id_collision}")
+    if report.cluster_distribution:
+        typer.echo("  cluster distribution of newly-assigned rows:")
+        for cluster_id, count in sorted(report.cluster_distribution.items(), key=lambda kv: -kv[1]):
+            typer.echo(f"    cluster {cluster_id}: {count}")
+    if apply:
+        if report.applied:
+            typer.echo(f"  backup written to: {report.backup_path}")
+            typer.echo(f"  appended {report.assigned} entr{'y' if report.assigned == 1 else 'ies'} to {report.task_cluster_map_path}")
+        else:
+            typer.echo("  nothing to assign — no backup made, no write made")
+    else:
+        typer.echo("  dry run only — re-run with --apply to write (a backup is made automatically first)")
+
+
+@app.command("assign-incremental-clusters")
+def assign_incremental_clusters(
+    source: str = typer.Option(..., "--source", help="Name already embedded via embed-incremental-source."),
+    apply: bool = typer.Option(
+        False,
+        "--apply",
+        help="Actually write. Without this flag, only reports what would happen — cluster-map.json "
+        "is read but never touched (by design, in every mode), and task-cluster-map.json is read "
+        "but never written. With --apply, task-cluster-map.json is first backed up (as "
+        "task-cluster-map-backup-<UTC timestamp>.json next to it), then the newly-assigned rows "
+        "are appended to its existing tasks list.",
+    ),
+) -> None:
+    """Assign ONE incrementally-embedded source's rows to the EXISTING cluster-map.json's
+    centroids (nearest-centroid, no re-fit — cluster-map.json itself is never rewritten), and
+    append the assignments to task-cluster-map.json. Dry-run by default."""
+    _run_assign_incremental_clusters(source, apply)
 
 
 def _run_embed(sample: int | None, per_source_sample: int | None = None, seed: int = 42) -> None:
