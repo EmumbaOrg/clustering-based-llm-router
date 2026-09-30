@@ -72,13 +72,15 @@ models:
   # with no leaked tags. Only one heavy local llama.cpp server should run at a time (see
   # docs/engineering-notes.md on swap-thrash) — don't run this alongside llama-3.1-8b-instruct's
   # server.
-  - model_id: qwen2.5-14b-instruct
-    provider: local-qwen2514b
-    runner: pi
-    cost_input: 0.00005
-    cost_output: 0.00005
-    context_window: 16384
-    max_tokens: 2048
+  # Disabled (2026-09-30): never calibrated, so it has no entry in model-profiles.json and the
+  # runtime hard-fails on any roster model without one. Re-enable after running calibration for it.
+  # - model_id: qwen2.5-14b-instruct
+  #   provider: local-qwen2514b
+  #   runner: pi
+  #   cost_input: 0.00005
+  #   cost_output: 0.00005
+  #   context_window: 16384
+  #   max_tokens: 2048
 
   # ── Anthropic, native Pi provider (no ~/.pi/agent/models.json entry needed) ────────────────
   # `provider: anthropic` is built into Pi itself — confirmed via `pi auth check --provider
@@ -127,14 +129,16 @@ models:
   # openai/gpt-5.6-sol — both agreed exactly. `thinking: medium` per instruction, so reasoning
   # effort stays fixed for the whole calibration run rather than drifting with the model's own
   # default.
-  - model_id: gpt-5.6-sol
-    provider: openai
-    runner: pi
-    cost_input: 0.002
-    cost_output: 0.01
-    context_window: 272000
-    max_tokens: 128000
-    thinking: medium
+  # Disabled (2026-09-30): never calibrated, so it has no entry in model-profiles.json and the
+  # runtime hard-fails on any roster model without one. Re-enable after running calibration for it.
+  # - model_id: gpt-5.6-sol
+  #   provider: openai
+  #   runner: pi
+  #   cost_input: 0.002
+  #   cost_output: 0.01
+  #   context_window: 272000
+  #   max_tokens: 128000
+  #   thinking: medium
 
   # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
   # Cheapest model in OpenAI's entire current lineup — verified live via `pi --list-models nano`:
