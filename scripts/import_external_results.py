@@ -47,6 +47,32 @@ FALLBACK_MODEL_CONFIGS: dict[str, ModelConfig] = {
         context_window=128_000,
         max_tokens=16_384,
     ),
+    # The 2 below come from scaleapi/SWE-bench_Pro-os's traj/<run>/eval_results.json (real,
+    # unauthenticated per-instance pass/fail; see external-results/swe-bench-pro/), keyed by the
+    # real, callable model id (the run-folder name is kept as source.source_model_name in each
+    # file for provenance). Narrowed from all 9 traj/ runs to just these 2 -- the only ones still
+    # actually callable: Claude Sonnet 4 (retired June 15 2026 on the first-party Claude API) and
+    # Kimi K2 Instruct (retired May 25 2026) were dropped as no longer routable models; their
+    # external-results/swe-bench-pro/*.json files are still kept on disk as raw data (still under
+    # their raw run-folder names, since those 2 weren't re-keyed), just not imported here.
+    "claude-sonnet-4-5-20250929": ModelConfig(  # Claude Sonnet 4.5 -- Active, no retirement scheduled -- platform.claude.com/docs/en/models/sonnet-4-5/overview
+        model_id="claude-sonnet-4-5-20250929",
+        provider="anthropic",
+        runner="pi",
+        cost_input=3.00e-6,
+        cost_output=15.00e-6,
+        context_window=200_000,
+        max_tokens=64_000,
+    ),
+    "gpt-5-2025-08-07": ModelConfig(  # GPT-5's Aug 2025 launch snapshot -- deprecated but still callable, shutdown scheduled Dec 11 2026 per developers.openai.com/api/docs/deprecations -- $1.25/$10 per MTok, 400K context / 128K max output per OpenAI's published API pricing
+        model_id="gpt-5-2025-08-07",
+        provider="openai",
+        runner="pi",
+        cost_input=1.25e-6,
+        cost_output=10.00e-6,
+        context_window=400_000,
+        max_tokens=128_000,
+    ),
 }
 
 
