@@ -147,7 +147,7 @@ def stable_task_id(source: str, row: dict) -> str | None:
     if source == "ds1000":
         problem_id = (row.get("metadata") or {}).get("problem_id")
         return f"ds1000:{problem_id}" if problem_id is not None else None
-    if source in ("swe-smith", "swe-gym"):
+    if source in ("swe-smith", "swe-gym", "swe-bench-pro"):
         instance_id = row.get("instance_id")
         return str(instance_id) if instance_id else None
     if source == "multi-swe-rl":
@@ -306,7 +306,21 @@ class IncrementalSourceSpec:
 
 # Registered here one at a time as new datasets are chosen and validated — never through
 # build_corpus()/SOURCE_METADATA. Empty until a real source is added.
-INCREMENTAL_SOURCES: dict[str, IncrementalSourceSpec] = {}
+INCREMENTAL_SOURCES: dict[str, IncrementalSourceSpec] = {
+    # `load_dataset(hf_id, split="test")` resolves to the "default" config (642 rows, v2.0.0) —
+    # confirmed live; the HF card also exposes "v1" (731 rows, the dataset's original release) and
+    # "hard" (51 rows) as separate configs this loader intentionally doesn't reach. Only
+    # problem_statement text is pulled here (embedding/corpus use, not grading) — the underlying
+    # task repos are majority GPL-3.0/AGPL-3.0 (verified per-repo via the GitHub API), which is a
+    # distribution/derivative-work concern for running or redistributing the repos' code, not for
+    # reading their public issue text into an internal routing-calibration embedding.
+    "swe-bench-pro": IncrementalSourceSpec(
+        hf_id="ScaleAI/SWE-bench_Pro",
+        split="test",
+        field="problem_statement",
+        license="unspecified (no license tag on the HF card; underlying repos are majority GPL-3.0/AGPL-3.0 — problem_statement text only, not repo code)",
+    ),
+}
 
 
 def load_incremental_source(name: str, cap: int | None = None) -> list[CorpusRow]:
