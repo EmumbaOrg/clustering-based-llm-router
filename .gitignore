@@ -52,8 +52,24 @@ htmlcov/
 
 # Pipeline output artifacts — machine-generated, regenerable by re-running the pipeline (see
 # README.md). artifacts-schema/ (the JSON Schema contracts) is NOT covered by this and stays
-# tracked.
-/artifacts/
+# tracked. Only the current "latest" artifact per kind is tracked below; artifacts/archive/ holds
+# superseded timestamped runs (old calibration-details/calibration-task-selection/solutions
+# snapshots, cluster-map/task-cluster-map/model-profiles backups) and stays ignored. Whenever a
+# new timestamped run supersedes one of these, move the old one into artifacts/archive/ and swap
+# its filename in here for the new one.
+/artifacts/*
+!/artifacts/calibration-details-2026-09-18-171643.csv
+!/artifacts/calibration-report-2026-09-09.md
+!/artifacts/calibration-task-selection-2026-09-18-171643.json
+!/artifacts/cluster-map.json
+!/artifacts/cluster-visualization.png
+!/artifacts/dataset-overlap-2026-09/
+!/artifacts/ground-truth-registry.json
+!/artifacts/logs/
+!/artifacts/model-profiles.json
+!/artifacts/multi-swe-rl-investigation-2026-08-28.md
+!/artifacts/solutions/
+!/artifacts/task-cluster-map.json
 
 nosetests.xml
 coverage.xml

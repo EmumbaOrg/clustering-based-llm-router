@@ -1,0 +1,1360 @@
+{
+  "schema_version": 1,
+  "artifact_id": "profiles-2026-09-28-merged",
+  "created_at": "2026-09-28T10:05:37.634665+00:00",
+  "cluster_map_id": "clustermap-2026-09-01-k24-s42",
+  "cluster_count": 24,
+  "embedding": {
+    "model_id": "jinaai/jina-embeddings-v2-base-code",
+    "dimensions": 768
+  },
+  "smoothing": {
+    "method": "shrink_to_model_global",
+    "prior_weight": 5,
+    "formula": "(number_failed + prior_weight * global_raw_error_rate) / (number_of_tasks + prior_weight)"
+  },
+  "task_selection": {
+    "gradeable_sources": [
+      "bigcodebench",
+      "ds1000",
+      "swe-smith",
+      "swe-gym",
+      "multi-swe-rl"
+    ],
+    "tasks_per_cluster": 10,
+    "seed": 42,
+    "total_tasks": 587
+  },
+  "models": [
+    {
+      "model_id": "llama-3.1-8b-instruct",
+      "provider": "local-llama31",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "cal-2026-09-08-103425",
+      "global": {
+        "number_of_tasks": 143,
+        "number_succeeded": 5,
+        "number_failed": 138,
+        "raw_error_rate": 0.965034965034965,
+        "smoothed_error_rate": 0.965034965034965,
+        "excluded": {
+          "error_timeout": 2,
+          "error_harness": 95
+        }
+      },
+      "clusters": {
+        "4": {
+          "number_of_tasks": 5,
+          "number_succeeded": 0,
+          "number_failed": 5,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9825174825174825,
+          "excluded": {
+            "error_harness": 5
+          }
+        },
+        "10": {
+          "number_of_tasks": 6,
+          "number_succeeded": 0,
+          "number_failed": 6,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9841068022886205,
+          "excluded": {
+            "error_harness": 4
+          }
+        },
+        "2": {
+          "number_of_tasks": 3,
+          "number_succeeded": 0,
+          "number_failed": 3,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9781468531468531,
+          "excluded": {
+            "error_harness": 7
+          }
+        },
+        "7": {
+          "number_of_tasks": 8,
+          "number_succeeded": 0,
+          "number_failed": 8,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9865519096288327,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "11": {
+          "number_of_tasks": 4,
+          "number_succeeded": 0,
+          "number_failed": 4,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9805749805749806,
+          "excluded": {
+            "error_harness": 6
+          }
+        },
+        "6": {
+          "number_of_tasks": 7,
+          "number_succeeded": 0,
+          "number_failed": 7,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9854312354312355,
+          "excluded": {
+            "error_harness": 3
+          }
+        },
+        "13": {
+          "number_of_tasks": 8,
+          "number_succeeded": 2,
+          "number_failed": 6,
+          "raw_error_rate": 0.75,
+          "smoothed_error_rate": 0.8327057557826788,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "14": {
+          "number_of_tasks": 8,
+          "number_succeeded": 2,
+          "number_failed": 6,
+          "raw_error_rate": 0.75,
+          "smoothed_error_rate": 0.8327057557826788,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "22": {
+          "number_of_tasks": 7,
+          "number_succeeded": 0,
+          "number_failed": 7,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9854312354312355,
+          "excluded": {
+            "error_harness": 3
+          }
+        },
+        "15": {
+          "number_of_tasks": 8,
+          "number_succeeded": 0,
+          "number_failed": 8,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9865519096288327,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "23": {
+          "number_of_tasks": 5,
+          "number_succeeded": 0,
+          "number_failed": 5,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9825174825174825,
+          "excluded": {
+            "error_timeout": 1,
+            "error_harness": 4
+          }
+        },
+        "5": {
+          "number_of_tasks": 7,
+          "number_succeeded": 0,
+          "number_failed": 7,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9854312354312355,
+          "excluded": {
+            "error_harness": 2,
+            "error_timeout": 1
+          }
+        },
+        "18": {
+          "number_of_tasks": 7,
+          "number_succeeded": 0,
+          "number_failed": 7,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9854312354312355,
+          "excluded": {
+            "error_harness": 3
+          }
+        },
+        "8": {
+          "number_of_tasks": 6,
+          "number_succeeded": 0,
+          "number_failed": 6,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9841068022886205,
+          "excluded": {
+            "error_harness": 4
+          }
+        },
+        "16": {
+          "number_of_tasks": 3,
+          "number_succeeded": 0,
+          "number_failed": 3,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9781468531468531,
+          "excluded": {
+            "error_harness": 7
+          }
+        },
+        "21": {
+          "number_of_tasks": 8,
+          "number_succeeded": 1,
+          "number_failed": 7,
+          "raw_error_rate": 0.875,
+          "smoothed_error_rate": 0.9096288327057558,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "20": {
+          "number_of_tasks": 6,
+          "number_succeeded": 0,
+          "number_failed": 6,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9841068022886205,
+          "excluded": {
+            "error_harness": 4
+          }
+        },
+        "1": {
+          "number_of_tasks": 3,
+          "number_succeeded": 0,
+          "number_failed": 3,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9781468531468531,
+          "excluded": {
+            "error_harness": 7
+          }
+        },
+        "3": {
+          "number_of_tasks": 6,
+          "number_succeeded": 0,
+          "number_failed": 6,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9841068022886205,
+          "excluded": {
+            "error_harness": 4
+          }
+        },
+        "9": {
+          "number_of_tasks": 4,
+          "number_succeeded": 0,
+          "number_failed": 4,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9805749805749806,
+          "excluded": {
+            "error_harness": 6
+          }
+        },
+        "12": {
+          "number_of_tasks": 6,
+          "number_succeeded": 0,
+          "number_failed": 6,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9841068022886205,
+          "excluded": {
+            "error_harness": 4
+          }
+        },
+        "17": {
+          "number_of_tasks": 4,
+          "number_succeeded": 0,
+          "number_failed": 4,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9805749805749806,
+          "excluded": {
+            "error_harness": 6
+          }
+        },
+        "0": {
+          "number_of_tasks": 5,
+          "number_succeeded": 0,
+          "number_failed": 5,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9825174825174825,
+          "excluded": {
+            "error_harness": 5
+          }
+        },
+        "19": {
+          "number_of_tasks": 9,
+          "number_succeeded": 0,
+          "number_failed": 9,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.9875124875124875,
+          "excluded": {
+            "error_harness": 1
+          }
+        }
+      }
+    },
+    {
+      "model_id": "gpt-5.6-luna",
+      "provider": "openai",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "cal-2026-09-08-103425",
+      "global": {
+        "number_of_tasks": 228,
+        "number_succeeded": 163,
+        "number_failed": 65,
+        "raw_error_rate": 0.2850877192982456,
+        "smoothed_error_rate": 0.2850877192982456,
+        "excluded": {
+          "error_harness": 10,
+          "error_timeout": 2
+        }
+      },
+      "clusters": {
+        "4": {
+          "number_of_tasks": 9,
+          "number_succeeded": 8,
+          "number_failed": 1,
+          "raw_error_rate": 0.1111111111111111,
+          "smoothed_error_rate": 0.17324561403508773,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "10": {
+          "number_of_tasks": 10,
+          "number_succeeded": 6,
+          "number_failed": 4,
+          "raw_error_rate": 0.4,
+          "smoothed_error_rate": 0.3616959064327485
+        },
+        "2": {
+          "number_of_tasks": 9,
+          "number_succeeded": 8,
+          "number_failed": 1,
+          "raw_error_rate": 0.1111111111111111,
+          "smoothed_error_rate": 0.17324561403508773,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "7": {
+          "number_of_tasks": 10,
+          "number_succeeded": 7,
+          "number_failed": 3,
+          "raw_error_rate": 0.3,
+          "smoothed_error_rate": 0.29502923976608186
+        },
+        "11": {
+          "number_of_tasks": 8,
+          "number_succeeded": 4,
+          "number_failed": 4,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.4173414304993252,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "6": {
+          "number_of_tasks": 9,
+          "number_succeeded": 7,
+          "number_failed": 2,
+          "raw_error_rate": 0.2222222222222222,
+          "smoothed_error_rate": 0.24467418546365916,
+          "excluded": {
+            "error_timeout": 1
+          }
+        },
+        "13": {
+          "number_of_tasks": 10,
+          "number_succeeded": 8,
+          "number_failed": 2,
+          "raw_error_rate": 0.2,
+          "smoothed_error_rate": 0.2283625730994152
+        },
+        "14": {
+          "number_of_tasks": 10,
+          "number_succeeded": 8,
+          "number_failed": 2,
+          "raw_error_rate": 0.2,
+          "smoothed_error_rate": 0.2283625730994152
+        },
+        "22": {
+          "number_of_tasks": 10,
+          "number_succeeded": 7,
+          "number_failed": 3,
+          "raw_error_rate": 0.3,
+          "smoothed_error_rate": 0.29502923976608186
+        },
+        "15": {
+          "number_of_tasks": 10,
+          "number_succeeded": 9,
+          "number_failed": 1,
+          "raw_error_rate": 0.1,
+          "smoothed_error_rate": 0.16169590643274853
+        },
+        "23": {
+          "number_of_tasks": 10,
+          "number_succeeded": 4,
+          "number_failed": 6,
+          "raw_error_rate": 0.6,
+          "smoothed_error_rate": 0.4950292397660819
+        },
+        "5": {
+          "number_of_tasks": 7,
+          "number_succeeded": 3,
+          "number_failed": 4,
+          "raw_error_rate": 0.5714285714285714,
+          "smoothed_error_rate": 0.45211988304093564,
+          "excluded": {
+            "error_harness": 2,
+            "error_timeout": 1
+          }
+        },
+        "18": {
+          "number_of_tasks": 10,
+          "number_succeeded": 8,
+          "number_failed": 2,
+          "raw_error_rate": 0.2,
+          "smoothed_error_rate": 0.2283625730994152
+        },
+        "8": {
+          "number_of_tasks": 10,
+          "number_succeeded": 7,
+          "number_failed": 3,
+          "raw_error_rate": 0.3,
+          "smoothed_error_rate": 0.29502923976608186
+        },
+        "16": {
+          "number_of_tasks": 10,
+          "number_succeeded": 6,
+          "number_failed": 4,
+          "raw_error_rate": 0.4,
+          "smoothed_error_rate": 0.3616959064327485
+        },
+        "21": {
+          "number_of_tasks": 10,
+          "number_succeeded": 8,
+          "number_failed": 2,
+          "raw_error_rate": 0.2,
+          "smoothed_error_rate": 0.2283625730994152
+        },
+        "20": {
+          "number_of_tasks": 10,
+          "number_succeeded": 9,
+          "number_failed": 1,
+          "raw_error_rate": 0.1,
+          "smoothed_error_rate": 0.16169590643274853
+        },
+        "1": {
+          "number_of_tasks": 10,
+          "number_succeeded": 8,
+          "number_failed": 2,
+          "raw_error_rate": 0.2,
+          "smoothed_error_rate": 0.2283625730994152
+        },
+        "3": {
+          "number_of_tasks": 9,
+          "number_succeeded": 6,
+          "number_failed": 3,
+          "raw_error_rate": 0.3333333333333333,
+          "smoothed_error_rate": 0.31610275689223055,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "9": {
+          "number_of_tasks": 9,
+          "number_succeeded": 6,
+          "number_failed": 3,
+          "raw_error_rate": 0.3333333333333333,
+          "smoothed_error_rate": 0.31610275689223055,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "12": {
+          "number_of_tasks": 9,
+          "number_succeeded": 7,
+          "number_failed": 2,
+          "raw_error_rate": 0.2222222222222222,
+          "smoothed_error_rate": 0.24467418546365916,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "17": {
+          "number_of_tasks": 9,
+          "number_succeeded": 6,
+          "number_failed": 3,
+          "raw_error_rate": 0.3333333333333333,
+          "smoothed_error_rate": 0.31610275689223055,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "0": {
+          "number_of_tasks": 10,
+          "number_succeeded": 5,
+          "number_failed": 5,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.42836257309941517
+        },
+        "19": {
+          "number_of_tasks": 10,
+          "number_succeeded": 8,
+          "number_failed": 2,
+          "raw_error_rate": 0.2,
+          "smoothed_error_rate": 0.2283625730994152
+        }
+      }
+    },
+    {
+      "model_id": "gpt-5-nano",
+      "provider": "openai",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "cal-2026-09-08-103425",
+      "global": {
+        "number_of_tasks": 216,
+        "number_succeeded": 93,
+        "number_failed": 123,
+        "raw_error_rate": 0.5694444444444444,
+        "smoothed_error_rate": 0.5694444444444444,
+        "excluded": {
+          "error_harness": 23,
+          "error_timeout": 1
+        }
+      },
+      "clusters": {
+        "4": {
+          "number_of_tasks": 8,
+          "number_succeeded": 7,
+          "number_failed": 1,
+          "raw_error_rate": 0.125,
+          "smoothed_error_rate": 0.29594017094017094,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "10": {
+          "number_of_tasks": 10,
+          "number_succeeded": 5,
+          "number_failed": 5,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.5231481481481481
+        },
+        "2": {
+          "number_of_tasks": 7,
+          "number_succeeded": 5,
+          "number_failed": 2,
+          "raw_error_rate": 0.2857142857142857,
+          "smoothed_error_rate": 0.4039351851851852,
+          "excluded": {
+            "error_harness": 3
+          }
+        },
+        "7": {
+          "number_of_tasks": 10,
+          "number_succeeded": 5,
+          "number_failed": 5,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.5231481481481481
+        },
+        "11": {
+          "number_of_tasks": 8,
+          "number_succeeded": 2,
+          "number_failed": 6,
+          "raw_error_rate": 0.75,
+          "smoothed_error_rate": 0.6805555555555555,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "6": {
+          "number_of_tasks": 9,
+          "number_succeeded": 0,
+          "number_failed": 9,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.8462301587301587,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "13": {
+          "number_of_tasks": 8,
+          "number_succeeded": 4,
+          "number_failed": 4,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.5267094017094017,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "14": {
+          "number_of_tasks": 9,
+          "number_succeeded": 6,
+          "number_failed": 3,
+          "raw_error_rate": 0.3333333333333333,
+          "smoothed_error_rate": 0.4176587301587302,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "22": {
+          "number_of_tasks": 9,
+          "number_succeeded": 3,
+          "number_failed": 6,
+          "raw_error_rate": 0.6666666666666666,
+          "smoothed_error_rate": 0.6319444444444444,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "15": {
+          "number_of_tasks": 9,
+          "number_succeeded": 4,
+          "number_failed": 5,
+          "raw_error_rate": 0.5555555555555556,
+          "smoothed_error_rate": 0.560515873015873,
+          "excluded": {
+            "error_timeout": 1
+          }
+        },
+        "23": {
+          "number_of_tasks": 9,
+          "number_succeeded": 3,
+          "number_failed": 6,
+          "raw_error_rate": 0.6666666666666666,
+          "smoothed_error_rate": 0.6319444444444444,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "5": {
+          "number_of_tasks": 9,
+          "number_succeeded": 4,
+          "number_failed": 5,
+          "raw_error_rate": 0.5555555555555556,
+          "smoothed_error_rate": 0.560515873015873,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "18": {
+          "number_of_tasks": 9,
+          "number_succeeded": 5,
+          "number_failed": 4,
+          "raw_error_rate": 0.4444444444444444,
+          "smoothed_error_rate": 0.48908730158730157,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "8": {
+          "number_of_tasks": 9,
+          "number_succeeded": 3,
+          "number_failed": 6,
+          "raw_error_rate": 0.6666666666666666,
+          "smoothed_error_rate": 0.6319444444444444,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "16": {
+          "number_of_tasks": 10,
+          "number_succeeded": 3,
+          "number_failed": 7,
+          "raw_error_rate": 0.7,
+          "smoothed_error_rate": 0.6564814814814814
+        },
+        "21": {
+          "number_of_tasks": 10,
+          "number_succeeded": 4,
+          "number_failed": 6,
+          "raw_error_rate": 0.6,
+          "smoothed_error_rate": 0.5898148148148148
+        },
+        "20": {
+          "number_of_tasks": 8,
+          "number_succeeded": 3,
+          "number_failed": 5,
+          "raw_error_rate": 0.625,
+          "smoothed_error_rate": 0.6036324786324786,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "1": {
+          "number_of_tasks": 10,
+          "number_succeeded": 3,
+          "number_failed": 7,
+          "raw_error_rate": 0.7,
+          "smoothed_error_rate": 0.6564814814814814
+        },
+        "3": {
+          "number_of_tasks": 9,
+          "number_succeeded": 7,
+          "number_failed": 2,
+          "raw_error_rate": 0.2222222222222222,
+          "smoothed_error_rate": 0.3462301587301587,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "9": {
+          "number_of_tasks": 9,
+          "number_succeeded": 3,
+          "number_failed": 6,
+          "raw_error_rate": 0.6666666666666666,
+          "smoothed_error_rate": 0.6319444444444444,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "12": {
+          "number_of_tasks": 8,
+          "number_succeeded": 4,
+          "number_failed": 4,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.5267094017094017,
+          "excluded": {
+            "error_harness": 2
+          }
+        },
+        "17": {
+          "number_of_tasks": 10,
+          "number_succeeded": 1,
+          "number_failed": 9,
+          "raw_error_rate": 0.9,
+          "smoothed_error_rate": 0.7898148148148147
+        },
+        "0": {
+          "number_of_tasks": 9,
+          "number_succeeded": 3,
+          "number_failed": 6,
+          "raw_error_rate": 0.6666666666666666,
+          "smoothed_error_rate": 0.6319444444444444,
+          "excluded": {
+            "error_harness": 1
+          }
+        },
+        "19": {
+          "number_of_tasks": 10,
+          "number_succeeded": 6,
+          "number_failed": 4,
+          "raw_error_rate": 0.4,
+          "smoothed_error_rate": 0.4564814814814815
+        }
+      }
+    },
+    {
+      "model_id": "google/gemma-4-31b-it",
+      "provider": "openrouter",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "cal-2026-09-18-171643",
+      "global": {
+        "number_of_tasks": 39,
+        "number_succeeded": 21,
+        "number_failed": 18,
+        "raw_error_rate": 0.46153846153846156,
+        "smoothed_error_rate": 0.4615384615384615,
+        "excluded": {
+          "error_harness": 201
+        }
+      },
+      "clusters": {
+        "4": {
+          "number_of_tasks": 1,
+          "number_succeeded": 0,
+          "number_failed": 1,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.5512820512820513,
+          "excluded": {
+            "error_harness": 9
+          }
+        },
+        "10": {
+          "number_of_tasks": 2,
+          "number_succeeded": 1,
+          "number_failed": 1,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.47252747252747257,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "2": {
+          "number_of_tasks": 1,
+          "number_succeeded": 1,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.38461538461538464,
+          "excluded": {
+            "error_harness": 9
+          }
+        },
+        "7": {
+          "number_of_tasks": 5,
+          "number_succeeded": 3,
+          "number_failed": 2,
+          "raw_error_rate": 0.4,
+          "smoothed_error_rate": 0.43076923076923085,
+          "excluded": {
+            "error_harness": 5
+          }
+        },
+        "11": {
+          "number_of_tasks": 1,
+          "number_succeeded": 0,
+          "number_failed": 1,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.5512820512820513,
+          "excluded": {
+            "error_harness": 9
+          }
+        },
+        "6": {
+          "number_of_tasks": 3,
+          "number_succeeded": 2,
+          "number_failed": 1,
+          "raw_error_rate": 0.3333333333333333,
+          "smoothed_error_rate": 0.4134615384615385,
+          "excluded": {
+            "error_harness": 7
+          }
+        },
+        "13": {
+          "number_of_tasks": 2,
+          "number_succeeded": 2,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.3296703296703297,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "14": {
+          "number_of_tasks": 2,
+          "number_succeeded": 2,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.3296703296703297,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "22": {
+          "number_of_tasks": 2,
+          "number_succeeded": 1,
+          "number_failed": 1,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.47252747252747257,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "15": {
+          "number_of_tasks": 2,
+          "number_succeeded": 2,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.3296703296703297,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "23": {
+          "number_of_tasks": 2,
+          "number_succeeded": 1,
+          "number_failed": 1,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.47252747252747257,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "5": {
+          "number_of_tasks": 2,
+          "number_succeeded": 0,
+          "number_failed": 2,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.6153846153846155,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "18": {
+          "number_of_tasks": 2,
+          "number_succeeded": 1,
+          "number_failed": 1,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.47252747252747257,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "8": {
+          "number_of_tasks": 3,
+          "number_succeeded": 0,
+          "number_failed": 3,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.6634615384615385,
+          "excluded": {
+            "error_harness": 7
+          }
+        },
+        "16": {
+          "number_of_tasks": 2,
+          "number_succeeded": 0,
+          "number_failed": 2,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.6153846153846155,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "21": {
+          "number_of_tasks": 2,
+          "number_succeeded": 2,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.3296703296703297,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "20": {
+          "number_of_tasks": 1,
+          "number_succeeded": 0,
+          "number_failed": 1,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.5512820512820513,
+          "excluded": {
+            "error_harness": 9
+          }
+        },
+        "1": {
+          "number_of_tasks": 2,
+          "number_succeeded": 1,
+          "number_failed": 1,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.47252747252747257,
+          "excluded": {
+            "error_harness": 8
+          }
+        },
+        "3": {
+          "number_of_tasks": 1,
+          "number_succeeded": 1,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.38461538461538464,
+          "excluded": {
+            "error_harness": 9
+          }
+        },
+        "9": {
+          "number_of_tasks": 1,
+          "number_succeeded": 1,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.38461538461538464,
+          "excluded": {
+            "error_harness": 9
+          }
+        },
+        "12": {
+          "number_of_tasks": 0,
+          "number_succeeded": 0,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.46153846153846156,
+          "excluded": {
+            "error_harness": 10
+          }
+        },
+        "17": {
+          "number_of_tasks": 0,
+          "number_succeeded": 0,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.46153846153846156,
+          "excluded": {
+            "error_harness": 10
+          }
+        },
+        "0": {
+          "number_of_tasks": 0,
+          "number_succeeded": 0,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.46153846153846156,
+          "excluded": {
+            "error_harness": 10
+          }
+        },
+        "19": {
+          "number_of_tasks": 0,
+          "number_succeeded": 0,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.46153846153846156,
+          "excluded": {
+            "error_harness": 10
+          }
+        }
+      }
+    },
+    {
+      "model_id": "claude-sonnet-4-5-20250929",
+      "provider": "anthropic",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "external-import-2026-09-28-100537",
+      "global": {
+        "number_of_tasks": 641,
+        "number_succeeded": 281,
+        "number_failed": 360,
+        "raw_error_rate": 0.5616224648985959,
+        "smoothed_error_rate": 0.5616224648985959
+      },
+      "clusters": {
+        "10": {
+          "number_of_tasks": 53,
+          "number_succeeded": 20,
+          "number_failed": 33,
+          "raw_error_rate": 0.6226415094339622,
+          "smoothed_error_rate": 0.617381246974017
+        },
+        "5": {
+          "number_of_tasks": 17,
+          "number_succeeded": 8,
+          "number_failed": 9,
+          "raw_error_rate": 0.5294117647058824,
+          "smoothed_error_rate": 0.5367323783860445
+        },
+        "11": {
+          "number_of_tasks": 81,
+          "number_succeeded": 29,
+          "number_failed": 52,
+          "raw_error_rate": 0.6419753086419753,
+          "smoothed_error_rate": 0.6373036316801509
+        },
+        "13": {
+          "number_of_tasks": 13,
+          "number_succeeded": 5,
+          "number_failed": 8,
+          "raw_error_rate": 0.6153846153846154,
+          "smoothed_error_rate": 0.6004506846940544
+        },
+        "8": {
+          "number_of_tasks": 60,
+          "number_succeeded": 23,
+          "number_failed": 37,
+          "raw_error_rate": 0.6166666666666667,
+          "smoothed_error_rate": 0.612432497299892
+        },
+        "21": {
+          "number_of_tasks": 35,
+          "number_succeeded": 24,
+          "number_failed": 11,
+          "raw_error_rate": 0.3142857142857143,
+          "smoothed_error_rate": 0.3452028081123245
+        },
+        "2": {
+          "number_of_tasks": 19,
+          "number_succeeded": 13,
+          "number_failed": 6,
+          "raw_error_rate": 0.3157894736842105,
+          "smoothed_error_rate": 0.3670046801872075
+        },
+        "12": {
+          "number_of_tasks": 37,
+          "number_succeeded": 23,
+          "number_failed": 14,
+          "raw_error_rate": 0.3783783783783784,
+          "smoothed_error_rate": 0.40019315058316624
+        },
+        "0": {
+          "number_of_tasks": 85,
+          "number_succeeded": 34,
+          "number_failed": 51,
+          "raw_error_rate": 0.6,
+          "smoothed_error_rate": 0.5978679147165887
+        },
+        "18": {
+          "number_of_tasks": 69,
+          "number_succeeded": 35,
+          "number_failed": 34,
+          "raw_error_rate": 0.4927536231884058,
+          "smoothed_error_rate": 0.4974069233039592
+        },
+        "22": {
+          "number_of_tasks": 33,
+          "number_succeeded": 13,
+          "number_failed": 20,
+          "raw_error_rate": 0.6060606060606061,
+          "smoothed_error_rate": 0.6002134822234995
+        },
+        "16": {
+          "number_of_tasks": 17,
+          "number_succeeded": 4,
+          "number_failed": 13,
+          "raw_error_rate": 0.7647058823529411,
+          "smoothed_error_rate": 0.7185505602042264
+        },
+        "19": {
+          "number_of_tasks": 6,
+          "number_succeeded": 4,
+          "number_failed": 2,
+          "raw_error_rate": 0.3333333333333333,
+          "smoothed_error_rate": 0.43710112040845267
+        },
+        "17": {
+          "number_of_tasks": 35,
+          "number_succeeded": 11,
+          "number_failed": 24,
+          "raw_error_rate": 0.6857142857142857,
+          "smoothed_error_rate": 0.6702028081123246
+        },
+        "23": {
+          "number_of_tasks": 3,
+          "number_succeeded": 3,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.35101404056162244
+        },
+        "4": {
+          "number_of_tasks": 27,
+          "number_succeeded": 12,
+          "number_failed": 15,
+          "raw_error_rate": 0.5555555555555556,
+          "smoothed_error_rate": 0.5565035101404057
+        },
+        "15": {
+          "number_of_tasks": 18,
+          "number_succeeded": 5,
+          "number_failed": 13,
+          "raw_error_rate": 0.7222222222222222,
+          "smoothed_error_rate": 0.6873092314996948
+        },
+        "14": {
+          "number_of_tasks": 1,
+          "number_succeeded": 0,
+          "number_failed": 1,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.6346853874154966
+        },
+        "20": {
+          "number_of_tasks": 13,
+          "number_succeeded": 2,
+          "number_failed": 11,
+          "raw_error_rate": 0.8461538461538461,
+          "smoothed_error_rate": 0.7671173513607211
+        },
+        "9": {
+          "number_of_tasks": 7,
+          "number_succeeded": 6,
+          "number_failed": 1,
+          "raw_error_rate": 0.14285714285714285,
+          "smoothed_error_rate": 0.3173426937077483
+        },
+        "1": {
+          "number_of_tasks": 1,
+          "number_succeeded": 1,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.46801872074882994
+        },
+        "3": {
+          "number_of_tasks": 10,
+          "number_succeeded": 5,
+          "number_failed": 5,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.5205408216328653
+        },
+        "6": {
+          "number_of_tasks": 1,
+          "number_succeeded": 1,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.46801872074882994
+        }
+      }
+    },
+    {
+      "model_id": "gpt-5-2025-08-07",
+      "provider": "openai",
+      "runner": "pi",
+      "is_control": false,
+      "calibration_run_id": "external-import-2026-09-28-100537",
+      "global": {
+        "number_of_tasks": 640,
+        "number_succeeded": 237,
+        "number_failed": 403,
+        "raw_error_rate": 0.6296875,
+        "smoothed_error_rate": 0.6296875
+      },
+      "clusters": {
+        "8": {
+          "number_of_tasks": 60,
+          "number_succeeded": 21,
+          "number_failed": 39,
+          "raw_error_rate": 0.65,
+          "smoothed_error_rate": 0.6484375
+        },
+        "5": {
+          "number_of_tasks": 17,
+          "number_succeeded": 5,
+          "number_failed": 12,
+          "raw_error_rate": 0.7058823529411765,
+          "smoothed_error_rate": 0.6885653409090909
+        },
+        "22": {
+          "number_of_tasks": 33,
+          "number_succeeded": 13,
+          "number_failed": 20,
+          "raw_error_rate": 0.6060606060606061,
+          "smoothed_error_rate": 0.6091694078947368
+        },
+        "11": {
+          "number_of_tasks": 80,
+          "number_succeeded": 30,
+          "number_failed": 50,
+          "raw_error_rate": 0.625,
+          "smoothed_error_rate": 0.6252757352941176
+        },
+        "10": {
+          "number_of_tasks": 53,
+          "number_succeeded": 19,
+          "number_failed": 34,
+          "raw_error_rate": 0.6415094339622641,
+          "smoothed_error_rate": 0.6404903017241379
+        },
+        "12": {
+          "number_of_tasks": 37,
+          "number_succeeded": 16,
+          "number_failed": 21,
+          "raw_error_rate": 0.5675675675675675,
+          "smoothed_error_rate": 0.5749627976190477
+        },
+        "2": {
+          "number_of_tasks": 19,
+          "number_succeeded": 8,
+          "number_failed": 11,
+          "raw_error_rate": 0.5789473684210527,
+          "smoothed_error_rate": 0.5895182291666666
+        },
+        "21": {
+          "number_of_tasks": 35,
+          "number_succeeded": 18,
+          "number_failed": 17,
+          "raw_error_rate": 0.4857142857142857,
+          "smoothed_error_rate": 0.5037109375
+        },
+        "0": {
+          "number_of_tasks": 85,
+          "number_succeeded": 25,
+          "number_failed": 60,
+          "raw_error_rate": 0.7058823529411765,
+          "smoothed_error_rate": 0.7016493055555556
+        },
+        "18": {
+          "number_of_tasks": 69,
+          "number_succeeded": 27,
+          "number_failed": 42,
+          "raw_error_rate": 0.6086956521739131,
+          "smoothed_error_rate": 0.6101140202702703
+        },
+        "13": {
+          "number_of_tasks": 13,
+          "number_succeeded": 5,
+          "number_failed": 8,
+          "raw_error_rate": 0.6153846153846154,
+          "smoothed_error_rate": 0.6193576388888888
+        },
+        "16": {
+          "number_of_tasks": 17,
+          "number_succeeded": 5,
+          "number_failed": 12,
+          "raw_error_rate": 0.7058823529411765,
+          "smoothed_error_rate": 0.6885653409090909
+        },
+        "17": {
+          "number_of_tasks": 35,
+          "number_succeeded": 12,
+          "number_failed": 23,
+          "raw_error_rate": 0.6571428571428571,
+          "smoothed_error_rate": 0.6537109375
+        },
+        "19": {
+          "number_of_tasks": 6,
+          "number_succeeded": 2,
+          "number_failed": 4,
+          "raw_error_rate": 0.6666666666666666,
+          "smoothed_error_rate": 0.6498579545454546
+        },
+        "15": {
+          "number_of_tasks": 18,
+          "number_succeeded": 8,
+          "number_failed": 10,
+          "raw_error_rate": 0.5555555555555556,
+          "smoothed_error_rate": 0.571671195652174
+        },
+        "4": {
+          "number_of_tasks": 27,
+          "number_succeeded": 9,
+          "number_failed": 18,
+          "raw_error_rate": 0.6666666666666666,
+          "smoothed_error_rate": 0.660888671875
+        },
+        "9": {
+          "number_of_tasks": 7,
+          "number_succeeded": 2,
+          "number_failed": 5,
+          "raw_error_rate": 0.7142857142857143,
+          "smoothed_error_rate": 0.6790364583333334
+        },
+        "23": {
+          "number_of_tasks": 3,
+          "number_succeeded": 2,
+          "number_failed": 1,
+          "raw_error_rate": 0.3333333333333333,
+          "smoothed_error_rate": 0.5185546875
+        },
+        "20": {
+          "number_of_tasks": 13,
+          "number_succeeded": 3,
+          "number_failed": 10,
+          "raw_error_rate": 0.7692307692307693,
+          "smoothed_error_rate": 0.73046875
+        },
+        "14": {
+          "number_of_tasks": 1,
+          "number_succeeded": 0,
+          "number_failed": 1,
+          "raw_error_rate": 1.0,
+          "smoothed_error_rate": 0.69140625
+        },
+        "3": {
+          "number_of_tasks": 10,
+          "number_succeeded": 5,
+          "number_failed": 5,
+          "raw_error_rate": 0.5,
+          "smoothed_error_rate": 0.5432291666666667
+        },
+        "1": {
+          "number_of_tasks": 1,
+          "number_succeeded": 1,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.5247395833333334
+        },
+        "6": {
+          "number_of_tasks": 1,
+          "number_succeeded": 1,
+          "number_failed": 0,
+          "raw_error_rate": 0.0,
+          "smoothed_error_rate": 0.5247395833333334
+        }
+      }
+    }
+  ]
+}

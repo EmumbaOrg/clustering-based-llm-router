@@ -1,0 +1,1449 @@
+{
+  "artifact_id": "taskselection-2026-09-18-f0d9efd082e3",
+  "content_digest": "sha256:f0d9efd082e3a0c4bea59075324978e9dd2802c3a5101a3b05836b065fdbd5df",
+  "created_at": "2026-09-18T17:16:43.861889+00:00",
+  "empty_clusters": [],
+  "schema_version": 1,
+  "tasks": [
+    {
+      "cluster_id": 0,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "getmoto__moto-7324"
+    },
+    {
+      "cluster_id": 0,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "getmoto__moto-6868"
+    },
+    {
+      "cluster_id": 0,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "getmoto__moto-6255"
+    },
+    {
+      "cluster_id": 0,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "getmoto__moto-7303"
+    },
+    {
+      "cluster_id": 0,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "getmoto__moto.694ce1f4.pr_8080"
+    },
+    {
+      "cluster_id": 0,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "getmoto__moto-5620"
+    },
+    {
+      "cluster_id": 0,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:istio__istio-53806"
+    },
+    {
+      "cluster_id": 0,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:istio__istio-51031"
+    },
+    {
+      "cluster_id": 0,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "getmoto__moto-5347"
+    },
+    {
+      "cluster_id": 0,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "getmoto__moto-7167"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "davidhalter__parso.338a5760.func_basic__cwznso4m"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyparsing__pyparsing.533adf47.func_basic__72p3rw7p"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "PyCQA__flake8.cf1542ce.func_basic__swv5simh"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pydata__patsy.a5d16484.combine_file__nmsgzk5t"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "erikrose__parsimonious.0d3f5f93.func_basic__y3utdc9j"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "davidhalter__parso.338a5760.func_basic__sddu9c24"
+    },
+    {
+      "cluster_id": 1,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-5690"
+    },
+    {
+      "cluster_id": 1,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-10693"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.func_basic__pq8ely13"
+    },
+    {
+      "cluster_id": 1,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyutils__line_profiler.a646bf0f.func_basic__l1dooa9d"
+    },
+    {
+      "cluster_id": 2,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "pydantic__pydantic-4920"
+    },
+    {
+      "cluster_id": 2,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "marshmallow-code__marshmallow.9716fc62.func_basic__6gtmidyo"
+    },
+    {
+      "cluster_id": 2,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "marshmallow-code__apispec.8b421526.combine_module__x5749lu3"
+    },
+    {
+      "cluster_id": 2,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "marshmallow-code__marshmallow.9716fc62.lm_rewrite__173siroi"
+    },
+    {
+      "cluster_id": 2,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "alecthomas__voluptuous.a7a55f83.func_pm_remove_wrapper__6v39t09u"
+    },
+    {
+      "cluster_id": 2,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "graphql-python__graphene.82903263.func_basic__e7oq7xz3"
+    },
+    {
+      "cluster_id": 2,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:Automattic__mongoose-12990"
+    },
+    {
+      "cluster_id": 2,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:colinhacks__zod-752"
+    },
+    {
+      "cluster_id": 2,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/30"
+    },
+    {
+      "cluster_id": 2,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "marshmallow-code__apispec.8b421526.func_pm_remove_cond__029nh1ia"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-openxml__python-docx.0cf6d71f.combine_file__jlince2w"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-openxml__python-docx.0cf6d71f.func_basic__6h5z1ozn"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "scanny__python-pptx.278b47b1.func_basic__mttvdlfy"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-openxml__python-docx.0cf6d71f.func_pm_ctrl_shuffle__f3sbuwz2"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-openxml__python-docx.0cf6d71f.func_basic__pmiovt10"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "scanny__python-pptx.278b47b1.lm_rewrite__rala1oem"
+    },
+    {
+      "cluster_id": 3,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-5252"
+    },
+    {
+      "cluster_id": 3,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-11548"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "scanny__python-pptx.278b47b1.func_pm_ctrl_shuffle__8zbwp3x2"
+    },
+    {
+      "cluster_id": 3,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-openxml__python-docx.0cf6d71f.func_basic__jxdhmbcs"
+    },
+    {
+      "cluster_id": 4,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "encode__starlette.db5063c2.func_pm_class_rm_base__ra4k1z5q"
+    },
+    {
+      "cluster_id": 4,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "paramiko__paramiko.23f92003.func_basic__6eqlk0bm"
+    },
+    {
+      "cluster_id": 4,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "paramiko__paramiko.23f92003.func_pm_ctrl_shuffle__b0o2afet"
+    },
+    {
+      "cluster_id": 4,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "paramiko__paramiko.23f92003.func_basic__4s7qfjkl"
+    },
+    {
+      "cluster_id": 4,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-hyper__h11.bed0dd4a.func_basic__yuitrakq"
+    },
+    {
+      "cluster_id": 4,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "paramiko__paramiko.23f92003.func_basic__sl6qx946"
+    },
+    {
+      "cluster_id": 4,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:fish-shell__fish-shell-10365"
+    },
+    {
+      "cluster_id": 4,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:tokio-rs__bytes-450"
+    },
+    {
+      "cluster_id": 4,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/1039"
+    },
+    {
+      "cluster_id": 4,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "paramiko__paramiko.23f92003.func_basic__h4bmbv3s"
+    },
+    {
+      "cluster_id": 5,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "stanfordnlp__string2string.c4a72f59.func_pm_remove_loop__oi3wodau"
+    },
+    {
+      "cluster_id": 5,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "jaraco__inflect.c079a96a.func_basic__c5803m21"
+    },
+    {
+      "cluster_id": 5,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyupio__safety.7654596b.func_pm_remove_cond__rkw8df0h"
+    },
+    {
+      "cluster_id": 5,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "life4__textdistance.c3aca916.combine_file__s5ap259k"
+    },
+    {
+      "cluster_id": 5,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "oauthlib__oauthlib.1fd52536.func_basic__z9ez9yvn"
+    },
+    {
+      "cluster_id": 5,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "vi3k6i5__flashtext.b316c7e9.lm_rewrite__tsg6ubtt"
+    },
+    {
+      "cluster_id": 5,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:alacritty__alacritty-2207"
+    },
+    {
+      "cluster_id": 5,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:alacritty__alacritty-6186"
+    },
+    {
+      "cluster_id": 5,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:902"
+    },
+    {
+      "cluster_id": 5,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:905"
+    },
+    {
+      "cluster_id": 6,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_class_rm_funcs__7p90dl3f"
+    },
+    {
+      "cluster_id": 6,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_remove_assign__gpjanvq9"
+    },
+    {
+      "cluster_id": 6,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_class_rm_funcs__6vkh01hk"
+    },
+    {
+      "cluster_id": 6,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas-58369"
+    },
+    {
+      "cluster_id": 6,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas-58231"
+    },
+    {
+      "cluster_id": 6,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_remove_cond__b2o5z0ni"
+    },
+    {
+      "cluster_id": 6,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:alacritty__alacritty-2120"
+    },
+    {
+      "cluster_id": 6,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:vuejs__core-9824"
+    },
+    {
+      "cluster_id": 6,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:116"
+    },
+    {
+      "cluster_id": 6,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:255"
+    },
+    {
+      "cluster_id": 7,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyutils__line_profiler.a646bf0f.lm_rewrite__tey5jgmv"
+    },
+    {
+      "cluster_id": 7,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pydicom__pydicom.7d361b3d.func_basic__w9pyig3l"
+    },
+    {
+      "cluster_id": 7,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "iterative__dvc.1d6ea681.pr_8129"
+    },
+    {
+      "cluster_id": 7,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "joke2k__faker.8b401a7d.lm_rewrite__k9lmo6s3"
+    },
+    {
+      "cluster_id": 7,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "rubik__radon.54b88e58.func_pm_ctrl_shuffle__iwjn9q9y"
+    },
+    {
+      "cluster_id": 7,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/407"
+    },
+    {
+      "cluster_id": 7,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/472"
+    },
+    {
+      "cluster_id": 7,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/642"
+    },
+    {
+      "cluster_id": 7,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/901"
+    },
+    {
+      "cluster_id": 7,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/440"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "iterative__dvc.1d6ea681.func_pm_remove_assign__s6ywiq3q"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "iterative__dvc-4978"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "iterative__dvc-5822"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "iterative__dvc-6855"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "Cog-Creators__Red-DiscordBot.33e0eac7.combine_module__1o97qyc1"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "conan-io__conan.86f29e13.pr_16420"
+    },
+    {
+      "cluster_id": 8,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:nektos__act-502"
+    },
+    {
+      "cluster_id": 8,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-10557"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "iterative__dvc.1d6ea681.pr_9729"
+    },
+    {
+      "cluster_id": 8,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "iterative__dvc-3784"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "alecthomas__voluptuous.a7a55f83.func_pm_ctrl_shuffle__prrgrc7a"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "mahmoud__glom.fb3c4e76.lm_rewrite__iok0udsh"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "agronholm__typeguard.b6a7e438.func_pm_ctrl_shuffle__t61ylxpp"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "Instagram__MonkeyType.70c3acf6.func_pm_remove_cond__cz1fhv6r"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "agronholm__typeguard.b6a7e438.func_basic__nr24plym"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "graphql-python__graphene.82903263.func_basic__con0sv78"
+    },
+    {
+      "cluster_id": 9,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-7510"
+    },
+    {
+      "cluster_id": 9,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:spotbugs__spotbugs-3080"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pydata__patsy.a5d16484.func_pm_remove_assign__84rjir41"
+    },
+    {
+      "cluster_id": 9,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "python__mypy-10478"
+    },
+    {
+      "cluster_id": 10,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "oauthlib__oauthlib.1fd52536.lm_rewrite__wu7rhd9m"
+    },
+    {
+      "cluster_id": 10,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "bottlepy__bottle.a8dfef30.func_pm_remove_assign__utawnyov"
+    },
+    {
+      "cluster_id": 10,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "oauthlib__oauthlib.1fd52536.lm_rewrite__90y8ho2d"
+    },
+    {
+      "cluster_id": 10,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "oauthlib__oauthlib.1fd52536.func_pm_ctrl_shuffle__lreffuh3"
+    },
+    {
+      "cluster_id": 10,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tweepy__tweepy.91a41c6e.func_basic__9wf6wv30"
+    },
+    {
+      "cluster_id": 10,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "benoitc__gunicorn.bacbf8aa.combine_module__fa2yz78e"
+    },
+    {
+      "cluster_id": 10,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:Kong__insomnia-8131"
+    },
+    {
+      "cluster_id": 10,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:labstack__echo-1813"
+    },
+    {
+      "cluster_id": 10,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/273"
+    },
+    {
+      "cluster_id": 10,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "mahmoud__boltons.3bfcfdd0.func_pm_remove_cond__rmebptxw"
+    },
+    {
+      "cluster_id": 11,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "conan-io__conan.86f29e13.pr_13324"
+    },
+    {
+      "cluster_id": 11,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "getnikola__nikola.0f4c230e.func_pm_op_change_const__5q5pv8ys"
+    },
+    {
+      "cluster_id": 11,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tox-dev__pipdeptree.c31b6418.func_basic__e9pokoro"
+    },
+    {
+      "cluster_id": 11,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pytest-dev__iniconfig.16793ead.combine_module__irzgribi"
+    },
+    {
+      "cluster_id": 11,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "conan-io__conan.86f29e13.pr_15177"
+    },
+    {
+      "cluster_id": 11,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tox-dev__pipdeptree.c31b6418.func_basic__ytrdin4t"
+    },
+    {
+      "cluster_id": 11,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-9059"
+    },
+    {
+      "cluster_id": 11,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:jesseduffield__lazygit-3592"
+    },
+    {
+      "cluster_id": 11,
+      "source": "bigcodebench",
+      "split": "calibration",
+      "task_id": "BigCodeBench/717"
+    },
+    {
+      "cluster_id": 11,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "benoitc__gunicorn.bacbf8aa.func_pm_class_rm_funcs__4be4vnf8"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pylint-dev__astroid.b114f6b5.func_pm_ctrl_invert_if__q0e2extu"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "iterative__dvc.1d6ea681.func_pm_remove_cond__d45mhs9f"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "rsalmei__alive-progress.35853799.func_basic__ewcwr9lf"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "agronholm__typeguard.b6a7e438.combine_module__tr31kstl"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "gweis__isodate.17cb25eb.func_pm_remove_cond__znsfpknf"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_remove_assign__8x29qwov"
+    },
+    {
+      "cluster_id": 12,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:spotbugs__spotbugs-2881"
+    },
+    {
+      "cluster_id": 12,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-9748"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "django-money__django-money.835c1ab8.func_basic__080po5jt"
+    },
+    {
+      "cluster_id": 12,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_remove_assign__qyskjzxy"
+    },
+    {
+      "cluster_id": 13,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tobymao__sqlglot.036601ba.combine_module__qxsd17ky"
+    },
+    {
+      "cluster_id": 13,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.func_basic__bmj7n318"
+    },
+    {
+      "cluster_id": 13,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "kayak__pypika.1c9646f0.func_pm_ctrl_shuffle__pp6y1wny"
+    },
+    {
+      "cluster_id": 13,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tobymao__sqlglot.036601ba.func_pm_remove_assign__75uwuq84"
+    },
+    {
+      "cluster_id": 13,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.combine_module__8fg5m80l"
+    },
+    {
+      "cluster_id": 13,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "andialbrecht__sqlparse.e57923b3.func_basic__0zb7o5ky"
+    },
+    {
+      "cluster_id": 13,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:Automattic__mongoose-13435"
+    },
+    {
+      "cluster_id": 13,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:prometheus__prometheus-6480"
+    },
+    {
+      "cluster_id": 13,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:139"
+    },
+    {
+      "cluster_id": 13,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:140"
+    },
+    {
+      "cluster_id": 14,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas-53795"
+    },
+    {
+      "cluster_id": 14,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_ctrl_shuffle__7z769728"
+    },
+    {
+      "cluster_id": 14,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_remove_assign__9uubeplx"
+    },
+    {
+      "cluster_id": 14,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_ctrl_invert_if__8o2fuod2"
+    },
+    {
+      "cluster_id": 14,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas.95280573.func_pm_ctrl_invert_if__rvesdjos"
+    },
+    {
+      "cluster_id": 14,
+      "source": "swe-gym",
+      "split": "calibration",
+      "task_id": "pandas-dev__pandas-56522"
+    },
+    {
+      "cluster_id": 14,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:Automattic__mongoose-14254"
+    },
+    {
+      "cluster_id": 14,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:Automattic__mongoose-15035"
+    },
+    {
+      "cluster_id": 14,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:91"
+    },
+    {
+      "cluster_id": 14,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:266"
+    },
+    {
+      "cluster_id": 15,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pydata__patsy.a5d16484.func_basic__56f8gx5j"
+    },
+    {
+      "cluster_id": 15,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pydata__patsy.a5d16484.func_basic__cbjs5g3l"
+    },
+    {
+      "cluster_id": 15,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "dask__dask.5f61e423.combine_module__ibhv7crq"
+    },
+    {
+      "cluster_id": 15,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "dask__dask.5f61e423.lm_rewrite__y6wfm6ik"
+    },
+    {
+      "cluster_id": 15,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pydata__patsy.a5d16484.func_pm_ctrl_invert_if__i9tbpt45"
+    },
+    {
+      "cluster_id": 15,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "HIPS__autograd.ac044f0d.func_pm_ctrl_shuffle__fl0r904j"
+    },
+    {
+      "cluster_id": 15,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:Automattic__mongoose-13322"
+    },
+    {
+      "cluster_id": 15,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-8584"
+    },
+    {
+      "cluster_id": 15,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:714"
+    },
+    {
+      "cluster_id": 15,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:871"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.func_basic__51qqhx0d"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "PyCQA__flake8.cf1542ce.func_pm_ctrl_invert_if__l1ly30lw"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "PyCQA__flake8.cf1542ce.lm_rewrite__hvj9yvxx"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "rubik__radon.54b88e58.func_basic__ildfzz2r"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pylint-dev__astroid.b114f6b5.func_basic__hh1al916"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.func_pm_remove_cond__fbeh0mzx"
+    },
+    {
+      "cluster_id": 16,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:checkstyle__checkstyle-9209"
+    },
+    {
+      "cluster_id": 16,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:checkstyle__checkstyle-8712"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pylint-dev__astroid.b114f6b5.lm_rewrite__tzv40icb"
+    },
+    {
+      "cluster_id": 16,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-trio__trio.cfbbe2c1.combine_file__hog985q7"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sunpy__sunpy.f8edfd5c.func_pm_remove_loop__70or164i"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "jsvine__pdfplumber.02ff4313.lm_rewrite__t92ph1os"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "lepture__mistune.bf54ef67.lm_rewrite__oxot3e3g"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "lepture__mistune.bf54ef67.combine_module__l9fzzy50"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "mozilla__bleach.73871d76.lm_rewrite__gf39cr4o"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "matthewwithanm__python-markdownify.6258f5c3.lm_rewrite__7zbomkh9"
+    },
+    {
+      "cluster_id": 17,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-12343"
+    },
+    {
+      "cluster_id": 17,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-5660"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "kurtmckee__feedparser.cad965a3.combine_file__ol5m7joz"
+    },
+    {
+      "cluster_id": 17,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "kurtmckee__feedparser.cad965a3.lm_rewrite__x7512l00"
+    },
+    {
+      "cluster_id": 18,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "Suor__funcy.207a7810.func_basic__z5d85s80"
+    },
+    {
+      "cluster_id": 18,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-trio__trio.cfbbe2c1.combine_file__b385y9fk"
+    },
+    {
+      "cluster_id": 18,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__click.fde47b4b.func_basic__0cdbc2a2"
+    },
+    {
+      "cluster_id": 18,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "joke2k__faker.8b401a7d.func_pm_remove_assign__0rxokmwn"
+    },
+    {
+      "cluster_id": 18,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-trio__trio.cfbbe2c1.combine_file__hzs0kcph"
+    },
+    {
+      "cluster_id": 18,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-trio__trio.cfbbe2c1.func_basic__fsobg1u0"
+    },
+    {
+      "cluster_id": 18,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:vuejs__core-10912"
+    },
+    {
+      "cluster_id": 18,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-11326"
+    },
+    {
+      "cluster_id": 18,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:933"
+    },
+    {
+      "cluster_id": 18,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "python-trio__trio.cfbbe2c1.func_pm_ctrl_shuffle__s290y7ki"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "marshmallow-code__marshmallow.9716fc62.func_basic__7kw95lxv"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "mahmoud__glom.fb3c4e76.lm_rewrite__c5tayn7a"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "encode__starlette.db5063c2.func_pm_class_rm_funcs__26nlvprj"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "seperman__deepdiff.ed252022.func_pm_remove_cond__j4x2jj9t"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyasn1__pyasn1.0f07d724.func_basic__cj9o25ur"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "seperman__deepdiff.ed252022.func_basic__6dep599l"
+    },
+    {
+      "cluster_id": 19,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:colinhacks__zod-2161"
+    },
+    {
+      "cluster_id": 19,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:Automattic__mongoose-13589"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "seperman__deepdiff.ed252022.func_pm_ctrl_invert_if__irf92r4c"
+    },
+    {
+      "cluster_id": 19,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "seperman__deepdiff.ed252022.func_pm_remove_cond__kjryrlcx"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "bottlepy__bottle.a8dfef30.func_basic__t48bf5tw"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__jinja.ada0a9a6.lm_rewrite__oly1tnri"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__jinja.ada0a9a6.lm_rewrite__unk516xe"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.func_basic__h7xx4j9z"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__jinja.ada0a9a6.lm_rewrite__qej2fkbn"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__jinja.ada0a9a6.func_basic__en9y7pxk"
+    },
+    {
+      "cluster_id": 20,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:vuejs__core-11772"
+    },
+    {
+      "cluster_id": 20,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:gohugoio__hugo-5876"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.func_pm_remove_loop__irt2kbtb"
+    },
+    {
+      "cluster_id": 20,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__jinja.ada0a9a6.func_basic__xbkj5v4d"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__click.fde47b4b.lm_rewrite__ytci3086"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "cantools__cantools.0c6a7871.lm_rewrite__ld5ju2nq"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "mahmoud__glom.fb3c4e76.func_pm_remove_assign__ra86rkh7"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "amueller__word_cloud.ec24191c.lm_rewrite__mck8czap"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "sqlfluff__sqlfluff.50a1c4b6.combine_file__dcz1l1zf"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "weaveworks__grafanalib.5c3b17ed.func_basic__65xyna4g"
+    },
+    {
+      "cluster_id": 21,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:tj__commander.js-738"
+    },
+    {
+      "cluster_id": 21,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:tj__commander.js-1091"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pallets__click.fde47b4b.combine_file__1ycr9n01"
+    },
+    {
+      "cluster_id": 21,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyupio__safety.7654596b.func_pm_remove_wrapper__ny596eby"
+    },
+    {
+      "cluster_id": 22,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "cantools__cantools.0c6a7871.combine_file__irxdhfnr"
+    },
+    {
+      "cluster_id": 22,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "cantools__cantools.0c6a7871.func_basic__tbdua0cd"
+    },
+    {
+      "cluster_id": 22,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pydicom__pydicom.7d361b3d.func_basic__cvionhyi"
+    },
+    {
+      "cluster_id": 22,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyasn1__pyasn1.0f07d724.func_pm_remove_cond__yw02f11g"
+    },
+    {
+      "cluster_id": 22,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "cantools__cantools.0c6a7871.combine_file__xjelpdq3"
+    },
+    {
+      "cluster_id": 22,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "pyupio__safety.7654596b.func_pm_ctrl_shuffle__tri1vjka"
+    },
+    {
+      "cluster_id": 22,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:spotbugs__spotbugs-2516"
+    },
+    {
+      "cluster_id": 22,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:vuejs__core-12069"
+    },
+    {
+      "cluster_id": 22,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:344"
+    },
+    {
+      "cluster_id": 22,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "lincolnloop__python-qrcode.456b01d4.combine_file__f7vjesoc"
+    },
+    {
+      "cluster_id": 23,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tkrajina__gpxpy.09fc46b3.func_basic__qv1tc6x7"
+    },
+    {
+      "cluster_id": 23,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "kurtmckee__feedparser.cad965a3.combine_module__2ugnfryn"
+    },
+    {
+      "cluster_id": 23,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tkrajina__gpxpy.09fc46b3.func_basic__tgudqh6u"
+    },
+    {
+      "cluster_id": 23,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tkrajina__gpxpy.09fc46b3.func_pm_op_swap__f2gu0488"
+    },
+    {
+      "cluster_id": 23,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tkrajina__gpxpy.09fc46b3.func_pm_ctrl_invert_if__oufcabhl"
+    },
+    {
+      "cluster_id": 23,
+      "source": "swe-smith",
+      "split": "calibration",
+      "task_id": "tkrajina__gpxpy.09fc46b3.func_basic__o3xnjxka"
+    },
+    {
+      "cluster_id": 23,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:iamkun__dayjs-769"
+    },
+    {
+      "cluster_id": 23,
+      "source": "multi-swe-rl",
+      "split": "calibration",
+      "task_id": "multi-swe-rl:colinhacks__zod-1222"
+    },
+    {
+      "cluster_id": 23,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:788"
+    },
+    {
+      "cluster_id": 23,
+      "source": "ds1000",
+      "split": "calibration",
+      "task_id": "ds1000:790"
+    }
+  ]
+}
