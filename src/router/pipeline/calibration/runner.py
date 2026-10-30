@@ -22,6 +22,21 @@ logger = logging.getLogger(__name__)
 
 _CODE_BLOCK_RE = re.compile(r"```(?:\w+)?\n(.*?)```", re.DOTALL)
 
+# Provider errors meaning the ACCOUNT can't pay, not that this one call failed: OpenRouter's 402
+# (incl. `in_flight_budget_exhausted`, which killed the cal-2026-09-18 gemma run at task 47/240),
+# OpenAI's `insufficient_quota` (sent as a 429), Anthropic's "credit balance is too low". Every
+# later call fails the same way until someone tops up, so calibrate.py pauses instead of carrying
+# on. A plain 429 rate limit is deliberately NOT matched — it isn't a credit problem.
+_CREDIT_ERROR_RE = re.compile(
+    r'^\s*402\b|"code"\s*:\s*402\b|payment required|insufficient[_ ]quota|exceeded your current quota'
+    r"|credit|billing|in_flight_budget|insufficient (?:funds|balance)",
+    re.IGNORECASE,
+)
+
+
+def is_credit_error(message: str) -> bool:
+    return bool(_CREDIT_ERROR_RE.search(message))
+
 # Per-source instructions appended to the task's own natural-language prompt, telling the agent
 # what SHAPE of answer each grader expects (see the grading/*.py module docstrings for why each
 # shape is what it is — e.g. bigcodebench wants a body fragment because code_prompt already ends
@@ -138,6 +153,8 @@ class RunResult:
     # to error_harness.
     harness_error: bool = False  # provider rejected the call (Pi itself still exits 0); `detail`
     # carries the provider's error message.
+    credit_error: bool = False  # subset of harness_error: the rejection was credits/quota/billing
+    # (see is_credit_error) — calibrate.py pauses the run rather than recording it.
     timed_out: bool = False  # OUR subprocess timeout fired, distinct from a grader's own
     # error_timeout (the TEST run, not the model call).
     usage: TokenUsage | None = None  # None when pi's stdout wasn't parseable JSON — a genuinely
@@ -290,7 +307,7 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int) -> RunResult:
             # producing nothing.
             return RunResult(
                 solution=None, detail=f"pi exit {proc.returncode}: {proc.stderr[-500:]}", raw_response=proc.stdout,
-                harness_error=True,
+                harness_error=True, credit_error=is_credit_error(proc.stderr[-500:]),
             )
 
         final_text, usage, error_message = _parse_json_stream(proc.stdout)
@@ -300,7 +317,10 @@ def run_pi(task: Task, model: ModelConfig, timeout_seconds: int) -> RunResult:
                 f"provider rejected the call (pi exited 0 but reported an error): "
                 f"{model.model_id} on task {task.task_id} — {error_message}"
             )
-            return RunResult(solution=None, detail=error_message, raw_response=proc.stdout, harness_error=True)
+            return RunResult(
+                solution=None, detail=error_message, raw_response=proc.stdout,
+                harness_error=True, credit_error=is_credit_error(error_message),
+            )
 
         response_text = final_text if final_text is not None else proc.stdout
 

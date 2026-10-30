@@ -3,6 +3,10 @@ from __future__ import annotations
 import dataclasses
 import json
 import random
+import select
+import subprocess
+import sys
+import time
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -475,6 +479,63 @@ _MODEL_OPTION = typer.Option(
 )
 
 
+CREDIT_PAUSE_FILE = REPO_ROOT / ".cache" / "CALIBRATION_PAUSED"
+
+
+def _make_credit_pause_handler(
+    pause_file: Path = CREDIT_PAUSE_FILE, auto_retry_seconds: float = 600, poll_seconds: float = 5,
+) -> calibrate_mod.CreditErrorHandler:
+    """Never aborts: blocks until someone presses Enter, deletes `pause_file`, or
+    `auto_retry_seconds` pass (0 = never auto-retry) — then retries the same task, pausing again if
+    credits are still short. Auto-retry is what lets a run resume unattended once anyone tops up
+    the account: a credit-rejected call costs nothing, so re-probing is free."""
+
+    def handle(error: calibrate_mod.CreditExhaustedError) -> bool:
+        auto = f"auto-retries every {auto_retry_seconds / 60:g} min" if auto_retry_seconds else "no auto-retry"
+        message = (
+            f"CREDIT / QUOTA ERROR — calibration is PAUSED since {datetime.now().astimezone().isoformat(timespec='seconds')}\n"
+            f"  provider: {error.model.provider}   model: {error.model.model_id}   task: {error.task.task_id}\n"
+            f"  {error.detail[:400]}\n"
+            "Nothing was recorded for this task. Top up credits / raise the limit; the SAME task then\n"
+            f"retries when any of these happens ({auto}):\n"
+            "  - press Enter in this terminal\n"
+            f"  - delete this file:  rm {pause_file}\n"
+        )
+        pause_file.parent.mkdir(parents=True, exist_ok=True)
+        pause_file.write_text(message, encoding="utf-8")
+        typer.echo(f"\n{'=' * 78}\n{message}{'=' * 78}", err=True)
+        _notify_desktop(f"Calibration paused: {error.model.provider} credits", f"{error.model.model_id} — top up, then retry")
+
+        waited = 0.0
+        interactive = sys.stdin.isatty()
+        try:
+            while pause_file.exists():
+                if auto_retry_seconds and waited >= auto_retry_seconds:
+                    typer.echo(f"Auto-retrying after {waited / 60:g} min paused.", err=True)
+                    break
+                if interactive and select.select([sys.stdin], [], [], poll_seconds)[0]:
+                    if sys.stdin.readline() == "":  # EOF — stop listening, keep waiting on the rest
+                        interactive = False
+                    else:
+                        break
+                elif not interactive:
+                    time.sleep(poll_seconds)
+                waited += poll_seconds
+        finally:
+            pause_file.unlink(missing_ok=True)
+        return True
+
+    return handle
+
+
+def _notify_desktop(title: str, body: str) -> None:
+    # Best-effort only: a headless/SSH session has no notification daemon, and that's fine.
+    try:
+        subprocess.run(["notify-send", "--urgency=critical", title, body], check=False, timeout=5, capture_output=True)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 @app.command()
 def calibrate(
     tasks_file: Path | None = typer.Option(
@@ -485,6 +546,11 @@ def calibrate(
         "model-profiles.json was built from.",
     ),
     model: list[str] | None = _MODEL_OPTION,
+    credit_retry_minutes: float = typer.Option(
+        10, "--credit-retry-minutes",
+        help="While paused on a credit/quota error, re-try the blocked task this often (0 = only on "
+        "Enter or deleting the pause file). The run never aborts on a credit error.",
+    ),
 ) -> None:
     """Build and validate model-profiles.json."""
     if not CLUSTER_MAP_PATH.exists():
@@ -526,6 +592,7 @@ def calibrate(
     typer.echo(f"Writing per-task-per-model details incrementally to {details_path}")
     results, detail_rows = calibrate_mod.calibrate_models(
         models, selected, calibration_config, details_csv_path=details_path,
+        on_credit_error=_make_credit_pause_handler(auto_retry_seconds=credit_retry_minutes * 60),
     )
     for result in results:
         stats = result.global_stats

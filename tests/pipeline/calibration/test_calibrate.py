@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from router.common.assign import ClusterMap
 from router.common.config import CalibrationConfig, ModelConfig, SmoothingConfig
@@ -1027,3 +1028,71 @@ def test_load_task_selection_raises_when_the_pinned_content_digest_no_longer_mat
         assert False, "expected a ValueError"
     except ValueError as e:
         assert "digest" in str(e)
+
+
+# --- credit errors: pause the run (retry the same task, or abort) instead of recording
+# error_harness and moving on — the failure mode that ended the cal-2026-09-18 gemma run. -------
+
+def test_run_and_grade_raises_on_a_credit_error_instead_of_recording_it(monkeypatch):
+    monkeypatch.setattr(
+        calibrate_module.runner_mod, "run_pi",
+        lambda task, model, timeout_seconds: RunResult(
+            solution=None, detail="402 add credits", harness_error=True, credit_error=True,
+        ),
+    )
+    with pytest.raises(calibrate_module.CreditExhaustedError) as excinfo:
+        run_and_grade(_task(), _pi_model(), _calibration_config())
+    assert excinfo.value.detail == "402 add credits"
+
+
+def _credit_blocked_once(blocked_task_id: str, calls: list):
+    """A fake run_and_grade that hits a credit error on `blocked_task_id`'s first attempt only."""
+    def fake_run_and_grade(task, model, cfg):
+        calls.append(task.task_id)
+        if task.task_id == blocked_task_id and calls.count(blocked_task_id) == 1:
+            raise calibrate_module.CreditExhaustedError(task, model, "402 add credits")
+        return GradeResult(outcome="pass"), "solution", None
+    return fake_run_and_grade
+
+
+def test_calibrate_models_retries_the_same_task_when_the_handler_says_retry(monkeypatch, tmp_path):
+    calls, handled = [], []
+    monkeypatch.setattr(calibrate_module, "run_and_grade", _credit_blocked_once("t2", calls))
+
+    _results, detail_rows = calibrate_module.calibrate_models(
+        [_named_model("m1")], [_selected("t1", 0), _selected("t2", 0), _selected("t3", 0)], _calibration_config(),
+        details_csv_path=tmp_path / "details.csv", on_credit_error=lambda e: handled.append(e.task.task_id) or True,
+    )
+
+    assert handled == ["t2"]
+    assert calls == ["t1", "t2", "t2", "t3"]
+    # The credit-blocked attempt leaves no row behind — only the successful retry is recorded.
+    assert [(r.task_id, r.outcome) for r in detail_rows] == [("t1", "pass"), ("t2", "pass"), ("t3", "pass")]
+
+
+def test_calibrate_models_aborts_when_the_handler_says_abort_and_keeps_rows_so_far(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(calibrate_module, "run_and_grade", _credit_blocked_once("t2", calls))
+    details_path = tmp_path / "details.csv"
+
+    with pytest.raises(calibrate_module.CalibrationAborted):
+        calibrate_module.calibrate_models(
+            [_named_model("m1")], [_selected("t1", 0), _selected("t2", 0), _selected("t3", 0)], _calibration_config(),
+            details_csv_path=details_path, on_credit_error=lambda e: False,
+        )
+
+    assert calls == ["t1", "t2"]  # t3 never attempted
+    lines = details_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and lines[1].startswith("t1,")  # header + t1 only
+
+
+def test_calibrate_models_aborts_on_a_credit_error_when_no_handler_is_given(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(calibrate_module, "run_and_grade", _credit_blocked_once("t1", calls))
+
+    with pytest.raises(calibrate_module.CalibrationAborted):
+        calibrate_module.calibrate_models(
+            [_named_model("m1")], [_selected("t1", 0), _selected("t2", 0)], _calibration_config(),
+            details_csv_path=tmp_path / "details.csv",
+        )
+    assert calls == ["t1"]

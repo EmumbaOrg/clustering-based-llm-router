@@ -416,6 +416,27 @@ def load_task_selection(path: Path) -> list[SelectedTask]:
     return selected
 
 
+class CreditExhaustedError(Exception):
+    """A provider rejected a call for credits/quota/billing (see runner.is_credit_error). Raised
+    rather than recorded as error_harness: every later call would fail the same way, which is how
+    the gemma run silently turned 190 of its 240 tasks into excluded rows."""
+
+    def __init__(self, task: Task, model: ModelConfig, detail: str):
+        super().__init__(f"{model.provider} rejected {model.model_id} on task {task.task_id} for credits: {detail}")
+        self.task = task
+        self.model = model
+        self.detail = detail
+
+
+class CalibrationAborted(Exception):
+    """A credit error with no handler to pause on (library callers only — the CLI's handler always
+    pauses and retries). The details CSV written so far is kept; no model-profiles.json is written."""
+
+
+# Called on a CreditExhaustedError; returns True to retry the same task, False to abort the run.
+CreditErrorHandler = Callable[[CreditExhaustedError], bool]
+
+
 def run_and_grade(
     task: Task, model: ModelConfig, calibration_config: CalibrationConfig,
 ) -> tuple[GradeResult, str | None, runner_mod.TokenUsage | None]:
@@ -438,6 +459,8 @@ def run_and_grade(
 
     if model.runner == "pi":
         run_result = runner_mod.run_pi(task, model, timeout_seconds=calibration_config.task_timeout_seconds)
+        if run_result.credit_error:
+            raise CreditExhaustedError(task, model, run_result.detail)
         # All of these are infra/harness problems, not the model failing to answer, so they're
         # excluded (error_harness) rather than counted as a wrong answer.
         if run_result.context_unavailable:
@@ -673,13 +696,31 @@ def verify_ground_truth(
     return verdict
 
 
+def _run_until_not_credit_blocked(
+    task: Task, model: ModelConfig, calibration_config: CalibrationConfig, index: int, total: int,
+    on_credit_error: CreditErrorHandler | None,
+) -> TaskRunRecord:
+    """run_and_log, re-running the SAME task each time `on_credit_error` says to retry. Nothing is
+    recorded for a credit-blocked attempt. No handler (or a False from it) aborts the whole run."""
+    while True:
+        try:
+            return run_and_log(task, model, calibration_config, index, total)
+        except CreditExhaustedError as e:
+            logger.error(f"[{index}/{total}] calibration paused on a credit error: {e}")
+            if on_credit_error is None or not on_credit_error(e):
+                raise CalibrationAborted(f"aborted at [{index}/{total}] on a credit error: {e}") from e
+            logger.info(f"[{index}/{total}] retrying {model.model_id} on task {task.task_id} after credit pause")
+
+
 def calibrate_models(
     models: list[ModelConfig], selected_tasks: list[SelectedTask], calibration_config: CalibrationConfig,
-    details_csv_path: Path | None = None,
+    details_csv_path: Path | None = None, on_credit_error: CreditErrorHandler | None = None,
 ) -> tuple[list[ModelCalibrationResult], list[CalibrationDetailRow]]:
     """Runs every (task, model) pair TASKS-OUTER / MODELS-INNER (a deliberate optimization for
     Docker-image cache hit rate), then aggregates per model. Controls are graded first per task;
-    if they show bad ground truth, every real model for that task is skipped as `error_harness`."""
+    if they show bad ground truth, every real model for that task is skipped as `error_harness`.
+    A credit error pauses on `on_credit_error` (see _run_until_not_credit_blocked) and raises
+    CalibrationAborted if the run shouldn't continue."""
     calibration_only = sorted(
         (st for st in selected_tasks if st.split == "calibration"),
         key=lambda st: image_affinity_key(st.task),
@@ -711,7 +752,9 @@ def calibrate_models(
                     )
                     record = TaskRunRecord(result=result, solution=None, duration_ms=0)
                 else:
-                    record = run_and_log(st.task, model, calibration_config, index, total)
+                    record = _run_until_not_credit_blocked(
+                        st.task, model, calibration_config, index, total, on_credit_error,
+                    )
                     if model.runner == "reference":
                         reference_outcome = record.result.outcome
                     elif model.runner == "null":

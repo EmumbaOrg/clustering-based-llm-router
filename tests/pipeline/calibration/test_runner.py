@@ -1,3 +1,4 @@
+import json
 import subprocess
 
 import pytest
@@ -180,6 +181,60 @@ def test_run_pi_flags_a_provider_error_as_harness_error_not_no_solution(monkeypa
     assert result.solution is None
     assert result.harness_error is True
     assert "API key is invalid" in result.detail
+
+
+def _provider_error_stdout(error_message: str) -> str:
+    return (
+        '{"type":"agent_end","messages":[{"role":"assistant","content":[],"stopReason":"error",'
+        f'"errorMessage":{json.dumps(error_message)}}}]}}\n'
+    )
+
+
+@pytest.mark.parametrize("error_message", [
+    # Verbatim shape of the 190 rows that ended the cal-2026-09-18 gemma run.
+    (
+        '402: {"message":"This request would exceed your available credits given your current in-flight '
+        'requests. Retry after in-flight requests settle, or add credits.","code":402,'
+        '"metadata":{"reason":"in_flight_budget_exhausted"}}'
+    ),
+    "429 You exceeded your current quota, please check your plan and billing details.",
+    '400 {"type":"error","error":{"message":"Your credit balance is too low to access the Anthropic API."}}',
+])
+def test_run_pi_flags_a_credit_rejection_as_a_credit_error(monkeypatch, error_message):
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout=_provider_error_stdout(error_message), stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    result = run_pi(_task(), _model(), timeout_seconds=60)
+
+    assert result.harness_error is True
+    assert result.credit_error is True
+
+
+@pytest.mark.parametrize("error_message", [
+    '401 {"error":{"message":"API key is invalid."}}',
+    "429 Rate limit reached for gpt-5.6-sol on tokens per min (TPM): Limit 30000",
+    "500 Internal server error",
+])
+def test_run_pi_does_not_flag_other_provider_errors_as_credit_errors(monkeypatch, error_message):
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 0, stdout=_provider_error_stdout(error_message), stderr="")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    result = run_pi(_task(), _model(), timeout_seconds=60)
+
+    assert result.harness_error is True
+    assert result.credit_error is False
+
+
+def test_run_pi_flags_a_credit_error_on_a_nonzero_exit(monkeypatch):
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr="Error: 402 Payment Required")
+
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    result = run_pi(_task(), _model(), timeout_seconds=60)
+
+    assert result.credit_error is True
 
 
 def test_run_pi_does_not_flag_a_normal_completion_as_a_harness_error(monkeypatch):
