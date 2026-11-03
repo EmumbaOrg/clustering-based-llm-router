@@ -139,6 +139,28 @@ models:
   #   context_window: 272000
   #   max_tokens: 128000
   #   thinking: medium
+  # NOTE (verified 2026-10-30): gpt-5.6-sol's live price is $4.00/$20.00 per 1M (promotional,
+  # guaranteed only through Nov 21 2026) — the $2/$10 above is its Batch API rate. Fix before
+  # re-enabling.
+
+  # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
+  # Chosen over gpt-5.6-sol for calibration (2026-10-30). Verified live against
+  # developers.openai.com/api/docs/models/gpt-6.1-sol on 2026-10-30: $2.00 in / $10.00 out per 1M
+  # (Standard tier; no promotional pricing or deprecation listed), 128K max output, reasoning
+  # effort low..max with medium the default. context_window below is the 272K standard-rate
+  # ceiling, same convention as gpt-5.6-luna: the real window is 1.05M, but prompts over 272K
+  # input tokens are billed 2x input / 1.5x output for the whole request. `thinking: medium`
+  # pins reasoning effort for the whole run rather than leaving it to the model's default;
+  # reasoning tokens are billed as output, so real output cost runs above the visible output.
+  # Calibrated 2026-10-31 on the 240-task pin: 160/227 graded pass (70.5%), $7.35 recorded spend.
+  - model_id: gpt-6.1-sol
+    provider: openai
+    runner: pi
+    cost_input: 0.002
+    cost_output: 0.01
+    context_window: 272000
+    max_tokens: 128000
+    thinking: medium
 
   # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
   # Cheapest model in OpenAI's entire current lineup — verified live via `pi --list-models nano`:
