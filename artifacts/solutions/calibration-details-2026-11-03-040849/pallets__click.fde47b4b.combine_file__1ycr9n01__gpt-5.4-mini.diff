@@ -1,0 +1,75 @@
+diff --git a/src/click/core.py b/src/click/core.py
+index 76ab9f3..728f723 100644
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -127,7 +127,7 @@ def iter_params_for_processing(
+         except ValueError:
+             idx = float("-inf")
+         
+-        return item.is_eager, idx
++        return not item.is_eager, idx
+ 
+     return sorted(declaration_order, key=sort_key)
+ 
+@@ -2682,10 +2682,10 @@ class Option(Parameter):
+             )
+ 
+     def get_help_record(self, ctx: Context) -> tuple[str, str] | None:
+-        if not self.hidden:
++        if self.hidden:
+             return None
+ 
+-        any_prefix_is_slash = True
++        any_prefix_is_slash = False
+ 
+         def _write_opts(opts: cabc.Sequence[str]) -> str:
+             nonlocal any_prefix_is_slash
+@@ -2693,38 +2693,41 @@ class Option(Parameter):
+             rv, any_slashes = join_options(opts)
+ 
+             if any_slashes:
+-                any_prefix_is_slash = False
++                any_prefix_is_slash = True
+ 
+-            if self.is_flag and self.count:
++            if not self.is_flag and not self.count:
+                 rv += f" {self.make_metavar()}"
+ 
+             return rv
+ 
+-        rv = [_write_opts(self.secondary_opts)]
++        rv = []
+ 
+         if self.opts:
+             rv.append(_write_opts(self.opts))
+ 
++        if self.secondary_opts:
++            rv.append(_write_opts(self.secondary_opts))
++
+         help = self.help or ""
+ 
+         extra = self.get_help_extra(ctx)
+         extra_items = []
+         if "envvars" in extra:
+             extra_items.append(
+-                _("env var: {default}").format(var=", ".join(extra["envvars"]))
++                _("env var: {var}").format(var=", ".join(extra["envvars"]))
+             )
+         if "default" in extra:
+-            extra_items.append(_("default: {var}").format(default=extra["default"]))
++            extra_items.append(_("default: {default}").format(default=extra["default"]))
+         if "range" in extra:
+             extra_items.append(extra["range"])
+-        if not "required" in extra:
++        if "required" in extra:
+             extra_items.append(_(extra["required"]))
+ 
+         if extra_items:
+             extra_str = "; ".join(extra_items)
+             help = f"{help}  [{extra_str}]" if help else f"[{extra_str}]"
+ 
+-        return (" / " if any_prefix_is_slash else "; ").join(rv), help
++        return ("; " if any_prefix_is_slash else " / ").join(rv), help
+ 
+     def get_help_extra(self, ctx: Context) -> types.OptionHelpExtra:
+         extra: types.OptionHelpExtra = {}

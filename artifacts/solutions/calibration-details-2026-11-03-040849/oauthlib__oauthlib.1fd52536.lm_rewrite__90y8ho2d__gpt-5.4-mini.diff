@@ -1,0 +1,122 @@
+diff --git a/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py b/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py
+index df4c149..798cca9 100644
+--- a/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py
++++ b/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py
+@@ -436,43 +436,76 @@ class AuthorizationCodeGrant(GrantTypeBase):
+         :param request: OAuthlib request.
+         :type request: oauthlib.common.Request
+         """
+-        # Ensure the required parameters are present
+-        for param in ('grant_type', 'code', 'client_id', 'redirect_uri'):
+-            if not getattr(request, param, None):
+-                raise errors.InvalidRequestError(
+-                    'Request is missing %s parameter.' % param,
+-                    request=request)
++        # OpenID Connect may route authorization code token requests through
++        # this grant type using "openid" as an alias for the standard OAuth 2.0
++        # authorization code grant.
++        if not request.grant_type:
++            raise errors.UnsupportedGrantTypeError(request=request)
++        if request.grant_type == 'openid':
++            request.grant_type = 'authorization_code'
++        if request.grant_type != 'authorization_code':
++            raise errors.UnsupportedGrantTypeError(request=request)
+ 
+-        # Ensure the client is authenticated
+-        if not self.request_validator.authenticate_client(request):
++        if not request.code:
++            raise errors.InvalidRequestError(
++                'Request is missing code parameter.', request=request)
++
++        try:
++            duplicate_params = request.duplicate_params
++        except ValueError:
++            raise errors.InvalidRequestError(
++                description='Unable to parse query string', request=request)
++        for param in ('grant_type', 'code', 'redirect_uri', 'client_id'):
++            if param in duplicate_params:
++                raise errors.InvalidRequestError(
++                    description='Duplicate %s parameter.' % param, request=request)
++
++        # Ensure the client is authenticated.
++        if self.request_validator.client_authentication_required(request):
++            if not self.request_validator.authenticate_client(request):
++                log.debug('Client authentication failed, %r.', request)
++                raise errors.InvalidClientError(request=request)
++            if request.client is None or not hasattr(request.client, 'client_id') or request.client.client_id is None:
++                raise NotImplementedError(
++                    'Authenticate client must set the request.client.client_id attribute.')
++            if request.client_id is None:
++                request.client_id = request.client.client_id
++        elif not self.request_validator.authenticate_client_id(request.client_id, request):
+             log.debug('Client authentication failed, %r.', request)
+             raise errors.InvalidClientError(request=request)
+ 
+-        # Ensure the authorization code is valid
++        # Ensure client is authorized use of this grant type.
++        self.validate_grant_type(request)
++
++        # Ensure the authorization code is valid.
+         if not self.request_validator.validate_code(
+                 request.client_id, request.code, request.client, request):
+             log.debug('Client, %r, is not authorized to use authorization code %r.',
+                       request.client_id, request.code)
+             raise errors.InvalidGrantError(request=request)
+ 
+-        # Ensure that the authorization code and redirect_uri match
++        # Ensure that the authorization code and redirect_uri match.
+         if not self.request_validator.confirm_redirect_uri(
+                 request.client_id, request.code, request.redirect_uri, request.client, request):
+             log.debug('Redirect_uri (%r) invalid for client %r (%r).',
+                       request.redirect_uri, request.client_id, request.client)
+-            raise errors.AccessDeniedError(request=request)
+-
+-        # Validate PKCE parameters if code_verifier is present
+-        if request.code_verifier:
+-            code_challenge = self.request_validator.get_code_challenge(request.code, request)
++            raise errors.MismatchingRedirectURIError(request=request)
++
++        # Validate PKCE parameters.
++        code_challenge = self.request_validator.get_code_challenge(request.code, request)
++        pkce_required = self.request_validator.is_pkce_required(request.client_id, request)
++        if request.code_verifier is None:
++            if code_challenge or pkce_required is True:
++                raise errors.MissingCodeVerifierError(request=request)
++        elif not code_challenge:
++            log.debug('Client %r (%r) did not provide code_challenge for PKCE.',
++                      request.client_id, request.client)
++            if pkce_required is True:
++                raise errors.InvalidGrantError(request=request)
++        else:
+             code_challenge_method = self.request_validator.get_code_challenge_method(request.code, request)
+-
+-            if not code_challenge:
+-                log.debug('Client %r (%r) did not provide code_challenge for PKCE.',
+-                          request.client_id, request.client)
+-                raise errors.InvalidRequestError(
+-                    'Code challenge was not provided in the authorization request.',
+-                    request=request)
++            if code_challenge_method is None:
++                raise errors.InvalidGrantError(request=request)
+ 
+             if not self.validate_code_challenge(code_challenge, code_challenge_method, request.code_verifier):
+                 log.debug('PKCE verification failed for client %r (%r).',
+@@ -482,7 +515,7 @@ class AuthorizationCodeGrant(GrantTypeBase):
+         for validator in self.custom_validators.pre_token:
+             validator(request)
+ 
+-        # Ensure proper grant_type
++        # Ensure proper grant_type.
+         if request.grant_type != 'authorization_code':
+             log.debug('Client %r (%r) requested grant_type %r.',
+                       request.client_id, request.client, request.grant_type)
+@@ -490,7 +523,8 @@ class AuthorizationCodeGrant(GrantTypeBase):
+ 
+         for validator in self.custom_validators.post_token:
+             validator(request)
++
+     def validate_code_challenge(self, challenge, challenge_method, verifier):
+         if challenge_method in self._code_challenge_methods:
+             return self._code_challenge_methods[challenge_method](verifier, challenge)
+-        raise NotImplementedError('Unknown challenge_method %s' % challenge_method)
++        raise errors.ServerError('Unknown challenge_method %s' % challenge_method)

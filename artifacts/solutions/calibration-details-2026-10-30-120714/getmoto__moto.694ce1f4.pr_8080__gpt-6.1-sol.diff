@@ -1,0 +1,64 @@
+diff --git a/moto/shield/models.py b/moto/shield/models.py
+index 8aed296..c3641e8 100644
+--- a/moto/shield/models.py
++++ b/moto/shield/models.py
+@@ -1,6 +1,6 @@
+ """ShieldBackend class with methods for supported APIs."""
+ 
+-from typing import Any, Dict, List
++from typing import Any, Dict, List, Optional
+ 
+ from moto.core.base_backend import BackendDict, BaseBackend
+ from moto.core.common_models import BaseModel
+@@ -63,6 +63,32 @@ class ShieldBackend(BaseBackend):
+         super().__init__(region_name, account_id)
+         self.protections: Dict[str, Protection] = dict()
+         self.tagger = TaggingService()
++        self.subscription: Optional[Dict[str, Any]] = None
++
++    def create_subscription(self) -> None:
++        self.subscription = {
++            "AutoRenew": "ENABLED",
++            "Limits": [{"Type": "MitigationCapacityUnits", "Max": 10000}],
++            "ProactiveEngagementStatus": "ENABLED",
++            "SubscriptionLimits": {
++                "ProtectionLimits": {
++                    "ProtectedResourceTypeLimits": [
++                        {"Type": "ELASTIC_IP_ADDRESS", "Max": 100},
++                        {"Type": "APPLICATION_LOAD_BALANCER", "Max": 50},
++                    ]
++                },
++                "ProtectionGroupLimits": {
++                    "MaxProtectionGroups": 20,
++                    "PatternTypeLimits": {"ArbitraryPatternLimits": {"MaxMembers": 100}},
++                },
++            },
++            "TimeCommitmentInSeconds": 31536000,
++        }
++
++    def describe_subscription(self) -> Dict[str, Any]:
++        if self.subscription is None:
++            raise ResourceNotFoundException("The subscription does not exist.")
++        return self.subscription
+ 
+     def validate_resource_arn(self, resource_arn: str) -> None:
+         """Raise exception if the resource arn is invalid."""
+diff --git a/moto/shield/responses.py b/moto/shield/responses.py
+index b6e558e..a12e59d 100644
+--- a/moto/shield/responses.py
++++ b/moto/shield/responses.py
+@@ -18,6 +18,14 @@ class ShieldResponse(BaseResponse):
+         """Return backend instance specific for this region."""
+         return shield_backends[self.current_account][self.region]
+ 
++    def create_subscription(self) -> str:
++        self.shield_backend.create_subscription()
++        return "{}"
++
++    def describe_subscription(self) -> str:
++        subscription = self.shield_backend.describe_subscription()
++        return json.dumps(dict(Subscription=subscription))
++
+     def create_protection(self) -> str:
+         params = json.loads(self.body)
+         name = params.get("Name")

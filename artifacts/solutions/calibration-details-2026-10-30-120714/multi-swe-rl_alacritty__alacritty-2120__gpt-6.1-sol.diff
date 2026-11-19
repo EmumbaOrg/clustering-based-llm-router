@@ -1,0 +1,149 @@
+diff --git a/src/grid/mod.rs b/src/grid/mod.rs
+index 80289cd6..3117c8f5 100644
+--- a/src/grid/mod.rs
++++ b/src/grid/mod.rs
+@@ -19,6 +19,7 @@ use std::ops::{Deref, Range, Index, IndexMut, RangeTo, RangeFrom, RangeFull};
+ 
+ use crate::index::{self, Point, Line, Column, IndexRange};
+ use crate::selection::Selection;
++use crate::term::cell::{Cell, Flags};
+ 
+ mod row;
+ pub use self::row::Row;
+@@ -422,6 +423,109 @@ impl<T: Copy + Clone> Grid<T> {
+     }
+ }
+ 
++impl Grid<Cell> {
++    /// Rewrap the normal screen and its history without discarding truncated cells.
++    pub fn reflow(&mut self, cols: Column, cursor: &mut Point, needs_wrap: &mut bool) {
++        if cols == self.cols {
++            return;
++        }
++
++        let template = Cell::default();
++        let old_len = self.scroll_limit + self.lines.0;
++        let cursor_line = self.scroll_limit + cursor.line.0;
++        let display_line = self.scroll_limit - self.display_offset;
++        let mut rows = Vec::new();
++        let mut logical = Vec::new();
++        let mut cursor_offset = None;
++        let mut display_offset = None;
++        let mut new_cursor = Point::new(0usize, Column(0));
++        let mut new_display = 0;
++
++        // Join soft-wrapped rows before splitting them at the new width. Hard
++        // line breaks must remain intact, including empty lines.
++        for line in 0..old_len {
++            let row = &self.raw[old_len - line - 1];
++            let wrapped = row[self.cols - 1].flags.contains(Flags::WRAPLINE);
++            let mut length = if wrapped {
++                self.cols.0
++            } else {
++                row.iter().rposition(|cell| {
++                    !cell.is_empty() || cell.flags.contains(Flags::WIDE_CHAR_SPACER)
++                }).map_or(0, |i| i + 1)
++            };
++            if line == cursor_line {
++                let col = cursor.col.0 + if *needs_wrap { 1 } else { 0 };
++                cursor_offset = Some(logical.len() + col);
++                length = max(length, col);
++            }
++            if line == display_line {
++                display_offset = Some(logical.len());
++            }
++            logical.extend_from_slice(&row[..Column(length)]);
++            if wrapped && line + 1 < old_len {
++                continue;
++            }
++
++            let count = max(1, (logical.len() + cols.0 - 1) / cols.0);
++            if let Some(offset) = cursor_offset.take() {
++                // A cursor just beyond the final cell is represented by a
++                // pending wrap, not by an extra empty line.
++                *needs_wrap = offset > 0 && offset == logical.len() && offset % cols.0 == 0;
++                let offset = if *needs_wrap { offset - 1 } else { offset };
++                new_cursor = Point::new(rows.len() + offset / cols.0, Column(offset % cols.0));
++            }
++            if let Some(offset) = display_offset.take() {
++                new_display = rows.len() + offset / cols.0;
++            }
++            for index in 0..count {
++                let mut row = Row::new(cols, &template);
++                let start = index * cols.0;
++                let length = min(cols.0, logical.len().saturating_sub(start));
++                row[..Column(length)].copy_from_slice(&logical[start..start + length]);
++                for cell in &mut row[..Column(length)] {
++                    cell.flags.remove(Flags::WRAPLINE);
++                }
++                if index + 1 < count {
++                    row[cols - 1].flags.insert(Flags::WRAPLINE);
++                }
++                rows.push(row);
++            }
++            logical.clear();
++        }
++
++        // Use spare lines below the cursor before pushing content into history.
++        while rows.len() > old_len && rows.len() > new_cursor.line + 1 {
++            let last = rows.last().unwrap();
++            if last[cols - 1].flags.contains(Flags::WRAPLINE)
++                || !last.iter().all(Cell::is_empty)
++            {
++                break;
++            }
++            rows.pop();
++        }
++        while rows.len() < self.lines.0 {
++            rows.push(Row::new(cols, &template));
++        }
++
++        let visible_start = rows.len() - self.lines.0;
++        cursor.line = Line(min(new_cursor.line.saturating_sub(visible_start), self.lines.0 - 1));
++        cursor.col = new_cursor.col;
++        self.scroll_limit = min(visible_start, self.max_scroll_limit);
++        if self.display_offset != 0 {
++            self.display_offset = min(visible_start.saturating_sub(new_display), self.scroll_limit);
++        }
++
++        let len = self.lines.0 + self.scroll_limit;
++        self.raw = Storage::with_capacity(self.lines, Row::new(cols, &template));
++        self.raw.initialize(self.scroll_limit, Row::new(cols, &template));
++        for (index, row) in rows.into_iter().rev().take(len).enumerate() {
++            self.raw[index] = row;
++        }
++        self.cols = cols;
++        self.selection = None;
++    }
++}
++
+ #[allow(clippy::len_without_is_empty)]
+ impl<T> Grid<T> {
+     #[inline]
+diff --git a/src/term/mod.rs b/src/term/mod.rs
+index f48ad699..fbb83f1d 100644
+--- a/src/term/mod.rs
++++ b/src/term/mod.rs
+@@ -1245,9 +1245,19 @@ impl Term {
+ 
+         debug!("New num_cols is {} and num_lines is {}", num_cols, num_lines);
+ 
+-        // Resize grids to new size
+-        self.grid.resize(num_lines, num_cols, &Cell::default());
+-        self.alt_grid.resize(num_lines, num_cols, &Cell::default());
++        // Only the normal screen reflows; full-screen applications redraw the
++        // alternate screen themselves after a resize.
++        if self.alt {
++            self.grid.resize(num_lines, num_cols, &Cell::default());
++            self.alt_grid.resize(num_lines, old_cols, &Cell::default());
++            self.cursor_save.point.line = min(self.cursor_save.point.line, num_lines - 1);
++            self.alt_grid.reflow(num_cols, &mut self.cursor_save.point, &mut false);
++        } else {
++            self.grid.resize(num_lines, old_cols, &Cell::default());
++            self.cursor.point.line = min(self.cursor.point.line, num_lines - 1);
++            self.grid.reflow(num_cols, &mut self.cursor.point, &mut self.input_needs_wrap);
++            self.alt_grid.resize(num_lines, num_cols, &Cell::default());
++        }
+ 
+         // Reset scrolling region to new size
+         self.scroll_region = Line(0)..self.grid.num_lines();

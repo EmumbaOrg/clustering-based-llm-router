@@ -1,0 +1,52 @@
+    if isinstance(n_clusters, bool) or not isinstance(n_clusters, int) or n_clusters <= 0:
+        raise ValueError("n_clusters must be a positive integer.")
+
+    if isinstance(myList, (str, bytes)) or not hasattr(myList, "__iter__"):
+        raise ValueError("myList must be an iterable of 2D points.")
+
+    points = []
+    for point in myList:
+        if isinstance(point, (str, bytes)) or not hasattr(point, "__iter__"):
+            raise ValueError("Each point must be an iterable of two numeric values.")
+        try:
+            x, y = point
+        except Exception as exc:
+            raise ValueError("Each point must contain exactly two values.") from exc
+
+        if isinstance(x, bool) or isinstance(y, bool):
+            raise ValueError("Point coordinates must be numeric.")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            raise ValueError("Point coordinates must be numeric.")
+        if x != x or y != y or x in (float("inf"), float("-inf")) or y in (float("inf"), float("-inf")):
+            raise ValueError("Point coordinates must be finite numeric values.")
+
+        points.append([float(x), float(y)])
+
+    if len(points) == 0 or len(points) < n_clusters:
+        raise ValueError("Invalid number of points for the requested clusters.")
+
+    try:
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        labels = kmeans.fit_predict(points)
+    except Exception as exc:
+        raise ValueError("Invalid inputs for KMeans clustering.") from exc
+
+    fig, ax = plt.subplots()
+
+    cmap = plt.cm.get_cmap("tab10", n_clusters)
+    for cluster_id in range(n_clusters):
+        cluster_points = [pt for pt, label in zip(points, labels) if label == cluster_id]
+        if cluster_points:
+            xs = [pt[0] for pt in cluster_points]
+            ys = [pt[1] for pt in cluster_points]
+            ax.scatter(xs, ys, s=50, color=cmap(cluster_id), label=f"Cluster {cluster_id + 1}")
+
+    centers = kmeans.cluster_centers_
+    ax.scatter(centers[:, 0], centers[:, 1], c="red", marker="x", s=100, label="Cluster centers")
+
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_title("KMeans Clustering")
+    ax.legend()
+
+    return ax

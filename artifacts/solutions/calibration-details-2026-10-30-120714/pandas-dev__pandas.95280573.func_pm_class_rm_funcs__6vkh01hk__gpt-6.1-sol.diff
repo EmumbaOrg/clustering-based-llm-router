@@ -1,0 +1,186 @@
+diff --git a/pandas/io/formats/style_render.py b/pandas/io/formats/style_render.py
+index 9409b8f2..60f4154e 100644
+--- a/pandas/io/formats/style_render.py
++++ b/pandas/io/formats/style_render.py
+@@ -80,6 +80,124 @@ class StylerRenderer:
+     template_typst = env.get_template("typst.tpl")
+     template_string = env.get_template("string.tpl")
+ 
++    def __init__(
++        self,
++        data: DataFrame | Series,
++        uuid: str | None = None,
++        uuid_len: int = 5,
++        table_styles: CSSStyles | None = None,
++        table_attributes: str | None = None,
++        caption: str | tuple | list | None = None,
++        cell_ids: bool = True,
++        precision: int | None = None,
++    ) -> None:
++        # validate ordered args
++        if isinstance(data, Series):
++            data = data.to_frame()
++        if not isinstance(data, DataFrame):
++            raise TypeError("``data`` must be a Series or DataFrame")
++        self.data: DataFrame = data
++        self.index: Index = data.index
++        self.columns: Index = data.columns
++        if not isinstance(uuid_len, int) or uuid_len < 0:
++            raise TypeError("``uuid_len`` must be an integer in range [0, 32].")
++        self.uuid = uuid or uuid4().hex[: min(32, uuid_len)]
++        self.uuid_len = len(self.uuid)
++        self.table_styles = table_styles
++        self.table_attributes = table_attributes
++        self.caption = caption
++        self.cell_ids = cell_ids
++        self.css = {
++            "row_heading": "row_heading",
++            "col_heading": "col_heading",
++            "index_name": "index_name",
++            "col": "col",
++            "row": "row",
++            "col_trim": "col_trim",
++            "row_trim": "row_trim",
++            "level": "level",
++            "data": "data",
++            "blank": "blank",
++            "foot": "foot",
++        }
++        self.concatenated: list[StylerRenderer] = []
++        # add rendering variables
++        self.hide_index_names: bool = False
++        self.hide_column_names: bool = False
++        self.hide_index_: list = [False] * self.index.nlevels
++        self.hide_columns_: list = [False] * self.columns.nlevels
++        self.hidden_rows: Sequence[int] = []  # sequence for specific hidden rows/cols
++        self.hidden_columns: Sequence[int] = []
++        self.ctx: DefaultDict[tuple[int, int], CSSList] = defaultdict(list)
++        self.ctx_index: DefaultDict[tuple[int, int], CSSList] = defaultdict(list)
++        self.ctx_columns: DefaultDict[tuple[int, int], CSSList] = defaultdict(list)
++        self.cell_context: DefaultDict[tuple[int, int], str] = defaultdict(str)
++        self._todo: list[tuple[Callable, tuple, dict]] = []
++        self.tooltips: Tooltips | None = None
++        precision = (
++            get_option("styler.format.precision") if precision is None else precision
++        )
++        self._display_funcs: DefaultDict[  # maps (row, col) -> format func
++            tuple[int, int], Callable[[Any], str]
++        ] = defaultdict(lambda: partial(_default_formatter, precision=precision))
++        self._display_funcs_index: DefaultDict[  # maps (row, level) -> format func
++            tuple[int, int], Callable[[Any], str]
++        ] = defaultdict(lambda: partial(_default_formatter, precision=precision))
++        self._display_funcs_index_names: DefaultDict[  # maps index level -> format func
++            int, Callable[[Any], str]
++        ] = defaultdict(lambda: partial(_default_formatter, precision=precision))
++        self._display_funcs_columns: DefaultDict[  # maps (level, col) -> format func
++            tuple[int, int], Callable[[Any], str]
++        ] = defaultdict(lambda: partial(_default_formatter, precision=precision))
++        self._display_funcs_column_names: DefaultDict[  # maps col level -> format func
++            int, Callable[[Any], str]
++        ] = defaultdict(lambda: partial(_default_formatter, precision=precision))
++
++    def _render(
++        self,
++        sparse_index: bool,
++        sparse_columns: bool,
++        max_rows: int | None = None,
++        max_cols: int | None = None,
++        blank: str = "",
++    ):
++        """
++        Computes and applies styles and then generates the general render dicts.
++
++        Also extends the `ctx` and `ctx_index` attributes with those of concatenated
++        stylers for use within `_translate_latex`
++        """
++        self._compute()
++        dxs = []
++        ctx_len = len(self.index)
++        for i, concatenated in enumerate(self.concatenated):
++            concatenated.hide_index_ = self.hide_index_
++            concatenated.hidden_columns = self.hidden_columns
++            foot = f"{self.css['foot']}{i}"
++            concatenated.css = {
++                **self.css,
++                "data": f"{foot}_data",
++                "row_heading": f"{foot}_row_heading",
++                "row": f"{foot}_row",
++                "foot": f"{foot}_foot",
++            }
++            dx = concatenated._render(
++                sparse_index, sparse_columns, max_rows, max_cols, blank
++            )
++            dxs.append(dx)
++
++            for (r, c), v in concatenated.ctx.items():
++                self.ctx[(r + ctx_len, c)] = v
++            for (r, c), v in concatenated.ctx_index.items():
++                self.ctx_index[(r + ctx_len, c)] = v
++
++            ctx_len += len(concatenated.index)
++
++        d = self._translate(
++            sparse_index, sparse_columns, max_rows, max_cols, blank, dxs
++        )
++        return d
++
+     def _render_html(
+         self,
+         sparse_index: bool,
+@@ -855,6 +973,56 @@ class StylerRenderer:
+                             f"\\cline{{{lvln + 1}-{len(visible_index_levels) + data_len}}}"  # noqa: E501
+                         )
+ 
++    def format(
++        self,
++        formatter: ExtFormatter | None = None,
++        subset: Subset | None = None,
++        na_rep: str | None = None,
++        precision: int | None = None,
++        decimal: str = ".",
++        thousands: str | None = None,
++        escape: str | None = None,
++        hyperlinks: str | None = None,
++    ) -> StylerRenderer:
++        if all(
++            (
++                formatter is None,
++                subset is None,
++                precision is None,
++                decimal == ".",
++                thousands is None,
++                na_rep is None,
++                escape is None,
++                hyperlinks is None,
++            )
++        ):
++            self._display_funcs.clear()
++            return self  # clear the formatter / revert to default and avoid looping
++
++        subset = slice(None) if subset is None else subset
++        subset = non_reducing_slice(subset)
++        data = self.data.loc[subset]
++
++        if not isinstance(formatter, dict):
++            formatter = {col: formatter for col in data.columns}
++
++        cis = self.columns.get_indexer_for(data.columns)
++        ris = self.index.get_indexer_for(data.index)
++        for ci in cis:
++            format_func = _maybe_wrap_formatter(
++                formatter.get(self.columns[ci]),
++                na_rep=na_rep,
++                precision=precision,
++                decimal=decimal,
++                thousands=thousands,
++                escape=escape,
++                hyperlinks=hyperlinks,
++            )
++            for ri in ris:
++                self._display_funcs[(ri, ci)] = format_func
++
++        return self
++
+     def format_index(
+         self,
+         formatter: ExtFormatter | None = None,

@@ -1,0 +1,62 @@
+diff --git a/src/jinja2/environment.py b/src/jinja2/environment.py
+index 3282b54..1cb9e4f 100644
+--- a/src/jinja2/environment.py
++++ b/src/jinja2/environment.py
+@@ -841,6 +841,8 @@ class Environment:
+         import time
+         from os import path
+ 
++        from .loaders import ModuleLoader
++
+         if self.loader is None:
+             raise TypeError("no loader for this environment specified")
+ 
+@@ -881,26 +883,29 @@ class Environment:
+                 with open(template_path, 'w', encoding='utf-8') as f:
+                     f.write(source)
+ 
+-        for name in templates:
+-            if log_function is not None:
+-                log_function(f'Compiling template {name}')
+-
+-            try:
+-                # Get the template source
+-                source = self.loader.get_source(self, name)[0]
+-                # Compile the template
+-                code = self.compile(source, name, name, raw=True)
+-                write_template(name, code)
+-            except Exception as e:
++        try:
++            for name in templates:
++                source, filename, _ = self.loader.get_source(self, name)
++                try:
++                    code = self.compile(source, name, filename, raw=True, defer_init=True)
++                except TemplateSyntaxError as e:
++                    if not ignore_errors:
++                        raise
++                    if log_function is not None:
++                        log_function(f'Could not compile "{name}": {e}')
++                    continue
++
++                filename = ModuleLoader.get_module_filename(name)
++                write_template(filename, code)
+                 if log_function is not None:
+-                    log_function(f'Could not compile {name}: {e}')
+-                if not ignore_errors:
+-                    if zip_file is not None:
+-                        zip_file.close()
+-                    raise
+-
+-        if zip_file is not None:
+-            zip_file.close()
++                    log_function(f'Compiled "{name}" as {filename}')
++        finally:
++            if zip_file is not None:
++                zip_file.close()
++
++        if log_function is not None:
++            log_function("Finished compiling templates")
++
+     def list_templates(
+         self,
+         extensions: t.Optional[t.Collection[str]] = None,

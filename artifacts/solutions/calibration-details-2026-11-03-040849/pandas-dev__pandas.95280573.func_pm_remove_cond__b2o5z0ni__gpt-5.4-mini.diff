@@ -1,0 +1,68 @@
+diff --git a/pandas/core/reshape/encoding.py b/pandas/core/reshape/encoding.py
+index 99ea9b72..291da739 100644
+--- a/pandas/core/reshape/encoding.py
++++ b/pandas/core/reshape/encoding.py
+@@ -1,6 +1,5 @@
+ from __future__ import annotations
+ 
+-from collections import defaultdict
+ from collections.abc import (
+     Hashable,
+     Iterable,
+@@ -491,6 +490,22 @@ def from_dummies(
+             f"Received 'data' of type: {type(data).__name__}"
+         )
+ 
++    if sep is not None and not isinstance(sep, str):
++        raise TypeError(
++            "Expected 'sep' to be of type 'str' or 'None'; "
++            f"Received 'sep' of type: {type(sep).__name__}"
++        )
++
++    if not (
++        default_category is None
++        or isinstance(default_category, Hashable)
++        or isinstance(default_category, dict)
++    ):
++        raise TypeError(
++            "Expected 'default_category' to be of type 'None', 'Hashable', or 'dict'; "
++            f"Received 'default_category' of type: {type(default_category).__name__}"
++        )
++
+     col_isna_mask = data.isna().any()
+ 
+     if col_isna_mask.any():
+@@ -505,7 +520,23 @@ def from_dummies(
+         raise TypeError("Passed DataFrame contains non-dummy data") from err
+ 
+     # collect prefixes and get lists to slice data for each prefix
+-    variables_slice = defaultdict(list)
++    variables_slice = {}
++    if sep is None:
++        variables_slice[""] = list(data.columns)
++    else:
++        for col in data.columns:
++            if not isinstance(col, str) or sep not in col:
++                raise ValueError(f"Separator not specified for column: {col}")
++            prefix = col.split(sep, 1)[0]
++            variables_slice.setdefault(prefix, []).append(col)
++
++    if isinstance(default_category, dict) and len(default_category) != len(
++        variables_slice
++    ):
++        raise ValueError(
++            f"Length of 'default_category' ({len(default_category)}) did not match "
++            f"the length of the columns being encoded ({len(variables_slice)})"
++        )
+ 
+     cat_data = {}
+     for prefix, prefix_slice in variables_slice.items():
+@@ -522,6 +553,8 @@ def from_dummies(
+         if any(assigned == 0):
+             if isinstance(default_category, dict):
+                 cats.append(default_category[prefix])
++            elif default_category is not None:
++                cats.append(default_category)
+             else:
+                 raise ValueError(
+                     "Dummy DataFrame contains unassigned value(s); "

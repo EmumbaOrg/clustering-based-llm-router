@@ -1,0 +1,58 @@
+diff --git a/lib/document.js b/lib/document.js
+index 81d51a2ce..9e84edd2a 100644
+--- a/lib/document.js
++++ b/lib/document.js
+@@ -3312,28 +3312,34 @@ Document.prototype.$__reset = function reset() {
+ 
+   // Skip for subdocuments
+   const subdocs = this.$parent() === this ? this.$getAllSubdocs() : [];
+-  const resetArrays = new Set();
++  const subdocsToReset = [];
+   for (const subdoc of subdocs) {
+     const fullPathWithIndexes = subdoc.$__fullPathWithIndexes();
+     if (this.isModified(fullPathWithIndexes) || isParentInit(fullPathWithIndexes)) {
+-      subdoc.$__reset();
+-      if (subdoc.$isDocumentArrayElement) {
+-        if (!resetArrays.has(subdoc.parentArray())) {
+-          const array = subdoc.parentArray();
+-          this.$__.activePaths.clearPath(fullPathWithIndexes.replace(/\.\d+$/, '').slice(-subdoc.$basePath - 1));
+-          array[arrayAtomicsBackupSymbol] = array[arrayAtomicsSymbol];
+-          array[arrayAtomicsSymbol] = {};
+-
+-          resetArrays.add(array);
+-        }
+-      } else {
+-        if (subdoc.$parent() === this) {
+-          this.$__.activePaths.clearPath(subdoc.$basePath);
+-        } else if (subdoc.$parent() != null && subdoc.$parent().$isSubdocument) {
+-          // If map path underneath subdocument, may end up with a case where
+-          // map path is modified but parent still needs to be reset. See gh-10295
+-          subdoc.$parent().$__reset();
+-        }
++      subdocsToReset.push(subdoc);
++    }
++  }
++
++  const resetArrays = new Set();
++  for (const subdoc of subdocsToReset) {
++    const fullPathWithIndexes = subdoc.$__fullPathWithIndexes();
++    subdoc.$__reset();
++    if (subdoc.$isDocumentArrayElement) {
++      if (!resetArrays.has(subdoc.parentArray())) {
++        const array = subdoc.parentArray();
++        this.$__.activePaths.clearPath(fullPathWithIndexes.replace(/\.\d+$/, '').slice(-subdoc.$basePath - 1));
++        array[arrayAtomicsBackupSymbol] = array[arrayAtomicsSymbol];
++        array[arrayAtomicsSymbol] = {};
++
++        resetArrays.add(array);
++      }
++    } else {
++      if (subdoc.$parent() === this) {
++        this.$__.activePaths.clearPath(subdoc.$basePath);
++      } else if (subdoc.$parent() != null && subdoc.$parent().$isSubdocument) {
++        // If map path underneath subdocument, may end up with a case where
++        // map path is modified but parent still needs to be reset. See gh-10295
++        subdoc.$parent().$__reset();
+       }
+     }
+   }

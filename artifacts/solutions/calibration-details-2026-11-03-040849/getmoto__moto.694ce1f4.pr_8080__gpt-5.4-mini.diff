@@ -1,0 +1,96 @@
+diff --git a/moto/shield/models.py b/moto/shield/models.py
+index 8aed296..c8119da 100644
+--- a/moto/shield/models.py
++++ b/moto/shield/models.py
+@@ -1,6 +1,6 @@
+ """ShieldBackend class with methods for supported APIs."""
+ 
+-from typing import Any, Dict, List
++from typing import Any, Dict, List, Optional
+ 
+ from moto.core.base_backend import BackendDict, BaseBackend
+ from moto.core.common_models import BaseModel
+@@ -56,12 +56,47 @@ class Protection(BaseModel):
+         return {k: v for k, v in dct.items() if v}
+ 
+ 
++class Subscription(BaseModel):
++    def __init__(self, account_id: str):
++        self.subscription_arn = f"arn:aws:shield::{account_id}:subscription/default"
++        self.auto_renew = "ENABLED"
++        self.limits = [{"Type": "MitigationCapacityUnits", "Max": 10000}]
++        self.proactive_engagement_status = "ENABLED"
++        self.subscription_limits = {
++            "ProtectionLimits": {
++                "ProtectedResourceTypeLimits": [
++                    {"Type": "ELASTIC_IP_ADDRESS", "Max": 100},
++                    {"Type": "APPLICATION_LOAD_BALANCER", "Max": 50},
++                ]
++            },
++            "ProtectionGroupLimits": {
++                "MaxProtectionGroups": 20,
++                "PatternTypeLimits": {
++                    "ArbitraryPatternLimits": {"MaxMembers": 100}
++                },
++            },
++        }
++        self.time_commitment_in_seconds = 31536000
++
++    def to_dict(self) -> Dict[str, Any]:
++        dct = {
++            "SubscriptionArn": self.subscription_arn,
++            "AutoRenew": self.auto_renew,
++            "Limits": self.limits,
++            "ProactiveEngagementStatus": self.proactive_engagement_status,
++            "SubscriptionLimits": self.subscription_limits,
++            "TimeCommitmentInSeconds": self.time_commitment_in_seconds,
++        }
++        return {k: v for k, v in dct.items() if v is not None}
++
++
+ class ShieldBackend(BaseBackend):
+     """Implementation of Shield APIs."""
+ 
+     def __init__(self, region_name: str, account_id: str):
+         super().__init__(region_name, account_id)
+         self.protections: Dict[str, Protection] = dict()
++        self.subscription: Optional[Subscription] = None
+         self.tagger = TaggingService()
+ 
+     def validate_resource_arn(self, resource_arn: str) -> None:
+@@ -180,6 +215,16 @@ class ShieldBackend(BaseBackend):
+             protections = list(self.protections.values())
+         return protections
+ 
++    def create_subscription(self) -> None:
++        if self.subscription is not None:
++            raise ResourceAlreadyExistsException("The subscription already exists.")
++        self.subscription = Subscription(account_id=self.account_id)
++
++    def describe_subscription(self) -> Subscription:
++        if self.subscription is None:
++            raise ResourceNotFoundException("The subscription does not exist.")
++        return self.subscription
++
+     def delete_protection(self, protection_id: str) -> None:
+         if protection_id in self.protections:
+             del self.protections[protection_id]
+diff --git a/moto/shield/responses.py b/moto/shield/responses.py
+index b6e558e..09ba5a7 100644
+--- a/moto/shield/responses.py
++++ b/moto/shield/responses.py
+@@ -30,6 +30,14 @@ class ShieldResponse(BaseResponse):
+         )
+         return json.dumps(dict(ProtectionId=protection_id))
+ 
++    def create_subscription(self) -> str:
++        self.shield_backend.create_subscription()
++        return "{}"
++
++    def describe_subscription(self) -> str:
++        subscription = self.shield_backend.describe_subscription()
++        return json.dumps(dict(Subscription=subscription.to_dict()))
++
+     def describe_protection(self) -> str:
+         params = json.loads(self.body)
+         protection_id = params.get("ProtectionId")

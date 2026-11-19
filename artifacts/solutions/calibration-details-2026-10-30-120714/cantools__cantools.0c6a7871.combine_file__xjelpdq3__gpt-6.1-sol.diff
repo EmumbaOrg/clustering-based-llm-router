@@ -1,0 +1,60 @@
+diff --git a/src/cantools/subparsers/__utils__.py b/src/cantools/subparsers/__utils__.py
+index dc1f4b5..370be79 100644
+--- a/src/cantools/subparsers/__utils__.py
++++ b/src/cantools/subparsers/__utils__.py
+@@ -27,9 +27,9 @@ def _format_signals(message, decoded_signals):
+         except KeyError:
+             continue
+ 
+-        signal_name = signal.unit if signal.unit is not None else signal.name
++        signal_name = signal.name
+ 
+-        if signal.unit is None and \
++        if signal.unit is None or \
+            isinstance(value, NamedSignalValue) or \
+            isinstance(value, str):
+ 
+@@ -38,14 +38,14 @@ def _format_signals(message, decoded_signals):
+         else:
+             formatted_signal = f'{signal_name}: {value} {signal.unit}'
+ 
+-        formatted_signals.insert(0, formatted_signal)
++        formatted_signals.append(formatted_signal)
+ 
+     return formatted_signals
+ 
+ 
+ def _format_message_single_line(message : Message,
+                                 formatted_signals : Iterable[str]) -> str:
+-    return ' {} [{}]'.format(message.name,
++    return ' {}({})'.format(message.name,
+                              ', '.join(formatted_signals))
+ 
+ 
+@@ -126,14 +126,14 @@ def format_message_by_frame_id(dbase : Database,
+     except KeyError:
+         return f' Unknown frame id {frame_id} (0x{frame_id:X})'
+ 
+-    if not message.is_container:
++    if message.is_container:
+         if decode_containers:
+             return format_container_message(message,
+                                             data,
+                                             decode_choices,
+                                             single_line,
+-                                            allow_truncated=allow_excess,  # Swapped allow_truncated with allow_excess
+-                                            allow_excess=allow_truncated)
++                                            allow_truncated=allow_truncated,
++                                            allow_excess=allow_excess)
+         else:
+             return f' Frame 0x{frame_id:X} is a container message'
+ 
+@@ -141,7 +141,7 @@ def format_message_by_frame_id(dbase : Database,
+         return format_message(message,
+                             data,
+                             decode_choices,
+-                            not single_line,  # Negated single_line
++                            single_line,
+                             allow_truncated=allow_truncated,
+                             allow_excess=allow_excess)
+     except DecodeError:

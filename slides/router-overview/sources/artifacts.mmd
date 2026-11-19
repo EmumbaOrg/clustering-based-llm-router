@@ -1,0 +1,16 @@
+flowchart LR
+    subgraph RT["Read by the runtime"]
+        direction TB
+        CM[["<b>cluster-map.json</b><br/>24 centroids (768-d)<br/>+ embedding config"]]
+        MP[["<b>model-profiles.json</b><br/>per model × cluster:<br/>tasks, passed, error rate<br/>+ model's global rate"]]
+        CM ---|"same cluster_map_id"| MP
+    end
+    subgraph AU["Kept for audit / rebuild"]
+        direction TB
+        TC[/"task-cluster-map.json<br/>every corpus task → cluster"/]
+        TS[/"calibration-task-selection.json<br/>which tasks were sampled"/]
+        CD[/"calibration-details.csv<br/>every graded attempt"/]
+    end
+    RT ~~~ AU
+    classDef art fill:#fff4e0,stroke:#e08a2c,stroke-width:2px;
+    class CM,MP art;

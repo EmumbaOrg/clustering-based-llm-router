@@ -1,0 +1,10 @@
+flowchart LR
+    A["<b>1 · Corpus</b><br/>pull task text<br/>from 6 datasets<br/>dedup by text hash"] --> B["<b>2 · Embed</b><br/>jina-v2-base-code<br/>768-d vector<br/>per task"]
+    B --> C["<b>3 · Cluster</b><br/>k-means, k = 24<br/>seed 42"]
+    C --> E["<b>4 · Calibrate</b><br/>4 candidates run the<br/>same 240 pinned tasks,<br/>graded pass / fail"]
+    A -.-> A1[/corpus.jsonl/]
+    B -.-> B1[/embeddings.npz/]
+    C -.-> C1[/cluster-map.json<br/>task-cluster-map.json/]
+    E -.-> E1[/model-profiles.json<br/>calibration-details.csv/]
+    classDef out fill:#f4f4f4,stroke:#999,color:#333;
+    class A1,B1,C1,E1 out;

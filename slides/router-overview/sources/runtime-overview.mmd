@@ -1,0 +1,7 @@
+flowchart LR
+    P([prompt]) --> E["<b>Embed</b><br/>same encoder as<br/>offline, 768-d"]
+    E --> C["<b>Assign</b><br/>nearest of<br/>24 centroids"]
+    C --> S["<b>Score</b><br/>each candidate:<br/>error + λ · cost"]
+    S --> M([lowest score<br/>= selected model])
+    classDef io fill:#e8f1fb,stroke:#3b5ba9;
+    class P,M io;

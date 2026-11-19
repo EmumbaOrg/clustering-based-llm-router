@@ -1,0 +1,10 @@
+flowchart TB
+    subgraph RP["Repo  ·  SWE-smith, SWE-Gym, Multi-SWE-RL"]
+        direction LR
+        r1["worktree at base commit<br/>(SWE-smith: bug patch<br/>applied + committed)"] --> r2["agent edits files;<br/>capture git diff"] --> r3["Docker image:<br/>apply diff + test patch"] --> r4["run FAIL_TO_PASS /<br/>PASS_TO_PASS tests"] --> r5["nonce result line →<br/>PASS / FAIL / HARNESS"]
+    end
+    subgraph SA["Standalone  ·  BigCodeBench, DS-1000"]
+        direction LR
+        s1["model writes<br/>a function"] --> s2["subprocess:<br/>code + bundled tests"] --> s3["nonce result line →<br/>pass / fail"]
+    end
+    RP ~~~ SA

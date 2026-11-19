@@ -1,0 +1,52 @@
+diff --git a/deepdiff/deephash.py b/deepdiff/deephash.py
+index f7b7110..866bb0f 100644
+--- a/deepdiff/deephash.py
++++ b/deepdiff/deephash.py
+@@ -366,13 +366,22 @@ class DeepHash(Base):
+ 
+     def _skip_this(self, obj, parent):
+         skip = False
++        if self.exclude_paths and parent in self.exclude_paths:
++            skip = True
+         if self.include_paths and parent != 'root':
+-            pass
++            if parent not in self.include_paths:
++                skip = True
++                for prefix in self.include_paths:
++                    if prefix in parent or parent in prefix:
++                        skip = False
++                        break
+         elif self.exclude_regex_paths and any(
+                 [exclude_regex_path.search(parent) for exclude_regex_path in self.exclude_regex_paths]):
+             skip = True
+         elif self.exclude_types_tuple and isinstance(obj, self.exclude_types_tuple):
+             skip = True
++        elif self.exclude_obj_callback and self.exclude_obj_callback(obj, parent):
++            skip = True
+         return skip
+     def _prep_dict(self, obj, parent, parents_ids=EMPTY_FROZENSET, print_as_attribute=False, original_type=None):
+ 
+@@ -381,18 +390,21 @@ class DeepHash(Base):
+ 
+         key_text = "%s{}".format(INDEX_VS_ATTRIBUTE[print_as_attribute])
+         for key, item in obj.items():
+-            counts += 1
+             # ignore private variables
+             if self.ignore_private_variables and isinstance(key, str) and key.startswith('__'):
+                 continue
+             key_formatted = "'%s'" % key if not print_as_attribute and isinstance(key, strings) else key
+             key_in_report = key_text % (parent, key_formatted)
+ 
++            if self._skip_this(key, parent=key_in_report):
++                continue
++
++            counts += 1
+             key_hash, _ = self._hash(key, parent=key_in_report, parents_ids=parents_ids)
+             if not key_hash:
+                 continue
+             item_id = get_id(item)
+-            if (parents_ids and item_id in parents_ids) or self._skip_this(item, parent=key_in_report):
++            if parents_ids and item_id in parents_ids or self._skip_this(item, parent=key_in_report):
+                 continue
+             parents_ids_added = add_to_frozen_set(parents_ids, item_id)
+             hashed, count = self._hash(item, parent=key_in_report, parents_ids=parents_ids_added)

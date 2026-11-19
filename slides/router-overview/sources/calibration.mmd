@@ -1,0 +1,12 @@
+flowchart LR
+    V["<b>Pinned task set</b><br/>240 tasks, 10 per cluster<br/>gold answer passes,<br/>empty answer fails"] --> R["<b>Run candidate</b><br/>Pi coding agent, headless<br/>same prompt + tools,<br/>reasoning level pinned"]
+    R --> G{"<b>Grade</b>"}
+    G -->|standalone| G1["exec code +<br/>task's own tests"]
+    G -->|repo| G2["real repo in Docker,<br/>apply diff, run tests"]
+    G1 --> O["pass / fail / no solution<br/>(harness errors excluded)"]
+    G2 --> O
+    O --> AG["<b>Aggregate</b><br/>per model × cluster<br/>shrink toward model's<br/>global rate (k = 5)"]
+    AG --> MP[["model-profiles.json<br/>merged one model at a time"]]
+    R -.->|"credit / quota error"| PZ(["pause, notify,<br/>resume same task"])
+    classDef art fill:#fff4e0,stroke:#e08a2c,stroke-width:2px;
+    class MP art;

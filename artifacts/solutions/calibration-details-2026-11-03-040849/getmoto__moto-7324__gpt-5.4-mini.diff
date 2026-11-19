@@ -1,0 +1,152 @@
+diff --git a/moto/ec2/models/amis.py b/moto/ec2/models/amis.py
+index 12028f2cd..402fc0591 100644
+--- a/moto/ec2/models/amis.py
++++ b/moto/ec2/models/amis.py
+@@ -103,6 +103,7 @@ class Ami(TaggedEC2Resource):
+ 
+         self.launch_permission_groups: Set[str] = set()
+         self.launch_permission_users: Set[str] = set()
++        self.launch_permission_organization_arns: Set[str] = set()
+ 
+         if public:
+             self.launch_permission_groups.add("all")
+@@ -306,7 +307,10 @@ class AmiBackend:
+             raise InvalidAMIIdError(ami_id)
+ 
+     def validate_permission_targets(
+-        self, user_ids: Optional[List[str]] = None, group: Optional[str] = None
++        self,
++        user_ids: Optional[List[str]] = None,
++        group: Optional[str] = None,
++        organization_arns: Optional[List[str]] = None,
+     ) -> None:
+         # If anything is invalid, nothing is added. (No partial success.)
+         if user_ids:
+@@ -327,9 +331,12 @@ class AmiBackend:
+         ami_id: str,
+         user_ids: Optional[List[str]] = None,
+         group: Optional[str] = None,
++        organization_arns: Optional[List[str]] = None,
+     ) -> None:
+         ami = self.describe_images(ami_ids=[ami_id])[0]
+-        self.validate_permission_targets(user_ids=user_ids, group=group)
++        self.validate_permission_targets(
++            user_ids=user_ids, group=group, organization_arns=organization_arns
++        )
+ 
+         if user_ids:
+             for user_id in user_ids:
+@@ -338,6 +345,10 @@ class AmiBackend:
+         if group:
+             ami.launch_permission_groups.add(group)
+ 
++        if organization_arns:
++            for organization_arn in organization_arns:
++                ami.launch_permission_organization_arns.add(organization_arn)
++
+     def register_image(
+         self, name: Optional[str] = None, description: Optional[str] = None
+     ) -> Ami:
+@@ -358,9 +369,12 @@ class AmiBackend:
+         ami_id: str,
+         user_ids: Optional[List[str]] = None,
+         group: Optional[str] = None,
++        organization_arns: Optional[List[str]] = None,
+     ) -> None:
+         ami = self.describe_images(ami_ids=[ami_id])[0]
+-        self.validate_permission_targets(user_ids=user_ids, group=group)
++        self.validate_permission_targets(
++            user_ids=user_ids, group=group, organization_arns=organization_arns
++        )
+ 
+         if user_ids:
+             for user_id in user_ids:
+@@ -369,5 +383,9 @@ class AmiBackend:
+         if group:
+             ami.launch_permission_groups.discard(group)
+ 
++        if organization_arns:
++            for organization_arn in organization_arns:
++                ami.launch_permission_organization_arns.discard(organization_arn)
++
+     def describe_image_attribute(self, ami_id: str, attribute_name: str) -> Any:
+         return self.amis[ami_id].__getattribute__(attribute_name)
+diff --git a/moto/ec2/responses/amis.py b/moto/ec2/responses/amis.py
+index c9e36607d..93980ab6f 100644
+--- a/moto/ec2/responses/amis.py
++++ b/moto/ec2/responses/amis.py
+@@ -68,6 +68,7 @@ class AmisResponse(EC2BaseResponse):
+             "launchPermission": {
+                 "groups": "launch_permission_groups",
+                 "users": "launch_permission_users",
++                "organizationArns": "launch_permission_organization_arns",
+             },
+             "productCodes": "product_codes",
+             "blockDeviceMapping": "bdm",
+@@ -87,6 +88,7 @@ class AmisResponse(EC2BaseResponse):
+ 
+         groups = None
+         users = None
++        organization_arns = None
+         attribute_value = None
+         if attribute_name == "launchPermission":
+             groups = self.ec2_backend.describe_image_attribute(
+@@ -95,6 +97,10 @@ class AmisResponse(EC2BaseResponse):
+             users = self.ec2_backend.describe_image_attribute(
+                 ami_id, valid_atrributes_list[attribute_name]["users"]  # type: ignore[index]
+             )
++            organization_arns = self.ec2_backend.describe_image_attribute(
++                ami_id,
++                valid_atrributes_list[attribute_name]["organizationArns"],  # type: ignore[index]
++            )
+         else:
+             attribute_value = self.ec2_backend.describe_image_attribute(
+                 ami_id, valid_atrributes_list[attribute_name]
+@@ -104,6 +110,7 @@ class AmisResponse(EC2BaseResponse):
+             ami_id=ami_id,
+             users=users,
+             groups=groups,
++            organization_arns=organization_arns,
+             attribute_name=attribute_name,
+             attribute_value=attribute_value,
+         )
+@@ -113,16 +120,23 @@ class AmisResponse(EC2BaseResponse):
+         operation_type = self._get_param("OperationType")
+         group = self._get_param("UserGroup.1")
+         user_ids = self._get_multi_param("UserId")
++        organization_arns = self._get_multi_param("OrganizationArns")
+ 
+         self.error_on_dryrun()
+ 
+         if operation_type == "add":
+             self.ec2_backend.add_launch_permission(
+-                ami_id, user_ids=user_ids, group=group
++                ami_id,
++                user_ids=user_ids,
++                group=group,
++                organization_arns=organization_arns,
+             )
+         elif operation_type == "remove":
+             self.ec2_backend.remove_launch_permission(
+-                ami_id, user_ids=user_ids, group=group
++                ami_id,
++                user_ids=user_ids,
++                group=group,
++                organization_arns=organization_arns,
+             )
+         return MODIFY_IMAGE_ATTRIBUTE_RESPONSE
+ 
+@@ -246,6 +260,13 @@ DESCRIBE_IMAGE_ATTRIBUTES_RESPONSE = """
+                </item>
+             {% endfor %}
+          {% endif %}
++         {% if organization_arns %}
++            {% for organization_arn in organization_arns %}
++               <item>
++                  <organizationArn>{{ organization_arn }}</organizationArn>
++               </item>
++            {% endfor %}
++         {% endif %}
+     {% endif %}
+     {% if attribute_name not in ['launchPermission', 'productCodes'] %}
+             <value>{{ attribute_value }}</value>

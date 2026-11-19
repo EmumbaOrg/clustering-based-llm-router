@@ -163,6 +163,23 @@ models:
     thinking: medium
 
   # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
+  # Verified live against developers.openai.com/api/docs/models/gpt-5.4-mini on 2026-11-03:
+  # $0.75 in / $0.075 cached / $4.50 out per 1M, 400K window with a 272K max input, 128K max
+  # output, no long-context tier and not on the deprecations page. Pi's catalog matches exactly.
+  # OpenAI's own default reasoning effort is `none`; `thinking: medium` pins it to the same level
+  # gpt-6.1-sol was calibrated at. gpt-5.6-luna and gpt-5-nano predate pinning and ran at Pi's
+  # default, which is unverified as medium.
+  # Calibrated 2026-11-03 on the 240-task pin: 132/221 graded pass (59.7%), $14.73 recorded spend.
+  - model_id: gpt-5.4-mini
+    provider: openai
+    runner: pi
+    cost_input: 0.00075
+    cost_output: 0.0045
+    context_window: 272000
+    max_tokens: 128000
+    thinking: medium
+
+  # ── OpenAI, via Pi's plain `openai` provider (same credential as gpt-5.6-luna) ─────────────
   # Cheapest model in OpenAI's entire current lineup — verified live via `pi --list-models nano`:
   # provider=openai, context=400K, max-out=128K, matching the values below exactly (unlike Luna,
   # no correction needed here). cost_input/cost_output are OpenAI's own published $0.05/$0.40 per
@@ -211,14 +228,6 @@ models:
   #   runner: pi
   #   cost_input: 0.0002
   #   cost_output: 0.00125
-  #   context_window: 400000
-  #   max_tokens: 128000
-  #
-  # - model_id: gpt-5.4-mini
-  #   provider: openai
-  #   runner: pi
-  #   cost_input: 0.00075
-  #   cost_output: 0.0045
   #   context_window: 400000
   #   max_tokens: 128000
   #

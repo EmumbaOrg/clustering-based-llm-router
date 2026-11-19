@@ -1,0 +1,108 @@
+diff --git a/tpl/math/init.go b/tpl/math/init.go
+index ddbd2fc73..ef0c80023 100644
+--- a/tpl/math/init.go
++++ b/tpl/math/init.go
+@@ -64,6 +64,20 @@ func init() {
+ 			},
+ 		)
+ 
++		ns.AddMethodMapping(ctx.Max,
++			[]string{"max"},
++			[][2]string{
++				{"{{math.Max 1 2}}", "2"},
++			},
++		)
++
++		ns.AddMethodMapping(ctx.Min,
++			[]string{"min"},
++			[][2]string{
++				{"{{math.Min 1 2}}", "1"},
++			},
++		)
++
+ 		ns.AddMethodMapping(ctx.Sqrt,
+ 			nil,
+ 			[][2]string{
+diff --git a/tpl/math/math.go b/tpl/math/math.go
+index badc189c8..0c0774412 100644
+--- a/tpl/math/math.go
++++ b/tpl/math/math.go
+@@ -82,6 +82,36 @@ func (ns *Namespace) Sqrt(a interface{}) (float64, error) {
+ 	return math.Sqrt(af), nil
+ }
+ 
++// Max returns the larger of x or y.
++func (ns *Namespace) Max(x, y interface{}) (float64, error) {
++	xf, err := cast.ToFloat64E(x)
++	if err != nil {
++		return 0, errors.New("Max operator can't be used with non-float value")
++	}
++
++	yf, err := cast.ToFloat64E(y)
++	if err != nil {
++		return 0, errors.New("Max operator can't be used with non-float value")
++	}
++
++	return math.Max(xf, yf), nil
++}
++
++// Min returns the smaller of x or y.
++func (ns *Namespace) Min(x, y interface{}) (float64, error) {
++	xf, err := cast.ToFloat64E(x)
++	if err != nil {
++		return 0, errors.New("Min operator can't be used with non-float value")
++	}
++
++	yf, err := cast.ToFloat64E(y)
++	if err != nil {
++		return 0, errors.New("Min operator can't be used with non-float value")
++	}
++
++	return math.Min(xf, yf), nil
++}
++
+ // Mod returns a % b.
+ func (ns *Namespace) Mod(a, b interface{}) (int64, error) {
+ 	ai, erra := cast.ToInt64E(a)
+diff --git a/tpl/math/math_test.go b/tpl/math/math_test.go
+index da59d7938..2feb62538 100644
+--- a/tpl/math/math_test.go
++++ b/tpl/math/math_test.go
+@@ -54,6 +54,37 @@ func TestBasicNSArithmetic(t *testing.T) {
+ 	}
+ }
+ 
++func TestMaxMin(t *testing.T) {
++	t.Parallel()
++	c := qt.New(t)
++
++	ns := New()
++
++	for _, test := range []struct {
++		fn     func(a, b interface{}) (float64, error)
++		a      interface{}
++		b      interface{}
++		expect interface{}
++	}{
++		{ns.Max, 1, 2, 2.0},
++		{ns.Max, 1.5, 1.2, 1.5},
++		{ns.Min, 1, 2, 1.0},
++		{ns.Min, 1.5, 1.2, 1.2},
++		{ns.Max, 1, "foo", false},
++		{ns.Min, "foo", 1, false},
++	} {
++		result, err := test.fn(test.a, test.b)
++
++		if b, ok := test.expect.(bool); ok && !b {
++			c.Assert(err, qt.Not(qt.IsNil))
++			continue
++		}
++
++		c.Assert(err, qt.IsNil)
++		c.Assert(result, qt.Equals, test.expect)
++	}
++}
++
+ func TestCeil(t *testing.T) {
+ 	t.Parallel()
+ 	c := qt.New(t)

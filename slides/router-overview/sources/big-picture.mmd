@@ -1,0 +1,13 @@
+flowchart LR
+    subgraph OFF["OFFLINE · ahead of time"]
+        D[(6 datasets)] --> P["corpus → embed<br/>→ cluster → calibrate"]
+    end
+    P --> CM[["cluster-map.json"]]
+    P --> MP[["model-profiles.json"]]
+    subgraph ON["RUNTIME · per request"]
+        Q([prompt]) --> R["embed → cluster<br/>→ score → pick"] --> M([model id])
+    end
+    CM --> R
+    MP --> R
+    classDef art fill:#fff4e0,stroke:#e08a2c,stroke-width:2px;
+    class CM,MP art;

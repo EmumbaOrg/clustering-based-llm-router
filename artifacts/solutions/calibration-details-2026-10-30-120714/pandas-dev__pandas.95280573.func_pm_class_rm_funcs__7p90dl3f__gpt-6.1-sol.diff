@@ -1,0 +1,44 @@
+diff --git a/pandas/plotting/_matplotlib/core.py b/pandas/plotting/_matplotlib/core.py
+index b444e3b3..96995af4 100644
+--- a/pandas/plotting/_matplotlib/core.py
++++ b/pandas/plotting/_matplotlib/core.py
+@@ -62,7 +62,10 @@ from pandas.plotting._matplotlib import tools
+ from pandas.plotting._matplotlib.converter import register_pandas_matplotlib_converters
+ from pandas.plotting._matplotlib.groupby import reconstruct_data_with_by
+ from pandas.plotting._matplotlib.misc import unpack_single_str_list
+-from pandas.plotting._matplotlib.style import get_standard_colors
++from pandas.plotting._matplotlib.style import (
++    _get_cmap_instance,
++    get_standard_colors,
++)
+ from pandas.plotting._matplotlib.timeseries import (
+     decorate_axes,
+     format_dateaxis,
+@@ -1290,8 +1293,7 @@ class ScatterPlot(PlanePlot):
+         unique = np.unique(c_values)
+         n_colors = len(unique)
+ 
+-        # passing `None` here will default to :rc:`image.cmap`
+-        cmap = mpl.colormaps.get_cmap(self.colormap)
++        cmap = _get_cmap_instance(self.colormap or mpl.rcParams["image.cmap"])
+         colors = cmap(np.linspace(0, 1, n_colors))  # RGB tuples
+ 
+         return dict(zip(unique, colors))
+@@ -1299,7 +1301,7 @@ class ScatterPlot(PlanePlot):
+     def _get_norm_and_cmap(self, c_values, color_by_categorical: bool):
+         c = self.c
+         if self.colormap is not None:
+-            cmap = mpl.colormaps.get_cmap(self.colormap)
++            cmap = _get_cmap_instance(self.colormap)
+         # cmap is only used if c_values are integers, otherwise UserWarning.
+         # GH-53908: additionally call isinstance() because is_integer_dtype
+         # returns True for "b" (meaning "blue" and not int8 in this context)
+@@ -1355,7 +1357,7 @@ class HexBinPlot(PlanePlot):
+         ax = self.axes[0]
+         # pandas uses colormap, matplotlib uses cmap.
+         cmap = self.colormap or "BuGn"
+-        cmap = mpl.colormaps.get_cmap(cmap)
++        cmap = _get_cmap_instance(cmap)
+         cb = self.colorbar
+ 
+         if C is None:

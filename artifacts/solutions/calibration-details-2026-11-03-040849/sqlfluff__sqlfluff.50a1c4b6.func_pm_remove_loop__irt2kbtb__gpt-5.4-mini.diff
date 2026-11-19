@@ -1,0 +1,200 @@
+diff --git a/src/sqlfluff/core/templaters/jinja.py b/src/sqlfluff/core/templaters/jinja.py
+index bd4fa6d..e713a0c 100644
+--- a/src/sqlfluff/core/templaters/jinja.py
++++ b/src/sqlfluff/core/templaters/jinja.py
+@@ -2,6 +2,7 @@
+ 
+ import copy
+ import importlib
++import re
+ import importlib.util
+ import logging
+ import os.path
+@@ -838,6 +839,38 @@ class JinjaTemplater(PythonTemplater):
+             )
+         return adjusted_slices
+ 
++    _re_conditional_tag = re.compile(
++        r"^(\s*\{%\s*[+\-]?\s*(?:if|elif)\s+)(.*?)(\s*[+\-]?\s*%\}\s*)$",
++        re.DOTALL,
++    )
++
++    @classmethod
++    def _rewrite_conditional_tag(cls, raw_tag: str, value: bool) -> str:
++        """Replace the condition inside a Jinja if/elif tag."""
++        match = cls._re_conditional_tag.match(raw_tag)
++        if not match:
++            return raw_tag
++        return f"{match.group(1)}{'True' if value else 'False'}{match.group(3)}"
++
++    @staticmethod
++    def _apply_raw_replacements(
++        raw_str: str,
++        raw_sliced: List[RawFileSlice],
++        replacements: Dict[int, str],
++    ) -> str:
++        """Apply replacements for raw slices to a template string."""
++        if not replacements:
++            return raw_str
++        parts: List[str] = []
++        last_idx = 0
++        for slice_idx, replacement in sorted(replacements.items()):
++            raw_slice = raw_sliced[slice_idx]
++            parts.append(raw_str[last_idx : raw_slice.source_idx])
++            parts.append(replacement)
++            last_idx = raw_slice.end_source_idx()
++        parts.append(raw_str[last_idx:])
++        return "".join(parts)
++
+     @staticmethod
+     def _calculate_variant_score(
+         raw_sliced: List[RawFileSlice],
+@@ -877,6 +910,7 @@ class JinjaTemplater(PythonTemplater):
+         in_str: str,
+         render_func: Callable[[str], str],
+         uncovered_slices: Set[int],
++        config: Optional[FluffConfig] = None,
+         append_to_templated: str = "",
+     ) -> Iterator[Tuple[List[RawFileSlice], List[TemplatedFileSlice], str]]:
+         """Address uncovered slices by tweaking the template to hit them.
+@@ -889,6 +923,7 @@ class JinjaTemplater(PythonTemplater):
+                 slices we'll attempt to hit by modifying the template. NOTE: These are
+                 indices in the _sequence of slices_, not _character indices_ in the
+                 raw source file.
++            config (:obj:`FluffConfig`, optional): Config used to render variants.
+             append_to_templated (:obj:`str`, optional): Optional string to append
+                 to the templated file.
+         """
+@@ -906,6 +941,123 @@ class JinjaTemplater(PythonTemplater):
+             for idx, raw_slice in enumerate(tracer_copy.raw_sliced)
+         }
+ 
++        # Build a small cartesian product of conditional branch overrides.
++        conditional_groups: Dict[int, Dict[str, Union[int, List[int], None]]] = {}
++        for idx, raw_slice in enumerate(tracer_copy.raw_sliced):
++            if raw_slice.tag not in ("if", "elif", "else"):
++                continue
++            group = conditional_groups.setdefault(
++                raw_slice.block_idx, {"if": None, "elif": [], "else": None}
++            )
++            if raw_slice.tag == "if":
++                group["if"] = idx
++            elif raw_slice.tag == "elif":
++                cast(List[int], group["elif"]).append(idx)
++            else:
++                group["else"] = idx
++
++        conditional_variants: List[List[Dict[int, str]]] = []
++        for _, group in sorted(conditional_groups.items()):
++            if_idx = cast(Optional[int], group["if"])
++            elif_idxs = cast(List[int], group["elif"])
++            else_idx = cast(Optional[int], group["else"])
++            if if_idx is None:
++                continue
++
++            branch_variants: List[Dict[int, str]] = []
++            branch_variants.append(
++                {
++                    if_idx: self._rewrite_conditional_tag(
++                        tracer_copy.raw_sliced[if_idx].raw, True
++                    )
++                }
++            )
++            for elif_pos, elif_idx in enumerate(elif_idxs):
++                replacements: Dict[int, str] = {
++                    if_idx: self._rewrite_conditional_tag(
++                        tracer_copy.raw_sliced[if_idx].raw, False
++                    )
++                }
++                for prev_idx in elif_idxs[:elif_pos]:
++                    replacements[prev_idx] = self._rewrite_conditional_tag(
++                        tracer_copy.raw_sliced[prev_idx].raw, False
++                    )
++                replacements[elif_idx] = self._rewrite_conditional_tag(
++                    tracer_copy.raw_sliced[elif_idx].raw, True
++                )
++                for next_idx in elif_idxs[elif_pos + 1 :]:
++                    replacements[next_idx] = self._rewrite_conditional_tag(
++                        tracer_copy.raw_sliced[next_idx].raw, False
++                    )
++                branch_variants.append(replacements)
++            if else_idx is not None:
++                replacements = {
++                    if_idx: self._rewrite_conditional_tag(
++                        tracer_copy.raw_sliced[if_idx].raw, False
++                    )
++                }
++                for elif_idx in elif_idxs:
++                    replacements[elif_idx] = self._rewrite_conditional_tag(
++                        tracer_copy.raw_sliced[elif_idx].raw, False
++                    )
++                branch_variants.append(replacements)
++
++            conditional_variants.append(branch_variants)
++
++        def _generate_variants(
++            group_idx: int, replacements: Dict[int, str]
++        ) -> None:
++            if len(variants) >= max_variants_generated:
++                return
++            if group_idx >= len(conditional_variants):
++                variant_raw_str = self._apply_raw_replacements(
++                    in_str, tracer_copy.raw_sliced, replacements
++                )
++                if variant_raw_str == in_str:
++                    return
++                try:
++                    variant_raw_sliced, variant_sliced_file, variant_templated_str = (
++                        self.slice_file(
++                            variant_raw_str,
++                            render_func=render_func,
++                            config=config,
++                            append_to_templated=append_to_templated,
++                        )
++                    )
++                except (SQLTemplaterError, TemplateError, TypeError):
++                    return
++                score = self._calculate_variant_score(
++                    variant_raw_sliced,
++                    variant_sliced_file,
++                    uncovered_slices,
++                    original_source_slices,
++                )
++                if not score or variant_templated_str in variants:
++                    return
++                deltas = {
++                    original_slice.source_idx: len(variant_slice.raw)
++                    - len(original_slice.raw)
++                    for variant_slice, original_slice in zip(
++                        variant_raw_sliced, tracer_copy.raw_sliced
++                    )
++                    if variant_slice.raw != original_slice.raw
++                }
++                variants[variant_templated_str] = (
++                    score,
++                    JinjaTrace(
++                        variant_templated_str, variant_raw_sliced, variant_sliced_file
++                    ),
++                    deltas,
++                )
++                return
++
++            for branch_replacements in conditional_variants[group_idx]:
++                combined = dict(replacements)
++                combined.update(branch_replacements)
++                _generate_variants(group_idx + 1, combined)
++
++        _generate_variants(0, {})
++
+         # Return the top-scoring variants.
+         sorted_variants: List[Tuple[int, JinjaTrace, Dict[int, int]]] = sorted(
+             variants.values(), key=lambda v: v[0], reverse=True
+@@ -983,7 +1135,7 @@ class JinjaTemplater(PythonTemplater):
+         _, _, render_func = self.construct_render_func(fname=fname, config=config)
+ 
+         for raw_sliced, sliced_file, templated_str in self._handle_unreached_code(
+-            in_str, render_func, uncovered_literal_idxs
++            in_str, render_func, uncovered_literal_idxs, config=config
+         ):
+             yield (
+                 TemplatedFile(

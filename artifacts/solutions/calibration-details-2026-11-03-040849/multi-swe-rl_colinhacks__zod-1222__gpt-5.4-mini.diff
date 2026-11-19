@@ -1,0 +1,272 @@
+diff --git a/deno/lib/ZodError.ts b/deno/lib/ZodError.ts
+index dfbea611..75a02005 100644
+--- a/deno/lib/ZodError.ts
++++ b/deno/lib/ZodError.ts
+@@ -95,16 +95,16 @@ export interface ZodInvalidStringIssue extends ZodIssueBase {
+ 
+ export interface ZodTooSmallIssue extends ZodIssueBase {
+   code: typeof ZodIssueCode.too_small;
+-  minimum: number;
++  minimum: number | Date;
+   inclusive: boolean;
+-  type: "array" | "string" | "number" | "set";
++  type: "array" | "string" | "number" | "set" | "date";
+ }
+ 
+ export interface ZodTooBigIssue extends ZodIssueBase {
+   code: typeof ZodIssueCode.too_big;
+-  maximum: number;
++  maximum: number | Date;
+   inclusive: boolean;
+-  type: "array" | "string" | "number" | "set";
++  type: "array" | "string" | "number" | "set" | "date";
+ }
+ 
+ export interface ZodInvalidIntersectionTypesIssue extends ZodIssueBase {
+@@ -360,6 +360,10 @@ export const defaultErrorMap = (
+         message = `Number must be greater than ${
+           issue.inclusive ? `or equal to ` : ``
+         }${issue.minimum}`;
++      else if (issue.type === "date")
++        message = `Date must be greater than ${
++          issue.inclusive ? `or equal to ` : ``
++        }${issue.minimum instanceof Date ? issue.minimum.toISOString() : issue.minimum}`;
+       else message = "Invalid input";
+       break;
+     case ZodIssueCode.too_big:
+@@ -375,6 +379,10 @@ export const defaultErrorMap = (
+         message = `Number must be less than ${
+           issue.inclusive ? `or equal to ` : ``
+         }${issue.maximum}`;
++      else if (issue.type === "date")
++        message = `Date must be less than ${
++          issue.inclusive ? `or equal to ` : ``
++        }${issue.maximum instanceof Date ? issue.maximum.toISOString() : issue.maximum}`;
+       else message = "Invalid input";
+       break;
+     case ZodIssueCode.custom:
+diff --git a/deno/lib/types.ts b/deno/lib/types.ts
+index 83fd4bf9..661cf966 100644
+--- a/deno/lib/types.ts
++++ b/deno/lib/types.ts
+@@ -1004,7 +1004,14 @@ export class ZodBoolean extends ZodType<boolean, ZodBooleanDef> {
+ //////////                     ////////
+ ///////////////////////////////////////
+ ///////////////////////////////////////
++export type ZodDateCheck = {
++  kind: "min" | "max";
++  value: Date;
++  message?: string;
++};
++
+ export interface ZodDateDef extends ZodTypeDef {
++  checks: ZodDateCheck[];
+   typeName: ZodFirstPartyTypeKind.ZodDate;
+ }
+ 
+@@ -1028,14 +1035,65 @@ export class ZodDate extends ZodType<Date, ZodDateDef> {
+       return INVALID;
+     }
+ 
+-    return {
+-      status: "valid",
+-      value: new Date((input.data as Date).getTime()),
+-    };
++    let status = new ParseStatus();
++    let ctx: undefined | ParseContext = undefined;
++
++    for (const check of this._def.checks) {
++      if (check.kind === "min") {
++        if (input.data.getTime() < check.value.getTime()) {
++          ctx = this._getOrReturnCtx(input, ctx);
++          addIssueToContext(ctx, {
++            code: ZodIssueCode.too_small,
++            minimum: check.value,
++            type: "date",
++            inclusive: true,
++            message: check.message,
++          });
++          status.dirty();
++        }
++      } else if (check.kind === "max") {
++        if (input.data.getTime() > check.value.getTime()) {
++          ctx = this._getOrReturnCtx(input, ctx);
++          addIssueToContext(ctx, {
++            code: ZodIssueCode.too_big,
++            maximum: check.value,
++            type: "date",
++            inclusive: true,
++            message: check.message,
++          });
++          status.dirty();
++        }
++      } else {
++        util.assertNever(check);
++      }
++    }
++
++    return { status: status.value, value: new Date(input.data.getTime()) };
++  }
++
++  min(minDate: Date, message?: errorUtil.ErrMessage) {
++    return new ZodDate({
++      ...this._def,
++      checks: [
++        ...this._def.checks,
++        { kind: "min", value: minDate, message: errorUtil.toString(message) },
++      ],
++    });
++  }
++
++  max(maxDate: Date, message?: errorUtil.ErrMessage) {
++    return new ZodDate({
++      ...this._def,
++      checks: [
++        ...this._def.checks,
++        { kind: "max", value: maxDate, message: errorUtil.toString(message) },
++      ],
++    });
+   }
+ 
+   static create = (params?: RawCreateParams): ZodDate => {
+     return new ZodDate({
++      checks: [],
+       typeName: ZodFirstPartyTypeKind.ZodDate,
+       ...processCreateParams(params),
+     });
+diff --git a/src/ZodError.ts b/src/ZodError.ts
+index 1302ff41..fa5dd17e 100644
+--- a/src/ZodError.ts
++++ b/src/ZodError.ts
+@@ -95,16 +95,16 @@ export interface ZodInvalidStringIssue extends ZodIssueBase {
+ 
+ export interface ZodTooSmallIssue extends ZodIssueBase {
+   code: typeof ZodIssueCode.too_small;
+-  minimum: number;
++  minimum: number | Date;
+   inclusive: boolean;
+-  type: "array" | "string" | "number" | "set";
++  type: "array" | "string" | "number" | "set" | "date";
+ }
+ 
+ export interface ZodTooBigIssue extends ZodIssueBase {
+   code: typeof ZodIssueCode.too_big;
+-  maximum: number;
++  maximum: number | Date;
+   inclusive: boolean;
+-  type: "array" | "string" | "number" | "set";
++  type: "array" | "string" | "number" | "set" | "date";
+ }
+ 
+ export interface ZodInvalidIntersectionTypesIssue extends ZodIssueBase {
+@@ -360,6 +360,10 @@ export const defaultErrorMap = (
+         message = `Number must be greater than ${
+           issue.inclusive ? `or equal to ` : ``
+         }${issue.minimum}`;
++      else if (issue.type === "date")
++        message = `Date must be greater than ${
++          issue.inclusive ? `or equal to ` : ``
++        }${issue.minimum instanceof Date ? issue.minimum.toISOString() : issue.minimum}`;
+       else message = "Invalid input";
+       break;
+     case ZodIssueCode.too_big:
+@@ -375,6 +379,10 @@ export const defaultErrorMap = (
+         message = `Number must be less than ${
+           issue.inclusive ? `or equal to ` : ``
+         }${issue.maximum}`;
++      else if (issue.type === "date")
++        message = `Date must be less than ${
++          issue.inclusive ? `or equal to ` : ``
++        }${issue.maximum instanceof Date ? issue.maximum.toISOString() : issue.maximum}`;
+       else message = "Invalid input";
+       break;
+     case ZodIssueCode.custom:
+diff --git a/src/types.ts b/src/types.ts
+index edb71721..a22c6bf9 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1004,7 +1004,14 @@ export class ZodBoolean extends ZodType<boolean, ZodBooleanDef> {
+ //////////                     ////////
+ ///////////////////////////////////////
+ ///////////////////////////////////////
++export type ZodDateCheck = {
++  kind: "min" | "max";
++  value: Date;
++  message?: string;
++};
++
+ export interface ZodDateDef extends ZodTypeDef {
++  checks: ZodDateCheck[];
+   typeName: ZodFirstPartyTypeKind.ZodDate;
+ }
+ 
+@@ -1028,14 +1035,65 @@ export class ZodDate extends ZodType<Date, ZodDateDef> {
+       return INVALID;
+     }
+ 
+-    return {
+-      status: "valid",
+-      value: new Date((input.data as Date).getTime()),
+-    };
++    let status = new ParseStatus();
++    let ctx: undefined | ParseContext = undefined;
++
++    for (const check of this._def.checks) {
++      if (check.kind === "min") {
++        if (input.data.getTime() < check.value.getTime()) {
++          ctx = this._getOrReturnCtx(input, ctx);
++          addIssueToContext(ctx, {
++            code: ZodIssueCode.too_small,
++            minimum: check.value,
++            type: "date",
++            inclusive: true,
++            message: check.message,
++          });
++          status.dirty();
++        }
++      } else if (check.kind === "max") {
++        if (input.data.getTime() > check.value.getTime()) {
++          ctx = this._getOrReturnCtx(input, ctx);
++          addIssueToContext(ctx, {
++            code: ZodIssueCode.too_big,
++            maximum: check.value,
++            type: "date",
++            inclusive: true,
++            message: check.message,
++          });
++          status.dirty();
++        }
++      } else {
++        util.assertNever(check);
++      }
++    }
++
++    return { status: status.value, value: new Date(input.data.getTime()) };
++  }
++
++  min(minDate: Date, message?: errorUtil.ErrMessage) {
++    return new ZodDate({
++      ...this._def,
++      checks: [
++        ...this._def.checks,
++        { kind: "min", value: minDate, message: errorUtil.toString(message) },
++      ],
++    });
++  }
++
++  max(maxDate: Date, message?: errorUtil.ErrMessage) {
++    return new ZodDate({
++      ...this._def,
++      checks: [
++        ...this._def.checks,
++        { kind: "max", value: maxDate, message: errorUtil.toString(message) },
++      ],
++    });
+   }
+ 
+   static create = (params?: RawCreateParams): ZodDate => {
+     return new ZodDate({
++      checks: [],
+       typeName: ZodFirstPartyTypeKind.ZodDate,
+       ...processCreateParams(params),
+     });

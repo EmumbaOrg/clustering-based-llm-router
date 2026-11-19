@@ -1,0 +1,9 @@
+flowchart LR
+    P([prompt]) -->|"what is being asked"| R
+    CM[["cluster-map.json"]] -->|"which kind of task it is"| R
+    MP[["model-profiles.json"]] -->|"failure rate per model,<br/>per kind of task"| R
+    Y[("models.yaml")] -->|"who is eligible,<br/>what each costs"| R
+    L{{"λ"}} -->|"how much cost matters<br/>vs. quality"| R
+    R["<b>Router</b>"] --> O([model id<br/>+ score table])
+    classDef art fill:#fff4e0,stroke:#e08a2c,stroke-width:2px;
+    class CM,MP art;

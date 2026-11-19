@@ -1,0 +1,154 @@
+diff --git a/resources/resource_factories/create/remote.go b/resources/resource_factories/create/remote.go
+index 73171e570..293ad5592 100644
+--- a/resources/resource_factories/create/remote.go
++++ b/resources/resource_factories/create/remote.go
+@@ -16,15 +16,19 @@ package create
+ import (
+ 	"bufio"
+ 	"bytes"
++	"errors"
+ 	"fmt"
+ 	"io"
+ 	"mime"
++	"net"
+ 	"net/http"
+ 	"net/http/httputil"
+ 	"net/url"
+ 	"path"
+ 	"path/filepath"
++	"strconv"
+ 	"strings"
++	"time"
+ 
+ 	"github.com/gohugoio/hugo/common/hugio"
+ 	"github.com/gohugoio/hugo/common/maps"
+@@ -108,30 +112,44 @@ func (c *Client) FromRemote(uri string, optionsm map[string]any) (resource.Resou
+ 			return nil, err
+ 		}
+ 
+-		req, err := options.NewRequest(uri)
+-		if err != nil {
+-			return nil, fmt.Errorf("failed to create request for resource %s: %w", uri, err)
+-		}
++		for attempt := 1; ; attempt++ {
++			req, err := options.NewRequest(uri)
++			if err != nil {
++				return nil, fmt.Errorf("failed to create request for resource %s: %w", uri, err)
++			}
+ 
+-		res, err := c.httpClient.Do(req)
+-		if err != nil {
+-			return nil, err
+-		}
+-		defer res.Body.Close()
++			res, err := c.httpClient.Do(req)
++			if err != nil {
++				if attempt < remoteRequestMaxAttempts && isRetryableRemoteMethod(method) && isTemporaryRemoteError(err) {
++					time.Sleep(remoteRequestRetryDelay(attempt, nil))
++					continue
++				}
++				return nil, err
++			}
+ 
+-		httpResponse, err := httputil.DumpResponse(res, true)
+-		if err != nil {
+-			return nil, toHTTPError(err, res, !isHeadMethod)
+-		}
++			if attempt < remoteRequestMaxAttempts && isRetryableRemoteMethod(method) && isRetryableRemoteStatus(res.StatusCode) {
++				_, _ = io.Copy(io.Discard, res.Body)
++				res.Body.Close()
++				time.Sleep(remoteRequestRetryDelay(attempt, res))
++				continue
++			}
+ 
+-		if res.StatusCode != http.StatusNotFound {
+-			if res.StatusCode < 200 || res.StatusCode > 299 {
+-				return nil, toHTTPError(fmt.Errorf("failed to fetch remote resource: %s", http.StatusText(res.StatusCode)), res, !isHeadMethod)
++			defer res.Body.Close()
+ 
++			httpResponse, err := httputil.DumpResponse(res, true)
++			if err != nil {
++				return nil, toHTTPError(err, res, !isHeadMethod)
+ 			}
+-		}
+ 
+-		return hugio.ToReadCloser(bytes.NewReader(httpResponse)), nil
++			if res.StatusCode != http.StatusNotFound {
++				if res.StatusCode < 200 || res.StatusCode > 299 {
++					return nil, toHTTPError(fmt.Errorf("failed to fetch remote resource: %s", http.StatusText(res.StatusCode)), res, !isHeadMethod)
++
++				}
++			}
++
++			return hugio.ToReadCloser(bytes.NewReader(httpResponse)), nil
++		}
+ 	})
+ 	if err != nil {
+ 		return nil, err
+@@ -328,3 +346,66 @@ func decodeRemoteOptions(optionsm map[string]any) (fromRemoteOptions, error) {
+ 
+ 	return options, nil
+ }
++
++const remoteRequestMaxAttempts = 4
++
++func isRetryableRemoteMethod(method string) bool {
++	switch method {
++	case http.MethodGet, http.MethodHead:
++		return true
++	default:
++		return false
++	}
++}
++
++func isRetryableRemoteStatus(status int) bool {
++	switch status {
++	case http.StatusRequestTimeout,
++		http.StatusTooManyRequests,
++		http.StatusInternalServerError,
++		http.StatusBadGateway,
++		http.StatusServiceUnavailable,
++		http.StatusGatewayTimeout:
++		return true
++	default:
++		return false
++	}
++}
++
++func isTemporaryRemoteError(err error) bool {
++	var ne net.Error
++	if !errors.As(err, &ne) {
++		return false
++	}
++	return ne.Timeout() || ne.Temporary()
++}
++
++func remoteRequestRetryDelay(attempt int, res *http.Response) time.Duration {
++	delay := 200 * time.Millisecond
++	for i := 1; i < attempt; i++ {
++		delay *= 2
++	}
++
++	if res == nil {
++		return delay
++	}
++
++	if retryAfter := res.Header.Get("Retry-After"); retryAfter != "" {
++		if secs, err := strconv.Atoi(retryAfter); err == nil && secs > 0 {
++			retryAfterDelay := time.Duration(secs) * time.Second
++			if retryAfterDelay > delay {
++				return retryAfterDelay
++			}
++			return delay
++		}
++
++		if retryAfterTime, err := http.ParseTime(retryAfter); err == nil {
++			retryAfterDelay := time.Until(retryAfterTime)
++			if retryAfterDelay > delay {
++				return retryAfterDelay
++			}
++		}
++	}
++
++	return delay
++}

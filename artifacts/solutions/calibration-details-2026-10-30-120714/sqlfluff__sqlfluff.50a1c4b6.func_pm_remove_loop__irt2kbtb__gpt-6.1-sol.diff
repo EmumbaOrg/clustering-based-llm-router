@@ -1,0 +1,69 @@
+diff --git a/src/sqlfluff/core/templaters/jinja.py b/src/sqlfluff/core/templaters/jinja.py
+index bd4fa6d..437b3ff 100644
+--- a/src/sqlfluff/core/templaters/jinja.py
++++ b/src/sqlfluff/core/templaters/jinja.py
+@@ -906,6 +906,56 @@ class JinjaTemplater(PythonTemplater):
+             for idx, raw_slice in enumerate(tracer_copy.raw_sliced)
+         }
+ 
++        for uncovered_idx in sorted(uncovered_slices)[:max_variants_generated]:
++            # Walk a fresh tracer to the target to find the branch choices
++            # needed to reach it, without executing the original conditions.
++            tracer = copy.deepcopy(tracer_copy)
++            choices = tracer.move_to_slice(uncovered_idx, 0)
++            overrides: Dict[int, str] = {}
++            deltas: Dict[int, int] = {}
++            for idx, candidates in choices.items():
++                raw_slice = tracer.raw_sliced[idx]
++                if raw_slice.tag not in ("if", "elif"):
++                    continue
++                # The next slice enters the branch; a forward jump skips it.
++                condition = candidates[0] == idx + 1
++                opening = analyzer.re_open_tag.search(raw_slice.raw)
++                closing = analyzer.re_close_tag.search(raw_slice.raw)
++                assert opening and closing
++                replacement = (
++                    f"{opening.group()}{raw_slice.tag} {condition}{closing.group()}"
++                )
++                overrides[idx] = replacement
++                deltas[raw_slice.source_idx] = len(replacement) - len(raw_slice.raw)
++
++            variant = "".join(
++                overrides.get(idx, raw_slice.raw)
++                for idx, raw_slice in enumerate(tracer.raw_sliced)
++            )
++            if variant in variants:
++                continue
++            try:
++                variant_analyzer = self._get_jinja_analyzer(
++                    variant, self._get_jinja_env()
++                )
++                trace = variant_analyzer.analyze(render_func).trace(
++                    append_to_templated=append_to_templated
++                )
++            except (TemplateError, TypeError):
++                # A newly reached branch may not be renderable in this context.
++                templater_logger.debug(
++                    "Unable to render Jinja template variant", exc_info=True
++                )
++                continue
++            score = self._calculate_variant_score(
++                trace.raw_sliced,
++                trace.sliced_file,
++                uncovered_slices,
++                original_source_slices,
++            )
++            if score:
++                variants[variant] = (score, trace, deltas)
++
+         # Return the top-scoring variants.
+         sorted_variants: List[Tuple[int, JinjaTrace, Dict[int, int]]] = sorted(
+             variants.values(), key=lambda v: v[0], reverse=True
+@@ -923,6 +973,7 @@ class JinjaTemplater(PythonTemplater):
+                 adjusted_slices,
+                 trace.templated_str,
+             )
++
+     @large_file_check
+     def process_with_variants(
+         self,

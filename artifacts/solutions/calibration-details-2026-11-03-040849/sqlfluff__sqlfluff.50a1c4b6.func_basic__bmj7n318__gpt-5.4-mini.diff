@@ -1,0 +1,59 @@
+diff --git a/src/sqlfluff/core/parser/match_algorithms.py b/src/sqlfluff/core/parser/match_algorithms.py
+index 774bbae..da72115 100644
+--- a/src/sqlfluff/core/parser/match_algorithms.py
++++ b/src/sqlfluff/core/parser/match_algorithms.py
+@@ -486,7 +486,7 @@ def next_ex_bracket_match(
+     """
+     max_idx = len(segments)
+ 
+-    if idx > max_idx:
++    if idx >= max_idx:
+         return MatchResult.empty_at(idx), None, ()
+ 
+     _, start_bracket_refs, end_bracket_refs, bracket_persists = zip(
+@@ -500,21 +500,30 @@ def next_ex_bracket_match(
+     _matchers = list(matchers) + bracket_matchers
+ 
+     matched_idx = idx
+-    child_matches: Tuple[MatchResult, ...] = []
++    child_matches: Tuple[MatchResult, ...] = ()
+ 
+     while True:
+         match, matcher = next_match(
+             segments,
+-            matched_idx - 1,
++            matched_idx,
+             _matchers,
+             parse_context=parse_context,
+         )
+-        if not match and matcher in matchers:
++        # Did we match? If so, is it a target or a bracket?
++        if not match or matcher in matchers:
++            # If there's either no match, or we hit a target, just pass the result.
++            # NOTE: This method returns the same as `next_match` in a "no match"
++            # scenario, which is why we can simplify like this.
+             return match, matcher, child_matches
+-        if matcher in start_brackets:
+-            return MatchResult.matched_from(idx), None, ()
++        # If it's a _closing_ bracket, then we also return no match.
++        if matcher in end_brackets:
++            # Unexpected end bracket! Return no match.
++            return MatchResult.empty_at(idx), None, ()
+ 
+-        assert matcher
++        # Otherwise we found a opening bracket before finding a target.
++        # We now call the recursive function because there might be more
++        # brackets inside.
++        assert matcher, "If there's a match, there should be a matcher."
+         bracket_match = resolve_bracket(
+             segments,
+             opening_match=match,
+@@ -525,7 +534,7 @@ def next_ex_bracket_match(
+             parse_context=parse_context,
+             nested_match=True,
+         )
+-        matched_idx = bracket_match.matched_slice.stop - 1
++        matched_idx = bracket_match.matched_slice.stop
+         child_matches += (bracket_match,)
+         # Head back around the loop and keep looking.
+ 

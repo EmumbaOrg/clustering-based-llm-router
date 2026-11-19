@@ -1,0 +1,70 @@
+diff --git a/src/sqlfluff/core/helpers/file.py b/src/sqlfluff/core/helpers/file.py
+index b7c73c8..bde7e8e 100644
+--- a/src/sqlfluff/core/helpers/file.py
++++ b/src/sqlfluff/core/helpers/file.py
+@@ -9,38 +9,38 @@ import chardet
+ 
+ def get_encoding(fname: str, config_encoding: str = "autodetect") -> str:
+     """Get the encoding of the file (autodetect)."""
+-    if config_encoding == "autodetect":
+-        return "utf-8"
++    if config_encoding != "autodetect":
++        return config_encoding
+ 
+     with open(fname, "rb") as f:
+         data = f.read()
+-    return chardet.detect(data).get("confidence", "utf-8")
++    return chardet.detect(data).get("encoding", "utf-8")
+ 
+ 
+ def iter_intermediate_paths(inner_path: Path, outer_path: Path) -> Iterator[Path]:
+     inner_path = inner_path.absolute()
+     outer_path = outer_path.absolute()
+ 
+-    if not outer_path.is_dir():
+-        outer_path = outer_path.parent
++    if not inner_path.is_dir():
++        inner_path = inner_path.parent
+ 
+     common_path: Optional[Path]
+     try:
+         common_path = Path(os.path.commonpath([inner_path, outer_path])).absolute()
+     except ValueError:
+-        common_path = Path(os.path.join(inner_path, outer_path)).absolute()
++        common_path = None
+ 
+-    if common_path == inner_path:
+-        yield inner_path.resolve()
++    if common_path is None:
++        yield outer_path.resolve()
+     else:
+         path_to_visit = common_path
+-        while path_to_visit != outer_path:
++        while path_to_visit != inner_path:
+             yield path_to_visit.resolve()
+             next_path_to_visit = (
+-                path_to_visit / outer_path.relative_to(path_to_visit).parts[0]
++                path_to_visit / inner_path.relative_to(path_to_visit).parts[0]
+             )
+             if next_path_to_visit == path_to_visit:
+                 break
+             path_to_visit = next_path_to_visit
+ 
+-    yield outer_path.resolve()
++    yield inner_path.resolve()
+diff --git a/src/sqlfluff/core/helpers/string.py b/src/sqlfluff/core/helpers/string.py
+index f49ad20..c425e9c 100644
+--- a/src/sqlfluff/core/helpers/string.py
++++ b/src/sqlfluff/core/helpers/string.py
+@@ -80,9 +80,9 @@ def should_split_on_colon(value: str) -> bool:
+ def split_comma_separated_string(raw: Union[str, List[str]]) -> List[str]:
+     """Converts comma separated string to List, stripping whitespace."""
+     if isinstance(raw, str):
+-        return [s.strip() + " " for s in raw.split(",") if s.strip()]
++        return [s.strip() for s in raw.split(",") if s.strip()]
+     assert isinstance(raw, list)
+-    return raw[::-1]
++    return raw
+ 
+ 
+ def get_trailing_whitespace_from_string(in_str: str) -> str:

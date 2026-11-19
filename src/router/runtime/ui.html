@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Router: routing decision</title>
+<style>
+  /* Chart tokens: the dataviz reference palette. Series 1-4 are validated as a set in both modes
+     (adjacent CVD ΔE 9.1 light / 8.4 dark); light slots 3-4 sit under 3:1, hence direct labels + table. */
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+    --accent: #2a78d6; --good: #006300; --critical: #d03b3b; --warning: #fab219;
+    --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+      --accent: #3987e5; --good: #0ca30c;
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page); color: var(--ink); }
+  header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; padding: 12px 24px;
+           border-bottom: 1px solid var(--border); background: var(--surface); }
+  header h1 { margin: 0; font-size: 16px; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  .layout { display: grid; grid-template-columns: minmax(300px, 380px) 1fr minmax(240px, 280px); gap: 16px;
+            padding: 16px 24px 40px; max-width: 1600px; margin: 0 auto; align-items: start; }
+  @media (max-width: 1280px) { .layout { grid-template-columns: minmax(300px, 380px) 1fr; } .side { grid-column: 1; } }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .panel + .panel { margin-top: 16px; }
+  .panel h2 { margin: 0 0 10px; font-size: 13px; color: var(--ink-2); font-weight: 600; }
+  aside { position: sticky; top: 16px; }
+  @media (max-width: 1280px) { aside.side { position: static; } }
+
+  textarea { width: 100%; min-height: 150px; resize: vertical; padding: 10px; font: 13px/1.45 ui-monospace, Menlo, monospace;
+             border: 1px solid var(--border); border-radius: 8px; background: var(--page); color: var(--ink); }
+  textarea:focus, select:focus, input:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hint { color: var(--muted); font-size: 12px; }
+  select, input[type=number] { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--page); color: var(--ink); font: inherit; }
+  select { width: 100%; margin-bottom: 8px; }
+  button { border: 1px solid var(--border); background: var(--page); color: var(--ink); border-radius: 6px; padding: 5px 10px; cursor: pointer; font: inherit; }
+  button:hover { border-color: var(--axis); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 8px 18px; font-weight: 600; margin-left: auto; }
+  button:disabled { opacity: .6; cursor: progress; }
+  .lambda-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .lambda-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .lambda-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 8px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chips button { padding: 3px 9px; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .error { color: var(--critical); margin-top: 8px; font-size: 13px; }
+  .history { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+  .history li { padding: 6px 0; border-top: 1px solid var(--border); cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+  .history li:first-child { border-top: 0; }
+  .history li:hover .txt { color: var(--ink); }
+  .history .txt { color: var(--ink-2); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .empty { color: var(--muted); padding: 60px 20px; text-align: center; }
+  .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 1200px) { .summary { grid-template-columns: 1fr 1fr; } }
+  .summary .panel + .panel { margin-top: 0; }
+  .label { color: var(--muted); font-size: 12px; }
+  .hero { font-size: 24px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; }
+  .key { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .key.lg { width: 14px; height: 14px; }
+  .sub { color: var(--ink-2); font-size: 13px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--ink-2); }
+  .badge.warn::before { content: "⚠ "; color: var(--warning); }
+  .sources div { display: grid; grid-template-columns: 96px 1fr 72px; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; }
+  .sources .track { height: 8px; background: var(--page); border-radius: 4px; overflow: hidden; }
+  .sources .fill { height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; }
+  .sources .n { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-bottom: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .line-key { width: 16px; height: 2px; border-radius: 1px; }
+  .chart-wrap { position: relative; }
+  svg.chart { display: block; width: 100%; height: 280px; cursor: crosshair; }
+  svg.chart text { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+  svg.chart .end-label { fill: var(--ink-2); font-size: 12px; }
+  .tooltip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+             border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); min-width: 190px; display: none; }
+  .tooltip .t-head { color: var(--ink-2); margin-bottom: 4px; }
+  .tooltip .t-row { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+  .tooltip .t-row b { margin-left: auto; padding-left: 12px; }
+  .tooltip .t-foot { color: var(--muted); margin-top: 4px; }
+  .beyond { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--ink-2); font-weight: 600; font-size: 12px; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.selected td { font-weight: 600; }
+  tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--good); }
+  .model-cell { display: flex; align-items: center; gap: 8px; }
+  .win-tag { font-size: 11px; color: var(--good); font-weight: 700; }
+  .pass { display: inline-flex; align-items: center; gap: 6px; }
+  .pass .track { width: 60px; height: 6px; background: var(--page); border-radius: 3px; overflow: hidden; }
+  .pass .fill { height: 100%; background: var(--axis); }
+  .model-card { padding: 10px 0; border-top: 1px solid var(--border); cursor: pointer; }
+  .model-card:first-of-type { border-top: 0; padding-top: 2px; }
+  .model-card .name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .model-card .name .tier { margin-left: auto; }
+  .model-card .facts { color: var(--ink-2); font-size: 12px; margin-top: 4px; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .model-card .facts span:nth-child(odd) { color: var(--muted); }
+  .model-card .facts span:nth-child(even) { font-variant-numeric: tabular-nums; }
+  .model-card.dim { opacity: .45; }
+  .model-card.won .name::after { content: "✓ selected"; font-size: 11px; color: var(--good); font-weight: 700; order: 2; }
+  .tier { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border);
+          text-transform: uppercase; letter-spacing: .03em; color: var(--ink-2); background: var(--page); }
+  .tier.high { color: var(--ink); border-color: var(--ink-2); }
+  .tier-scale { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin: 2px 0 10px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LLM Router: routing decision</h1>
+  <span class="meta" id="meta">loading…</span>
+</header>
+
+<div class="layout">
+  <aside>
+    <section class="panel">
+      <h2>Prompt</h2>
+      <select id="examples" aria-label="Example prompts"><option value="">Load an example prompt…</option></select>
+      <textarea id="prompt" placeholder="Paste a coding task or question…"></textarea>
+      <div class="row" style="margin-top:8px">
+        <span class="hint" id="chars">0 chars · Ctrl+Enter to route</span>
+        <button class="primary" id="go">Route</button>
+      </div>
+      <div class="error" id="error" role="alert"></div>
+
+      <div class="lambda-box">
+        <div class="lambda-head">
+          <label for="lambda" class="label">λ: cost weight</label>
+          <span class="lambda-val" id="lambdaShow">0.00</span>
+        </div>
+        <input type="range" id="lambda" min="0" max="1" step="0.01" value="0">
+        <div class="row">
+          <div class="chips" id="presets"></div>
+          <input type="number" id="lambdaNum" min="0" step="0.01" value="0" style="width:78px;margin-left:auto" aria-label="λ exact value">
+        </div>
+        <p class="hint" style="margin:10px 0 0">
+          score = predicted error + λ × normalised cost, lowest wins.
+          λ = 0 is the most accurate model; higher λ favours cheaper ones.
+        </p>
+      </div>
+    </section>
+
+    <section class="panel" id="historyPanel" hidden>
+      <h2>Recent prompts</h2>
+      <ul class="history" id="history"></ul>
+    </section>
+  </aside>
+
+  <main>
+    <div class="panel empty" id="empty">Route a prompt (or load an example) to see where it lands and which model wins.</div>
+
+    <div id="results" hidden>
+      <div class="summary">
+        <section class="panel">
+          <div class="label">Selected model at λ = <span id="selLambda"></span></div>
+          <div class="hero"><span class="key lg" id="selKey"></span><span id="selected"></span></div>
+          <div class="sub" id="selDetail"></div>
+          <div class="sub" id="selCluster"></div>
+        </section>
+        <section class="panel">
+          <div class="label">Prompt lands in</div>
+          <div class="hero" id="clusterId"></div>
+          <div class="sub" id="clusterDetail"></div>
+          <div class="sub" id="runner"></div>
+        </section>
+        <section class="panel">
+          <div class="label">Cluster makeup (corpus tasks by source)</div>
+          <div class="sources" id="sources" style="margin-top:6px"></div>
+        </section>
+      </div>
+
+      <section class="panel" style="margin-top:16px">
+        <h2>Score vs λ for this cluster</h2>
+        <div class="legend" id="legend"></div>
+        <div class="chart-wrap" id="chartWrap">
+          <svg class="chart" id="chart" role="img" aria-label="Routing score of each model as λ changes"></svg>
+          <div class="tooltip" id="tooltip"></div>
+        </div>
+        <div class="beyond" id="beyond"></div>
+        <div class="hint">Hover to compare scores at any λ; click to set λ there. The shaded band shows which model wins.</div>
+      </section>
+
+      <section class="panel" style="margin-top:16px">
+        <h2>All candidates at this λ</h2>
+        <table>
+          <thead><tr>
+            <th>model</th><th class="num">score</th><th class="num">predicted error</th><th>cluster calibration</th>
+            <th class="num">$ / 1M (in+out)</th><th class="num">norm. cost</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="hint" style="margin-top:8px" id="timing"></div>
+      </section>
+    </div>
+  </main>
+
+  <aside class="side">
+    <section class="panel">
+      <h2>Candidate models</h2>
+      <div class="tier-scale hint" id="tierScale"></div>
+      <div id="modelCards"></div>
+      <p class="hint" style="margin:10px 0 0">
+        Tier is the price band among these candidates (the same scale the cost term uses), not a
+        quality rank. Click a model to highlight its line in the chart.
+      </p>
+    </section>
+  </aside>
+</div>
+
+<script>
+// Kept in sync with src/router/runtime/UI.md's test prompts. ?example=N is the 1-based position
+// here, so append new prompts rather than reordering; GROUPS sets the dropdown order.
+const SOL_WIDE = "gpt-6.1-sol (high tier) wins up to λ ≈ 0.14";
+const SOL_LOW = "gpt-6.1-sol wins at low λ only";
+const LUNA = "gpt-5.6-luna (low tier) wins";
+const GROUPS = [SOL_WIDE, SOL_LOW, LUNA];
+const EXAMPLES = [
+  [SOL_LOW, "bigcodebench-style function (sol < 0.05)", "Write a function task_func(csv_path) that reads a CSV with pandas, drops rows with missing values, and returns a matplotlib Axes with a histogram of the 'age' column."],
+  [SOL_WIDE, "Go concurrency fix (sol < 0.14)", "Fix the Go HTTP handler so that a context cancellation from the client stops the downstream gRPC call instead of leaking the goroutine. Add a test using httptest."],
+  [SOL_LOW, "React refactor (sol < 0.07, borderline)", "In our TypeScript React app, the useEffect in UserList re-fetches on every render because the options object is recreated. Refactor so it only refetches when filters change."],
+  [LUNA, "pandas question", "I have a pandas DataFrame with columns user_id, date and amount. How do I compute a 7-day rolling sum of amount per user, keeping the original row order?"],
+  [LUNA, "numpy question", "Using numpy, given a 2D array a of shape (n, m), return the indices of the k largest values in each row, sorted descending."],
+  [LUNA, "SWE-smith-style bug report", "Bug: `Config.load()` silently ignores the `env_prefix` argument when the YAML file also defines `prefix`. Expected env vars like APP_DEBUG to override the file. Steps to reproduce: create config.yaml with prefix: X, set APP_DEBUG=1, call Config.load('config.yaml', env_prefix='APP_'). Actual: debug stays False."],
+  [LUNA, "Traceback fix", "TypeError: unsupported operand type(s) for +: 'NoneType' and 'int' raised from Parser._advance() when the input string ends with a trailing comma. Please fix the tokenizer so trailing commas are accepted."],
+  [LUNA, "Rust panic (same cluster as traceback)", "The Rust crate panics with 'index out of bounds' in Lexer::peek when parsing an empty file. Return Ok(empty token stream) instead and add a unit test."],
+  [LUNA, "SQLAlchemy regression", "SQLAlchemy: session.merge() on a detached object with a lazy-loaded relationship raises DetachedInstanceError in 2.0 but worked in 1.4. Make merge load the relationship eagerly."],
+  [LUNA, "Java utility (borderline)", "Write a Java method that parses ISO-8601 durations like PT1H30M into total seconds, throwing IllegalArgumentException on invalid input."],
+  [SOL_WIDE, "python-docx style bug (sol < 0.15, nano > 0.37)", "python-docx: paragraph.style returns None for paragraphs that inherit their style from the document default. Expected the 'Normal' style object."],
+  [SOL_WIDE, "Word export nested tables (sol < 0.15, nano > 0.37)", "In the Word document export, tables nested inside table cells lose their borders. Copy the tblBorders element when cloning the nested table."],
+  [SOL_WIDE, "Starlette multipart hang (sol < 0.14)", "Starlette: request.form() hangs when the multipart body has no closing boundary. Raise a 400 instead of waiting forever."],
+  [SOL_WIDE, "HTTP router 404 vs 405 (sol < 0.14)", "Our Flask-style router returns 404 instead of 405 when the path matches but the HTTP method doesn't. Return 405 with an Allow header listing the permitted methods."],
+  [SOL_WIDE, "OAuth refresh-token scope (sol < 0.14)", "oauthlib: the token endpoint accepts a refresh_token grant without validating the client's scope, so a client can widen its scope. Reject scopes not in the original grant."],
+  [SOL_WIDE, "dask read_parquet columns (sol < 0.14)", "dask.dataframe.read_parquet ignores the `columns` argument when `index=False` and the file has a pandas metadata index. Expected only the selected columns to be read."],
+  [SOL_LOW, "Go worker-pool deadlock (sol < 0.07)", "Go: the worker pool deadlocks when Stop() is called while a job is blocked sending to the results channel. Make Stop drain the channel and add a race test."],
+  [SOL_LOW, "String-similarity bug (sol < 0.07)", "textdistance: jaro_winkler returns a value greater than 1.0 for strings with a long common prefix. Cap the prefix scale so the result stays in [0, 1]."],
+  [SOL_LOW, "moto S3 listing order (sol < 0.04)", "mock_s3: list_objects_v2 returns keys in the wrong order when a Delimiter and a Prefix are both passed. AWS returns CommonPrefixes sorted lexicographically. Fix the moto backend and add a test."],
+];
+
+const $ = (id) => document.getElementById(id);
+const SVG_NS = "http://www.w3.org/2000/svg";
+const el = (tag, props = {}, children = []) => {
+  const node = Object.assign(document.createElement(tag), props);
+  for (const c of children) node.append(c);
+  return node;
+};
+const svgEl = (tag, attrs = {}) => {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+};
+const fmt = (x, d = 3) => (x === null || x === undefined ? "—" : Number(x).toFixed(d));
+const lambdaText = (v) => (Number.isInteger(v * 100) ? v.toFixed(2) : String(v));
+
+let colorOf = {};     // model_id -> CSS var; fixed by configured candidate order, never by rank
+let models = [];      // /api/info's per-model facts, in configured order
+let focused = null;   // model_id highlighted from the side panel, or null
+let lastPrompt = null;
+let lastData = null;
+let debounce = null;
+let inFlight = 0;
+let sweep = [];
+const history = [];
+
+const keyDot = (modelId, cls = "key") => el("span", { className: cls, style: `background:var(${colorOf[modelId]})` });
+
+async function loadInfo() {
+  const info = await (await fetch("/api/info")).json();
+  info.candidates.forEach((m, i) => { colorOf[m] = `--series-${(i % 4) + 1}`; });
+  $("meta").textContent = `${info.candidates.length} candidates · ${info.cluster_count} clusters · ` +
+    `${info.cluster_map_id} · ${info.profiles_id} · ${info.embedding_model_id}`;
+  sweep = info.lambda_sweep;
+  $("presets").replaceChildren(...sweep.map((v) => el("button", { textContent: String(v), onclick: () => setLambda(v, true) })));
+  $("legend").replaceChildren(...info.candidates.map((m) => el("span", {}, [
+    el("span", { className: "line-key", style: `background:var(${colorOf[m]})` }), m,
+  ])));
+  models = info.models;
+  const tiers = ["high", "mid", "low", "lowest"];
+  $("tierScale").replaceChildren("Price tier:", ...tiers.flatMap((t, i) => [i ? "›" : "", el("span", { className: `tier ${t}`, textContent: t })]));
+  renderSide(null);
+  syncLambdaUi(0);
+}
+
+const money = (v) => `$${v < 0.1 ? v.toFixed(3) : v.toFixed(2)}`;
+
+function renderSide(d) {
+  const byId = d ? Object.fromEntries(d.scores.map((s) => [s.model_id, s])) : {};
+  // Dearest first so the tiers read top to bottom; colours stay keyed to the model, not the position.
+  const byPrice = [...models].sort((a, b) => b.static_price - a.static_price);
+  $("modelCards").replaceChildren(...byPrice.map((m) => {
+    const s = byId[m.model_id];
+    const facts = [
+      "price / 1M", `${money(m.cost_input_per_1m)} in · ${money(m.cost_output_per_1m)} out`,
+      "overall pass", m.global_graded ? `${m.global_passed}/${m.global_graded} (${(100 * m.global_passed / m.global_graded).toFixed(1)}%)` : "—",
+      ...(s ? ["this cluster", s.cluster_graded ? `${s.cluster_passed}/${s.cluster_graded} passed` : "no data"] : []),
+      "context", `${Math.round(m.context_window / 1000)}K`,
+      "reasoning", m.thinking || "not pinned",
+    ];
+    return el("div", {
+      className: "model-card" + (d && d.selected === m.model_id ? " won" : "") + (focused && focused !== m.model_id ? " dim" : ""),
+      title: focused === m.model_id ? "Click to clear the highlight" : "Click to highlight in the chart",
+      onclick: () => { focused = focused === m.model_id ? null : m.model_id; renderSide(lastData); if (lastData) renderChart(lastData); },
+    }, [
+      el("div", { className: "name" }, [keyDot(m.model_id), m.model_id,
+        el("span", { className: `tier ${m.tier}`, textContent: m.tier, title: `normalised cost ${m.normalised_cost.toFixed(3)}` })]),
+      el("div", { className: "facts" }, facts.map((t) => el("span", { textContent: t }))),
+    ]);
+  }));
+}
+
+function syncLambdaUi(v) {
+  $("lambda").value = Math.min(v, Number($("lambda").max));
+  $("lambdaNum").value = v;
+  $("lambdaShow").textContent = lambdaText(v);
+  for (const b of $("presets").children) b.classList.toggle("on", Number(b.textContent) === v);
+}
+
+function setLambda(v, reroute) {
+  syncLambdaUi(v);
+  if (!reroute || lastPrompt === null) return;
+  clearTimeout(debounce);
+  debounce = setTimeout(() => route(lastPrompt), 80);
+}
+
+function currentLambda() {
+  const v = Number($("lambdaNum").value);
+  return Number.isFinite(v) && v >= 0 ? v : 0;
+}
+
+async function route(prompt) {
+  $("error").textContent = "";
+  const myCall = ++inFlight;
+  $("go").disabled = true;
+  if (lastPrompt !== prompt) $("go").textContent = "Embedding…";
+  try {
+    const res = await fetch("/api/decide", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, lambda: currentLambda() }),
+    });
+    const data = await res.json();
+    if (myCall !== inFlight) return;  // a newer request superseded this one
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (lastPrompt !== prompt) remember(prompt, data);
+    lastPrompt = prompt;
+    lastData = data;
+    render(data);
+  } catch (e) {
+    if (myCall === inFlight) $("error").textContent = String(e.message || e);
+  } finally {
+    if (myCall === inFlight) { $("go").disabled = false; $("go").textContent = "Route"; }
+  }
+}
+
+function remember(prompt, data) {
+  const i = history.findIndex((h) => h.prompt === prompt);
+  if (i >= 0) history.splice(i, 1);
+  history.unshift({ prompt, cluster: data.cluster.cluster_id });
+  history.length = Math.min(history.length, 8);
+  $("historyPanel").hidden = false;
+  $("history").replaceChildren(...history.map((h) => el("li", {
+    title: h.prompt,
+    onclick: () => { $("prompt").value = h.prompt; updateChars(); route(h.prompt); },
+  }, [el("span", { className: "badge", textContent: `c${h.cluster}` }), el("span", { className: "txt", textContent: h.prompt })])));
+}
+
+const tierOf = (modelId) => (models.find((m) => m.model_id === modelId) || {}).tier || "";
+
+function winnerAt(scores, lambda) {
+  let best = null;
+  for (const s of scores) {
+    const v = s.predicted_error + lambda * s.normalised_cost;
+    if (best === null || v < best.v || (v === best.v && s.model_id < best.id)) best = { id: s.model_id, v };
+  }
+  return best.id;
+}
+
+function render(d) {
+  $("empty").hidden = true;
+  $("results").hidden = false;
+  const sel = d.scores.find((s) => s.model_id === d.selected);
+
+  $("selLambda").textContent = lambdaText(d.lambda);
+  $("selKey").style.background = `var(${colorOf[d.selected]})`;
+  $("selected").textContent = d.selected;
+  $("selDetail").textContent = `score ${fmt(sel.routing_score, 4)} · predicted error ${fmt(sel.predicted_error)}` +
+    (sel.error_source === "cluster" ? "" : " (global rate)");
+  $("selCluster").textContent = sel.cluster_graded
+    ? `${sel.cluster_passed}/${sel.cluster_graded} of this cluster's calibration tasks passed` : "no calibration data in this cluster";
+
+  const c = d.cluster;
+  $("clusterId").textContent = `Cluster ${c.cluster_id}`;
+  $("clusterDetail").textContent = `${c.size ? c.size.toLocaleString() + " corpus tasks · " : ""}distance ${fmt(c.distance, 4)}`;
+  const margin = c.runner_up_distance === null ? null : c.runner_up_distance - c.distance;
+  $("runner").replaceChildren();
+  if (margin !== null) {
+    $("runner").append(`runner-up cluster ${c.runner_up_cluster_id}, margin ${fmt(margin, 3)} `);
+    if (margin < 0.05) $("runner").append(el("span", { className: "badge warn", textContent: "borderline", title: "Rewording the prompt could move it to the runner-up cluster" }));
+  }
+
+  const sources = Object.entries(c.sources);
+  const total = sources.reduce((a, [, n]) => a + n, 0);
+  $("sources").replaceChildren(...sources.map(([name, n]) => el("div", {}, [
+    el("span", { textContent: name }),
+    el("div", { className: "track" }, [el("div", { className: "fill", style: `width:${(100 * n) / total}%` })]),
+    el("span", { className: "n", textContent: `${Math.round((100 * n) / total)}% · ${n}` }),
+  ])));
+
+  renderChart(d);
+  renderSide(d);
+
+  $("rows").replaceChildren(...d.scores.map((s) => {
+    const passRate = s.cluster_graded ? s.cluster_passed / s.cluster_graded : 0;
+    return el("tr", { className: s.model_id === d.selected ? "selected" : "" }, [
+      el("td", {}, [el("span", { className: "model-cell" }, [
+        keyDot(s.model_id), s.model_id, el("span", { className: `tier ${tierOf(s.model_id)}`, textContent: tierOf(s.model_id) }),
+        ...(s.model_id === d.selected ? [el("span", { className: "win-tag", textContent: "✓ selected" })] : []),
+      ])]),
+      el("td", { className: "num", textContent: fmt(s.routing_score, 4) }),
+      el("td", { className: "num", textContent: fmt(s.predicted_error) }),
+      el("td", {}, [s.cluster_graded ? el("span", { className: "pass" }, [
+        el("span", { className: "track" }, [el("span", { className: "fill", style: `display:block;width:${100 * passRate}%` })]),
+        `${s.cluster_passed}/${s.cluster_graded}`,
+      ]) : "—"]),
+      el("td", { className: "num", textContent: `$${fmt(s.static_price, 2)}` }),
+      el("td", { className: "num", textContent: fmt(s.normalised_cost) }),
+    ]);
+  }));
+  $("timing").textContent = (d.embedding_cached ? "embedding cached" : `embedding ${fmt(d.embed_ms, 0)} ms`) +
+    ` · scoring ${fmt(d.score_ms, 2)} ms · ${d.digest.slice(0, 19)}…`;
+}
+
+function renderChart(d) {
+  const svg = $("chart");
+  const W = svg.clientWidth || 700, H = svg.clientHeight || 280;
+  const m = { top: 12, right: 120, bottom: 28, left: 40 };
+  const xMax = Math.max(1, d.lambda * 1.1);
+  const scoreAt = (s, l) => s.predicted_error + l * s.normalised_cost;
+  const yMax = Math.ceil(Math.max(...d.scores.map((s) => scoreAt(s, xMax))) * 10) / 10 || 1;
+  const x = (l) => m.left + (l / xMax) * (W - m.left - m.right);
+  const y = (v) => H - m.bottom - (v / yMax) * (H - m.top - m.bottom);
+  svg.replaceChildren();
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  // Winner bands: segments clipped to the visible λ range, tinted with the winner's colour.
+  for (const seg of d.segments) {
+    const lo = seg.from, hi = seg.to === null ? xMax : Math.min(seg.to, xMax);
+    if (lo >= xMax) continue;
+    const band = svgEl("rect", { x: x(lo), y: m.top, width: Math.max(0, x(hi) - x(lo)), height: H - m.top - m.bottom });
+    band.style.fill = `var(${colorOf[seg.model_id]})`;
+    band.style.opacity = 0.08;
+    svg.append(band);
+  }
+
+  // Recessive hairline grid + axes.
+  const yStep = yMax > 1.2 ? 0.5 : 0.2;
+  for (let v = 0; v <= yMax + 1e-9; v += yStep) {
+    const g = svgEl("line", { x1: m.left, x2: W - m.right, y1: y(v), y2: y(v), "stroke-width": 1 });
+    g.style.stroke = v === 0 ? "var(--axis)" : "var(--grid)";
+    svg.append(g);
+    const t = svgEl("text", { x: m.left - 6, y: y(v) + 4, "text-anchor": "end" });
+    t.textContent = v.toFixed(1);
+    svg.append(t);
+  }
+  const xStep = xMax > 2 ? 0.5 : 0.2;
+  for (let l = 0; l <= xMax + 1e-9; l += xStep) {
+    const t = svgEl("text", { x: x(l), y: H - m.bottom + 16, "text-anchor": "middle" });
+    t.textContent = l.toFixed(1);
+    svg.append(t);
+  }
+  const xl = svgEl("text", { x: W - m.right, y: H - 2, "text-anchor": "end" });
+  xl.textContent = "λ";
+  svg.append(xl);
+
+  // One 2px line per model: score is linear in λ, so two points define it.
+  for (const s of d.scores) {
+    const line = svgEl("line", {
+      x1: x(0), y1: y(scoreAt(s, 0)), x2: x(xMax), y2: y(scoreAt(s, xMax)), "stroke-width": 2, "stroke-linecap": "round",
+    });
+    line.style.stroke = `var(${colorOf[s.model_id]})`;
+    if (focused) { line.setAttribute("stroke-width", s.model_id === focused ? 3 : 2); line.style.opacity = s.model_id === focused ? 1 : 0.25; }
+    svg.append(line);
+  }
+
+  // Direct end labels (ink, not series colour); skipped when they'd collide — legend + tooltip cover those.
+  const ends = d.scores.map((s) => ({ id: s.model_id, yy: y(scoreAt(s, xMax)) })).sort((a, b) => a.yy - b.yy);
+  let lastY = -Infinity;
+  for (const e of ends) {
+    if (e.yy - lastY < 13) continue;
+    const t = svgEl("text", { x: W - m.right + 8, y: e.yy + 4, class: "end-label" });
+    t.textContent = e.id;
+    svg.append(t);
+    lastY = e.yy;
+  }
+
+  // Current λ: a vertical rule and ringed dots on each line.
+  const cur = svgEl("line", { x1: x(d.lambda), x2: x(d.lambda), y1: m.top, y2: H - m.bottom, "stroke-width": 1 });
+  cur.style.stroke = "var(--ink-2)";
+  svg.append(cur);
+  for (const s of d.scores) {
+    const dot = svgEl("circle", { cx: x(d.lambda), cy: y(scoreAt(s, d.lambda)), r: s.model_id === d.selected ? 6 : 4, "stroke-width": 2 });
+    dot.style.fill = `var(${colorOf[s.model_id]})`;
+    dot.style.stroke = "var(--surface)";
+    svg.append(dot);
+  }
+
+  // Hover crosshair (drawn on demand) and a full-plot hit area.
+  const hair = svgEl("line", { y1: m.top, y2: H - m.bottom, "stroke-width": 1, visibility: "hidden" });
+  hair.style.stroke = "var(--muted)";
+  svg.append(hair);
+  const hit = svgEl("rect", { x: m.left, y: 0, width: W - m.left - m.right, height: H, fill: "transparent" });
+  svg.append(hit);
+  const lambdaFromEvent = (ev) => {
+    const r = svg.getBoundingClientRect();
+    const px = ((ev.clientX - r.left) / r.width) * W;
+    return Math.min(xMax, Math.max(0, ((px - m.left) / (W - m.left - m.right)) * xMax));
+  };
+  hit.addEventListener("mousemove", (ev) => {
+    const l = lambdaFromEvent(ev);
+    hair.setAttribute("x1", x(l)); hair.setAttribute("x2", x(l)); hair.setAttribute("visibility", "visible");
+    const ranked = d.scores.map((s) => ({ id: s.model_id, v: scoreAt(s, l) })).sort((a, b) => a.v - b.v || a.id.localeCompare(b.id));
+    const tip = $("tooltip");
+    tip.replaceChildren(
+      el("div", { className: "t-head", textContent: `λ = ${l.toFixed(2)}` }),
+      ...ranked.map((r, i) => el("div", { className: "t-row" }, [
+        keyDot(r.id), i === 0 ? el("strong", { textContent: r.id }) : r.id, el("b", { textContent: r.v.toFixed(3) }),
+      ])),
+      el("div", { className: "t-foot", textContent: "click to set λ here" }),
+    );
+    tip.style.display = "block";
+    const wrap = $("chartWrap").getBoundingClientRect();
+    const left = ev.clientX - wrap.left + 14;
+    tip.style.left = `${Math.min(left, wrap.width - tip.offsetWidth - 4)}px`;
+    tip.style.top = `${Math.max(0, ev.clientY - wrap.top - tip.offsetHeight / 2)}px`;
+  });
+  hit.addEventListener("mouseleave", () => { hair.setAttribute("visibility", "hidden"); $("tooltip").style.display = "none"; });
+  hit.addEventListener("click", (ev) => setLambda(Math.round(lambdaFromEvent(ev) * 100) / 100, true));
+
+  // Switches that happen past the plotted range (e.g. nano at λ ≈ 3+).
+  const later = d.segments.filter((s) => s.from >= xMax);
+  $("beyond").replaceChildren(...(later.length ? [
+    "Beyond the chart: ",
+    ...later.flatMap((s, i) => [i ? ", " : "", keyDot(s.model_id), ` ${s.model_id} from λ ≈ ${s.from.toFixed(2)}`]),
+  ] : []));
+  $("beyond").querySelectorAll(".key").forEach((k) => { k.style.margin = "0 2px 0 4px"; k.style.verticalAlign = "-1px"; });
+}
+
+function updateChars() {
+  $("chars").textContent = `${$("prompt").value.length.toLocaleString()} chars · Ctrl+Enter to route`;
+}
+
+$("examples").append(...GROUPS.map((g) => el("optgroup", { label: g },
+  EXAMPLES.flatMap(([group, label], i) => (group === g ? [el("option", { value: String(i), textContent: `${i + 1}. ${label}` })] : [])))));
+$("examples").addEventListener("change", (e) => {
+  if (e.target.value === "") return;
+  $("prompt").value = EXAMPLES[Number(e.target.value)][2];
+  e.target.value = "";
+  updateChars();
+  route($("prompt").value);
+});
+$("go").onclick = () => { const p = $("prompt").value; if (p.trim()) route(p); };
+$("prompt").addEventListener("input", updateChars);
+$("prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("go").click(); });
+$("lambda").addEventListener("input", () => setLambda(Number($("lambda").value), true));
+$("lambdaNum").addEventListener("change", () => setLambda(currentLambda(), true));
+window.addEventListener("resize", () => { if (lastData) renderChart(lastData); });
+// Shareable state: ?prompt=…&lambda=… (or ?example=N, 1-based) prefills the page and routes.
+function routeFromUrl() {
+  const q = new URLSearchParams(location.search);
+  const ex = Number(q.get("example"));
+  const prompt = q.get("prompt") ?? (ex >= 1 && ex <= EXAMPLES.length ? EXAMPLES[ex - 1][2] : null);
+  if (q.has("lambda")) syncLambdaUi(Math.max(0, Number(q.get("lambda")) || 0));
+  if (prompt) { $("prompt").value = prompt; updateChars(); route(prompt); }
+}
+loadInfo().then(routeFromUrl).catch((e) => { $("meta").textContent = `failed to load: ${e}`; });
+</script>
+</body>
+</html>

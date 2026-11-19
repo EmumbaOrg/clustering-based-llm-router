@@ -1,0 +1,73 @@
+diff --git a/resources/page/pagegroup.go b/resources/page/pagegroup.go
+index 18c98e70e..c346b3a35 100644
+--- a/resources/page/pagegroup.go
++++ b/resources/page/pagegroup.go
+@@ -25,7 +25,9 @@ import (
+ 
+ 	"github.com/gohugoio/hugo/common/collections"
+ 	"github.com/gohugoio/hugo/common/hreflect"
++	"github.com/gohugoio/hugo/common/htime"
+ 	"github.com/gohugoio/hugo/compare"
++	"github.com/gohugoio/hugo/langs"
+ 
+ 	"github.com/gohugoio/hugo/resources/resource"
+ )
+@@ -251,6 +253,13 @@ func (p Pages) groupByDateField(sorter func(p Pages) Pages, formatter func(p Pag
+ 	return r, nil
+ }
+ 
++func formatDate(p Page, date time.Time, format string) string {
++	if language := p.Site().Language(); language != nil {
++		return htime.NewTimeFormatter(langs.GetTranslator(language)).Format(date, format)
++	}
++	return date.Format(format)
++}
++
+ // GroupByDate groups by the given page's Date value in
+ // the given format and with the given order.
+ // Valid values for order is asc, desc, rev and reverse.
+@@ -260,7 +269,7 @@ func (p Pages) GroupByDate(format string, order ...string) (PagesGroup, error) {
+ 		return p.ByDate()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.Date().Format(format)
++		return formatDate(p, p.Date(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -274,7 +283,7 @@ func (p Pages) GroupByPublishDate(format string, order ...string) (PagesGroup, e
+ 		return p.ByPublishDate()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.PublishDate().Format(format)
++		return formatDate(p, p.PublishDate(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -288,7 +297,7 @@ func (p Pages) GroupByExpiryDate(format string, order ...string) (PagesGroup, er
+ 		return p.ByExpiryDate()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.ExpiryDate().Format(format)
++		return formatDate(p, p.ExpiryDate(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -302,7 +311,7 @@ func (p Pages) GroupByLastmod(format string, order ...string) (PagesGroup, error
+ 		return p.ByLastmod()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.Lastmod().Format(format)
++		return formatDate(p, p.Lastmod(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -341,7 +350,7 @@ func (p Pages) GroupByParamDate(key string, format string, order ...string) (Pag
+ 		return r
+ 	}
+ 	formatter := func(p Page) string {
+-		return dates[p].Format(format)
++		return formatDate(p, dates[p], format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }

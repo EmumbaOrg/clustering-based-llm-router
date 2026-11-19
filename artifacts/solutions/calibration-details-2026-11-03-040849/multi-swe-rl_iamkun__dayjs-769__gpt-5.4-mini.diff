@@ -1,0 +1,65 @@
+diff --git a/src/plugin/weekOfYear/index.js b/src/plugin/weekOfYear/index.js
+index 7251d5a..6f81d18 100644
+--- a/src/plugin/weekOfYear/index.js
++++ b/src/plugin/weekOfYear/index.js
+@@ -1,4 +1,19 @@
+-import { MS, Y, D, W } from '../../constant'
++import { D, Y } from '../../constant'
++
++const isLeapYear = year => (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0
++
++const firstWeekOffset = (year, weekStart, yearStart) => {
++  const fwd = 7 + weekStart - yearStart
++  const fwdDate = new Date(year, 0, fwd)
++  const fwdlw = (7 + fwdDate.getDay() - weekStart) % 7
++  return -fwdlw + fwd - 1
++}
++
++const weeksInYear = (year, weekStart, yearStart) => {
++  const weekOffset = firstWeekOffset(year, weekStart, yearStart)
++  const weekOffsetNext = firstWeekOffset(year + 1, weekStart, yearStart)
++  return (isLeapYear(year) ? 366 : 365) - weekOffset + weekOffsetNext
++}
+ 
+ export default (o, c, d) => {
+   const proto = c.prototype
+@@ -7,11 +22,20 @@ export default (o, c, d) => {
+       return this.add((week - this.week()) * 7, 'day')
+     }
+     const weekStart = this.$locale().weekStart || 0
+-    const startOfYear = d(this).startOf(Y)
+-    const compareDay = startOfYear.subtract(startOfYear.day() - weekStart, D).subtract(1, MS)
+-    const diffInWeek = this.diff(compareDay, W, true)
+-    const result = Math.ceil(diffInWeek)
+-    return result > 52 ? 1 : result
++    const yearStart = this.$locale().yearStart || (weekStart === 1 ? 4 : 6)
++    const year = this.year()
++    const yearDay = this.startOf(D).diff(d(this).startOf(Y), D, true) + 1
++    const weekOffset = firstWeekOffset(year, weekStart, yearStart)
++    const weekOfYear = Math.floor((yearDay - weekOffset - 1) / 7) + 1
++    const weeks = weeksInYear(year, weekStart, yearStart) / 7
++
++    if (weekOfYear < 1) {
++      return weekOfYear + weeksInYear(year - 1, weekStart, yearStart) / 7
++    }
++    if (weekOfYear > weeks) {
++      return weekOfYear - weeks
++    }
++    return weekOfYear
+   }
+ 
+   proto.weeks = function (week = null) {
+diff --git a/src/plugin/weekYear/index.js b/src/plugin/weekYear/index.js
+index 1fa7577..c67f87c 100644
+--- a/src/plugin/weekYear/index.js
++++ b/src/plugin/weekYear/index.js
+@@ -7,6 +7,9 @@ export default (o, c) => {
+     if (weekOfYear === 1 && month === 11) {
+       return year + 1
+     }
++    if (weekOfYear > 50 && month === 0) {
++      return year - 1
++    }
+     return year
+   }
+ }

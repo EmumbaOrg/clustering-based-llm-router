@@ -1,0 +1,75 @@
+diff --git a/hugolib/shortcode.go b/hugolib/shortcode.go
+index 6d87414a7..e71e4b986 100644
+--- a/hugolib/shortcode.go
++++ b/hugolib/shortcode.go
+@@ -338,14 +338,8 @@ func (s *shortcodeHandler) prepareShortcodeForPage(placeholder string, sc *short
+ 
+ 	if sc.isInline {
+ 		key := newScKeyFromLangAndOutputFormat(lang, p.outputFormats[0], placeholder)
+-		if !s.enableInlineShortcodes {
+-			m[key] = func() (string, error) {
+-				return "", nil
+-			}
+-		} else {
+-			m[key] = func() (string, error) {
+-				return renderShortcode(key, sc, nil, p)
+-			}
++		m[key] = func() (string, error) {
++			return renderShortcode(key, sc, nil, p)
+ 		}
+ 
+ 		return m
+@@ -372,6 +366,9 @@ func renderShortcode(
+ 	var tmpl tpl.Template
+ 
+ 	if sc.isInline {
++		if !p.s.enableInlineShortcodes {
++			return "", nil
++		}
+ 		templName := path.Join("_inline_shortcode", p.Path(), sc.name)
+ 		if sc.isClosing {
+ 			templStr := sc.innerString()
+diff --git a/parser/pageparser/pagelexer_shortcode.go b/parser/pageparser/pagelexer_shortcode.go
+index fe182459a..d503d1797 100644
+--- a/parser/pageparser/pagelexer_shortcode.go
++++ b/parser/pageparser/pagelexer_shortcode.go
+@@ -280,6 +280,7 @@ func lexInsideShortcode(l *pageLexer) stateFunc {
+ 			return l.errorf("got closing shortcode, but none is open")
+ 		}
+ 		l.closingState++
++		l.isInline = false
+ 		l.emit(tScClose)
+ 	case r == '\\':
+ 		l.ignore()
+diff --git a/tpl/tplimpl/template.go b/tpl/tplimpl/template.go
+index 144bafdd8..8efeb6ce9 100644
+--- a/tpl/tplimpl/template.go
++++ b/tpl/tplimpl/template.go
+@@ -366,7 +366,8 @@ func (t *htmlTemplates) addLateTemplate(name, tpl string) error {
+ }
+ 
+ type textTemplate struct {
+-	t *texttemplate.Template
++	mu sync.RWMutex
++	t  *texttemplate.Template
+ }
+ 
+ func (t *textTemplate) Parse(name, tpl string) (tpl.Template, error) {
+@@ -374,11 +375,17 @@ func (t *textTemplate) Parse(name, tpl string) (tpl.Template, error) {
+ }
+ 
+ func (t *textTemplate) Lookup(name string) (tpl.Template, bool) {
++	t.mu.RLock()
++	defer t.mu.RUnlock()
++
+ 	tpl := t.t.Lookup(name)
+ 	return tpl, tpl != nil
+ }
+ 
+ func (t *textTemplate) parSeIn(tt *texttemplate.Template, name, tpl string) (*texttemplate.Template, error) {
++	t.mu.Lock()
++	defer t.mu.Unlock()
++
+ 	templ, err := tt.New(name).Parse(tpl)
+ 	if err != nil {
+ 		return nil, err

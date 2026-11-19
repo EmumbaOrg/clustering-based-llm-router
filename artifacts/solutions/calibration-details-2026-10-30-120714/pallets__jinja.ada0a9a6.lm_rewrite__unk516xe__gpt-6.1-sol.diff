@@ -1,0 +1,100 @@
+diff --git a/src/jinja2/compiler.py b/src/jinja2/compiler.py
+index 864443d..a032226 100644
+--- a/src/jinja2/compiler.py
++++ b/src/jinja2/compiler.py
+@@ -948,57 +948,49 @@ class CodeGenerator(NodeVisitor):
+         debug_kv_str = "&".join(f"{k}={v}" for k, v in self.debug_info)
+         self.writeline(f"debug_info = {debug_kv_str!r}")
+ 
+-    def visit_Block(self, node: nodes.Block, frame: Frame) ->None:
++    def visit_Block(self, node: nodes.Block, frame: Frame) -> None:
+         """Call a block and register it for the template."""
+-        block_frame = frame.inner()
+-        block_frame.block_frame = True
+-    
+-        # If this is a block within a block, we need to push the old
+-        # block variables on the stack and restore them later.
+-        if frame.block:
+-            self.writeline("block_vars = _block_vars.copy()")
+-    
+-        # The current block might have been overridden already by a template
+-        # that extends this one, so we need to check if a block with the same
+-        # name exists in the context.blocks dictionary.
+-        self.writeline(f"for name, parent_block in context.blocks.get({node.name!r}, []):")
+-        self.indent()
+-        self.writeline(f"if name == {node.name!r}:")
+-        self.indent()
+-    
+-        # If the block was overridden, we want to call the parent block
+-        self.writeline("parent_block(context)")
+-        self.outdent()
+-        self.outdent()
+-    
+-        # Otherwise, we'll execute the block's body
+-        self.writeline("else:")
+-        self.indent()
+-    
+-        # If we have known extends, we don't need to check if the template
+-        # has a parent, because we know it does.
+-        if self.has_known_extends:
+-            self.writeline(f"if context.blocks.get({node.name!r}):")
++        level = 0
++        if frame.toplevel:
++            if self.has_known_extends:
++                return
++            if self.extends_so_far > 0:
++                self.writeline("if parent_template is None:")
++                self.indent()
++                level += 1
++
++        if node.scoped:
++            context = self.derive_context(frame)
++        else:
++            context = self.get_context_ref()
++
++        if node.required:
++            self.writeline(f"if len(context.blocks[{node.name!r}]) <= 1:", node)
+             self.indent()
+-            self.writeline(f"context.blocks[{node.name!r}][0](context)")
++            self.writeline(
++                f"raise TemplateRuntimeError({f'Required block {node.name!r} not found'!r})"
++            )
+             self.outdent()
+-            self.writeline("else:")
++
++        if frame.buffer is None and not self.environment.is_async:
++            self.writeline(
++                f"yield from context.blocks[{node.name!r}][0]({context})", node
++            )
++        else:
++            self.writeline(f"gen = context.blocks[{node.name!r}][0]({context})", node)
++            self.writeline("try:")
+             self.indent()
+-    
+-        # Execute the block's body
+-        self.writeline("_block_vars = {}")
+-        self.enter_frame(block_frame)
+-        self.blockvisit(node.body, block_frame)
+-        self.leave_frame(block_frame)
+-    
+-        if self.has_known_extends:
++            self.writeline(f"{self.choose_async()}for event in gen:")
++            self.indent()
++            self.simple_write("event", frame)
+             self.outdent()
+-    
+-        self.outdent()
+-    
+-        # Restore the old block variables if we're in a nested block
+-        if frame.block:
+-            self.writeline("_block_vars = block_vars")
++            self.outdent()
++            self.writeline(
++                f"finally: {self.choose_async('await gen.aclose()', 'gen.close()')}"
++            )
++
++        self.outdent(level)
++
+     def visit_Extends(self, node: nodes.Extends, frame: Frame) -> None:
+         """Calls the extender."""
+         if not frame.toplevel:
