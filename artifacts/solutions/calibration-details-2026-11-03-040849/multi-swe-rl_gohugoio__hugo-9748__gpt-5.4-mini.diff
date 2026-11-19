@@ -1,0 +1,75 @@
+diff --git a/resources/page/pagegroup.go b/resources/page/pagegroup.go
+index 18c98e70e..be0c7303a 100644
+--- a/resources/page/pagegroup.go
++++ b/resources/page/pagegroup.go
+@@ -25,7 +25,9 @@ import (
+ 
+ 	"github.com/gohugoio/hugo/common/collections"
+ 	"github.com/gohugoio/hugo/common/hreflect"
++	"github.com/gohugoio/hugo/common/htime"
+ 	"github.com/gohugoio/hugo/compare"
++	"github.com/gohugoio/hugo/langs"
+ 
+ 	"github.com/gohugoio/hugo/resources/resource"
+ )
+@@ -260,7 +262,7 @@ func (p Pages) GroupByDate(format string, order ...string) (PagesGroup, error) {
+ 		return p.ByDate()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.Date().Format(format)
++		return localizedDateFormat(p, p.Date(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -274,7 +276,7 @@ func (p Pages) GroupByPublishDate(format string, order ...string) (PagesGroup, e
+ 		return p.ByPublishDate()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.PublishDate().Format(format)
++		return localizedDateFormat(p, p.PublishDate(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -288,7 +290,7 @@ func (p Pages) GroupByExpiryDate(format string, order ...string) (PagesGroup, er
+ 		return p.ByExpiryDate()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.ExpiryDate().Format(format)
++		return localizedDateFormat(p, p.ExpiryDate(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -302,7 +304,7 @@ func (p Pages) GroupByLastmod(format string, order ...string) (PagesGroup, error
+ 		return p.ByLastmod()
+ 	}
+ 	formatter := func(p Page) string {
+-		return p.Lastmod().Format(format)
++		return localizedDateFormat(p, p.Lastmod(), format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+@@ -341,11 +343,23 @@ func (p Pages) GroupByParamDate(key string, format string, order ...string) (Pag
+ 		return r
+ 	}
+ 	formatter := func(p Page) string {
+-		return dates[p].Format(format)
++		return localizedDateFormat(p, dates[p], format)
+ 	}
+ 	return p.groupByDateField(sorter, formatter, order...)
+ }
+ 
++func localizedDateFormat(p Page, t time.Time, format string) string {
++	if site := p.Site(); site != nil {
++		if l := site.Language(); l != nil {
++			if translator := langs.GetTranslator(l); translator != nil {
++				return htime.NewTimeFormatter(translator).Format(t, format)
++			}
++		}
++	}
++
++	return t.Format(format)
++}
++
+ // ProbablyEq wraps compare.ProbablyEqer
+ func (p PageGroup) ProbablyEq(other any) bool {
+ 	otherP, ok := other.(PageGroup)

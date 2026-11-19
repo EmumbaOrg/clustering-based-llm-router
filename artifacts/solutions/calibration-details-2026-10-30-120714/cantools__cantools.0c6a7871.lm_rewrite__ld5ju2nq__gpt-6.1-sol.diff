@@ -1,0 +1,70 @@
+diff --git a/src/cantools/subparsers/monitor.py b/src/cantools/subparsers/monitor.py
+index eb44703..b6fa634 100644
+--- a/src/cantools/subparsers/monitor.py
++++ b/src/cantools/subparsers/monitor.py
+@@ -94,46 +94,31 @@ class Monitor(can.Listener):
+     def redraw(self):
+         """Redraw the user interface on the terminal screen."""
+         self._stdscr.erase()
+-    
+-        # Draw the title bar at the top
+-        self.draw_title(0)
+-    
+-        # Calculate available rows for displaying messages
+-        available_rows = self._nrows - 2  # Subtract title and menu rows
+-    
+-        # Draw messages
+-        row = 1
+-        displayed_rows = 0
+-    
++
++        self.draw_stats(0)
++        self.draw_title(1)
++
++        # Reserve the first two rows for statistics and title, and the last
++        # row for the menu or filter.
++        row = 2
++        skipped_rows = 0
++
+         for name in self._filtered_sorted_message_names:
+-            formatted = self._formatted_messages[name]
+-        
+-            # Skip messages if we're scrolled down
+-            if self._page_first_row > displayed_rows:
+-                displayed_rows += len(formatted)
+-                continue
+-        
+-            # Display each line of the formatted message
+-            for line in formatted:
+-                if row >= available_rows:
++            for line in self._formatted_messages[name]:
++                if skipped_rows < self._page_first_row:
++                    skipped_rows += 1
++                    continue
++                if row >= self._nrows - 1:
+                     break
+                 self.addstr(row, 0, line)
+                 row += 1
+-        
+-            displayed_rows += len(formatted)
+-        
+-            # Stop if we've filled the available rows
+-            if row >= available_rows:
++
++            if row >= self._nrows - 1:
+                 break
+-    
+-        # Draw menu or filter at the bottom
+-        self.draw_menu(self._nrows - 2)
+-    
+-        # Draw statistics at the bottom
+-        self.draw_stats(self._nrows - 1)
+-    
+-        # Refresh the screen
++
++        self.draw_menu(self._nrows - 1)
+         self._stdscr.refresh()
++
+     def draw_stats(self, row):
+         status_text = \
+             f'Received: {self._received}, Discarded: {self._discarded}, Errors: 0'

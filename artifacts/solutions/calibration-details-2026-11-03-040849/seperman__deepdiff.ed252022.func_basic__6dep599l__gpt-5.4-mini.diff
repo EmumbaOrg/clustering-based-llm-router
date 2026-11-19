@@ -1,0 +1,54 @@
+diff --git a/deepdiff/distance.py b/deepdiff/distance.py
+index edd98cd..d2dc2fe 100644
+--- a/deepdiff/distance.py
++++ b/deepdiff/distance.py
+@@ -98,36 +98,37 @@ class DistanceMixin:
+     def _precalculate_numpy_arrays_distance(
+             self, hashes_added, hashes_removed, t1_hashtable, t2_hashtable, _original_type):
+ 
++        # We only want to deal with 1D arrays.
+         if isinstance(t2_hashtable[next(iter(hashes_added))].item, (np_ndarray, list)):
+             return
+ 
+         pre_calced_distances = dict_()
+-        added = [t1_hashtable[k].item for k in hashes_added]  # Changed from t2_hashtable to t1_hashtable
+-        removed = [t2_hashtable[k].item for k in hashes_removed]  # Changed from t1_hashtable to t2_hashtable
++        added = [t2_hashtable[k].item for k in hashes_added]
++        removed = [t1_hashtable[k].item for k in hashes_removed]
+ 
+         if _original_type is None:
+-            removed_numpy_compatible_type = get_homogeneous_numpy_compatible_type_of_seq(added)  # Swapped added with removed
+-            added_numpy_compatible_type = get_homogeneous_numpy_compatible_type_of_seq(removed)  # Swapped removed with added
+-            if removed_numpy_compatible_type and removed_numpy_compatible_type == added_numpy_compatible_type:  # Swapped order
++            added_numpy_compatible_type = get_homogeneous_numpy_compatible_type_of_seq(added)
++            removed_numpy_compatible_type = get_homogeneous_numpy_compatible_type_of_seq(removed)
++            if added_numpy_compatible_type and added_numpy_compatible_type == removed_numpy_compatible_type:
+                 _original_type = added_numpy_compatible_type
+-        if _original_type is not None:  # Changed condition from 'if _original_type is None:'
+-            return  # Introduced an early return
++        if _original_type is None:
++            return
+ 
+-        added = np_array_factory(removed, dtype=_original_type)  # Swapped added with removed
+-        removed = np_array_factory(added, dtype=_original_type)  # Swapped removed with added
++        added = np_array_factory(added, dtype=_original_type)
++        removed = np_array_factory(removed, dtype=_original_type)
+ 
+-        pairs = cartesian_product_numpy(removed, added)  # Swapped added with removed
++        pairs = cartesian_product_numpy(added, removed)
+ 
+         pairs_transposed = pairs.T
+ 
+         distances = _get_numpy_array_distance(
+-            pairs_transposed[1], pairs_transposed[0],  # Swapped indices
++            pairs_transposed[0], pairs_transposed[1],
+             max_=self.cutoff_distance_for_pairs,
+             use_log_scale=self.use_log_scale,
+             log_scale_similarity_threshold=self.log_scale_similarity_threshold,
+         )
+ 
+-        i = 1  # Changed from 0 to 1
++        i = 0
+         for added_hash in hashes_added:
+             for removed_hash in hashes_removed:
+                 pre_calced_distances["{}--{}".format(added_hash, removed_hash)] = distances[i]

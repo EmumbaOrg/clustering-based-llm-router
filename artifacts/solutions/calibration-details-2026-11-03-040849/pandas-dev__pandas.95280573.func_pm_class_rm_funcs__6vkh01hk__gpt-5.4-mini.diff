@@ -1,0 +1,68 @@
+diff --git a/pandas/io/formats/style_render.py b/pandas/io/formats/style_render.py
+index 9409b8f2..492f7d73 100644
+--- a/pandas/io/formats/style_render.py
++++ b/pandas/io/formats/style_render.py
+@@ -71,6 +71,63 @@ class StylerRenderer:
+     Base class to process rendering a Styler with a specified jinja2 template.
+     """
+ 
++    def __init__(
++        self,
++        data: DataFrame | Series,
++        precision: int | None = None,
++        table_styles: CSSStyles | None = None,
++        uuid: str | None = None,
++        caption: str | tuple | list | None = None,
++        table_attributes: str | None = None,
++        cell_ids: bool = True,
++        uuid_len: int = 5,
++    ) -> None:
++        if isinstance(data, Series):
++            data = data.to_frame()
++
++        self.data = data
++        self.index = data.index
++        self.columns = data.columns
++        self.uuid = uuid or uuid4().hex[:uuid_len]
++        self.uuid_len = uuid_len
++        self.table_styles = format_table_styles(table_styles or [])
++        self.caption = caption
++        self.table_attributes = table_attributes
++        self.cell_ids = cell_ids
++        self.precision = precision
++        self.hidden_rows: list[int] = []
++        self.hidden_columns: list[int] = []
++        self.hide_index_ = [False] * self.index.nlevels
++        self.hide_columns_ = [False] * self.columns.nlevels
++        self.hide_index_names = False
++        self.hide_column_names = False
++        self.ctx = defaultdict(list)
++        self.ctx_index = defaultdict(list)
++        self.ctx_columns = defaultdict(list)
++        self.cell_context = {}
++        self._todo = []
++        self.concatenated = []
++        self.tooltips = None
++        self.css = {
++            "row_heading": "row_heading",
++            "col_heading": "col_heading",
++            "index_name": "index_name",
++            "col": "col",
++            "row": "row",
++            "col_trim": "col_trim",
++            "row_trim": "row_trim",
++            "level": "level",
++            "data": "data",
++            "blank": "blank",
++            "foot": "foot",
++        }
++        identity = lambda x: x
++        self._display_funcs = defaultdict(lambda: identity)
++        self._display_funcs_index = defaultdict(lambda: identity)
++        self._display_funcs_columns = defaultdict(lambda: identity)
++        self._display_funcs_index_names = defaultdict(lambda: identity)
++        self._display_funcs_column_names = defaultdict(lambda: identity)
++
+     loader = jinja2.PackageLoader("pandas", "io/formats/templates")
+     env = jinja2.Environment(loader=loader, trim_blocks=True)
+     template_html = env.get_template("html.tpl")

@@ -1,0 +1,49 @@
+diff --git a/spotbugs/src/main/java/edu/umd/cs/findbugs/OpcodeStack.java b/spotbugs/src/main/java/edu/umd/cs/findbugs/OpcodeStack.java
+index 363b2ff61..5a81bba4a 100644
+--- a/spotbugs/src/main/java/edu/umd/cs/findbugs/OpcodeStack.java
++++ b/spotbugs/src/main/java/edu/umd/cs/findbugs/OpcodeStack.java
+@@ -521,6 +521,35 @@ public class OpcodeStack {
+             return buf.toString();
+         }
+ 
++        private enum ImmutableCollectionKind {
++            LIST, MAP, SET
++        }
++
++        private static @CheckForNull ImmutableCollectionKind getImmutableCollectionKind(@CheckForNull String signature) {
++            if (signature == null || signature.isEmpty() || signature.charAt(0) != 'L') {
++                return null;
++            }
++            String className = ClassName.fromFieldSignatureToDottedClassName(signature);
++            if (className.startsWith("java.util.Collections$") || className.startsWith("java.util.ImmutableCollections$")) {
++                if (className.contains("List")) {
++                    return ImmutableCollectionKind.LIST;
++                }
++                if (className.contains("Map")) {
++                    return ImmutableCollectionKind.MAP;
++                }
++                if (className.contains("Set")) {
++                    return ImmutableCollectionKind.SET;
++                }
++            }
++            return null;
++        }
++
++        private static boolean isImmutableCollectionMerge(Item i1, Item i2) {
++            ImmutableCollectionKind kind1 = getImmutableCollectionKind(i1.signature);
++            ImmutableCollectionKind kind2 = getImmutableCollectionKind(i2.signature);
++            return kind1 != null && kind1 == kind2;
++        }
++
+         public static Item merge(Item i1, Item i2) {
+             if (i1 == null) {
+                 return i2;
+@@ -548,6 +577,8 @@ public class OpcodeStack {
+                 m.signature = i2.signature;
+             } else if (i2.isNull()) {
+                 m.signature = i1.signature;
++            } else if (isImmutableCollectionMerge(i1, i2)) {
++                m.signature = i1.signature;
+             }
+             if (Objects.equals(i1.constValue, i2.constValue)) {
+                 m.constValue = i1.constValue;

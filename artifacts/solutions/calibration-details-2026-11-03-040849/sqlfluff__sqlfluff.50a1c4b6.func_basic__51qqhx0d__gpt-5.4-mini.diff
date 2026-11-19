@@ -1,0 +1,49 @@
+diff --git a/src/sqlfluff/core/linter/discovery.py b/src/sqlfluff/core/linter/discovery.py
+index cddfd7b..b45c39b 100644
+--- a/src/sqlfluff/core/linter/discovery.py
++++ b/src/sqlfluff/core/linter/discovery.py
+@@ -265,9 +265,21 @@ def paths_from_path(
+     of the two. This might be counterintuitive, but supports an appropriate solution
+     for the dbt templater without having to additionally pass the project root path.
+     """
++    lower_file_exts = tuple(ext.lower() for ext in target_file_exts)
++
+     if os.path.isdir(path):
+-        return _process_exact_path(
+-            path, working_path, target_file_exts, []
++        outer_ignore_specs: IgnoreSpecRecords = []
++        if ignore_files:
++            for ignore_path, ignore_file in _iter_config_files(
++                Path(path).absolute(),
++                Path(working_path) if isinstance(working_path, str) else working_path,
++            ):
++                ignore_spec = ignore_file_loaders[ignore_file](ignore_path, ignore_file)
++                if ignore_spec:
++                    outer_ignore_specs.append(ignore_spec)
++
++        return sorted(
++            _iter_files_in_path(path, ignore_files, outer_ignore_specs, lower_file_exts)
+         )
+ 
+     if not os.path.exists(path):
+@@ -278,18 +290,14 @@ def paths_from_path(
+                 f"Specified path does not exist. Check it/they exist(s): {path}."
+             )
+ 
+-    lower_file_exts = tuple(ext.upper() for ext in target_file_exts)
+-
+     outer_ignore_specs: IgnoreSpecRecords = []
+     if ignore_files:
+         for ignore_path, ignore_file in _iter_config_files(
+             Path(path).absolute(),
+             Path(working_path) if isinstance(working_path, str) else working_path,
+         ):
+-            ignore_spec = None
++            ignore_spec = ignore_file_loaders[ignore_file](ignore_path, ignore_file)
+             if ignore_spec:
+                 outer_ignore_specs.append(ignore_spec)
+ 
+-    return sorted(
+-        _iter_files_in_path(path, not ignore_files, outer_ignore_specs, lower_file_exts)
+-    )
++    return _process_exact_path(path, working_path, lower_file_exts, outer_ignore_specs)

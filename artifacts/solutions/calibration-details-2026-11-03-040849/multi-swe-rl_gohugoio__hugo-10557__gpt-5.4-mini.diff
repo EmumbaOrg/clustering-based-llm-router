@@ -1,0 +1,160 @@
+diff --git a/commands/hugo.go b/commands/hugo.go
+index e247fca27..ed92528e4 100644
+--- a/commands/hugo.go
++++ b/commands/hugo.go
+@@ -716,6 +716,20 @@ func (c *commandeer) getDirList() ([]string, error) {
+ 	}
+ 
+ 	watchFiles := c.hugo().PathSpec.BaseFs.WatchDirs()
++	if modulesClient := c.hugo().PathSpec.ModulesClient; modulesClient != nil {
++		for _, dir := range modulesClient.WorkspaceDirs() {
++			fi, err := os.Stat(dir)
++			if err != nil || !fi.IsDir() {
++				continue
++			}
++
++			meta := hugofs.NewFileMeta()
++			meta.Filename = dir
++			meta.Watch = true
++			watchFiles = append(watchFiles, hugofs.NewFileMetaInfo(fi, meta))
++		}
++	}
++
+ 	for _, fi := range watchFiles {
+ 		if !fi.IsDir() {
+ 			filenames = append(filenames, fi.Meta().Filename)
+diff --git a/hugolib/config.go b/hugolib/config.go
+index 8444d15d9..0341385e0 100644
+--- a/hugolib/config.go
++++ b/hugolib/config.go
+@@ -423,6 +423,12 @@ func (l configLoader) collectModules(modConfig modules.Config, v1 config.Provide
+ 		configFilenames = append(configFilenames, moduleConfig.GoModulesFilename)
+ 	}
+ 
++	if workspaceFilename := modulesClient.WorkspaceFilename(); workspaceFilename != "" {
++		if exists, _ := afero.Exists(l.Fs, workspaceFilename); exists {
++			configFilenames = append(configFilenames, workspaceFilename)
++		}
++	}
++
+ 	return moduleConfig.ActiveModules, configFilenames, err
+ }
+ 
+diff --git a/modules/client.go b/modules/client.go
+index 953391e59..d64aa153f 100644
+--- a/modules/client.go
++++ b/modules/client.go
+@@ -84,6 +84,14 @@ func NewClient(cfg ClientConfig) *Client {
+ 
+ 	var env []string
+ 	mcfg := cfg.ModuleConfig
++	if mcfg.Workspace != "" && mcfg.Workspace != "off" && !filepath.IsAbs(mcfg.Workspace) {
++		mcfg.Workspace = filepath.Join(cfg.WorkingDir, mcfg.Workspace)
++	}
++	workspaceFilename := mcfg.Workspace
++	if workspaceFilename == "off" {
++		workspaceFilename = ""
++	}
++	workspaceDirs := resolveGoWorkUseDirs(fs, mcfg.Workspace)
+ 
+ 	config.SetEnvVars(&env,
+ 		"PWD", cfg.WorkingDir,
+@@ -115,6 +123,8 @@ func NewClient(cfg ClientConfig) *Client {
+ 		moduleConfig:      mcfg,
+ 		environ:           env,
+ 		GoModulesFilename: goModFilename,
++		workspaceFilename: workspaceFilename,
++		workspaceDirs:     workspaceDirs,
+ 	}
+ }
+ 
+@@ -133,6 +143,9 @@ type Client struct {
+ 	// Environment variables used in "go get" etc.
+ 	environ []string
+ 
++	workspaceFilename string
++	workspaceDirs     []string
++
+ 	// Set when Go modules are initialized in the current repo, that is:
+ 	// a go.mod file exists.
+ 	GoModulesFilename string
+@@ -446,10 +459,79 @@ func (c *Client) runVerify() error {
+ 	return c.runGo(context.Background(), ioutil.Discard, "mod", "verify")
+ }
+ 
++func (c *Client) WorkspaceFilename() string {
++	return c.workspaceFilename
++}
++
++func (c *Client) WorkspaceDirs() []string {
++	return append([]string(nil), c.workspaceDirs...)
++}
++
+ func isProbablyModule(path string) bool {
+ 	return module.CheckPath(path) == nil
+ }
+ 
++func resolveGoWorkUseDirs(fs afero.Fs, workspaceFilename string) []string {
++	if workspaceFilename == "" || workspaceFilename == "off" {
++		return nil
++	}
++
++	f, err := fs.Open(workspaceFilename)
++	if err != nil {
++		return nil
++	}
++	defer f.Close()
++
++	baseDir := filepath.Dir(workspaceFilename)
++	seen := make(map[string]bool)
++	var dirs []string
++	inUseBlock := false
++
++	scanner := bufio.NewScanner(f)
++	for scanner.Scan() {
++		line := scanner.Text()
++		if idx := strings.Index(line, "//"); idx >= 0 {
++			line = line[:idx]
++		}
++		line = strings.TrimSpace(line)
++		if line == "" {
++			continue
++		}
++
++		if inUseBlock {
++			if line == ")" {
++				inUseBlock = false
++				continue
++			}
++		} else if line == "use (" {
++			inUseBlock = true
++			continue
++		} else if !strings.HasPrefix(line, "use ") {
++			continue
++		}
++
++		if strings.HasPrefix(line, "use ") {
++			line = strings.TrimSpace(strings.TrimPrefix(line, "use"))
++		}
++
++		line = strings.Trim(line, `"`)
++		if line == "" {
++			continue
++		}
++
++		if !filepath.IsAbs(line) {
++			line = filepath.Clean(filepath.Join(baseDir, line))
++		}
++
++		if !seen[line] {
++			seen[line] = true
++			dirs = append(dirs, line)
++		}
++	}
++
++	return dirs
++}
++
+ func (c *Client) listGoMods() (goModules, error) {
+ 	if c.GoModulesFilename == "" || !c.moduleConfig.hasModuleImport() {
+ 		return nil, nil

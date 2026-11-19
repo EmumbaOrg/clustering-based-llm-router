@@ -1,0 +1,68 @@
+diff --git a/glom/matching.py b/glom/matching.py
+index 1c7ec45..8f55cc8 100644
+--- a/glom/matching.py
++++ b/glom/matching.py
+@@ -688,17 +688,18 @@ def _handle_dict(target, spec, scope):
+     # Sort precedence groups (higher precedence = tried later)
+     precedence_order = sorted(spec_by_precedence.keys())
+     
+-    # Track matched target keys and required spec keys that weren't matched
+-    matched_target_keys = set()
++    # Track matched spec keys and required spec keys that weren't matched
++    matched_spec_keys = set()
+     required_keys = set()
+     
+     # Track keys that need to be in the result
+     result = {}
+     
+-    # First, identify all Required keys
++    # First, identify all required keys
+     for precedence in precedence_order:
+         for spec_key in spec_by_precedence[precedence]:
+-            if isinstance(spec_key, Required):
++            if (isinstance(spec_key, Required)
++                    or (_precedence(spec_key) == 0 and not isinstance(spec_key, Optional))):
+                 required_keys.add(spec_key)
+     
+     # For each target key, find a matching spec key
+@@ -718,21 +719,18 @@ def _handle_dict(target, spec, scope):
+                     else:
+                         key_to_match = spec_key
+                     
+-                    scope[glom](target_key, key_to_match, scope)
+-                    
+-                    # If we get here, the key matched
+-                    matched = True
+-                    matched_target_keys.add(target_key)
+-                    
+-                    if isinstance(spec_key, Required):
+-                        required_keys.remove(spec_key)
+-                    
+-                    # Match the value
+-                    result[target_key] = scope[glom](target[target_key], spec[spec_key], scope)
+-                    break
++                    result_key = scope[glom](target_key, key_to_match, scope)
+                 except GlomError:
+                     # This spec key didn't match, try the next one
+                     continue
++
++                # Match the value in the scope established by the key match.
++                matched = True
++                matched_spec_keys.add(spec_key)
++                required_keys.discard(spec_key)
++                result[result_key] = scope[glom](target[target_key], spec[spec_key],
++                                                chain_child(scope))
++                break
+         
+         if not matched:
+             # No spec key matched this target key
+@@ -749,8 +747,7 @@ def _handle_dict(target, spec, scope):
+     # Handle Optional keys with defaults that weren't matched
+     for spec_key in spec:
+         if isinstance(spec_key, Optional) and spec_key.default is not _MISSING:
+-            if not any(k in matched_target_keys for k in target 
+-                      if scope[glom](k, spec_key.key, scope) == k):
++            if spec_key not in matched_spec_keys:
+                 result[spec_key.key] = arg_val(target, spec_key.default, scope)
+     
+     return result

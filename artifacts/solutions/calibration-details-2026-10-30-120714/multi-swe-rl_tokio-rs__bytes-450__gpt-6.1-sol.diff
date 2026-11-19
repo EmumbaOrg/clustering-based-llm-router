@@ -1,0 +1,314 @@
+diff --git a/src/buf/buf_impl.rs b/src/buf/buf_impl.rs
+index 3c596f1..aaa570a 100644
+--- a/src/buf/buf_impl.rs
++++ b/src/buf/buf_impl.rs
+@@ -16,7 +16,7 @@ macro_rules! buf_get_impl {
+         // this Option<ret> trick is to avoid keeping a borrow on self
+         // when advance() is called (mut borrow) and to call bytes() only once
+         let ret = $this
+-            .bytes()
++            .chunk()
+             .get(..SIZE)
+             .map(|src| unsafe { $typ::$conv(*(src as *const _ as *const [_; SIZE])) });
+ 
+@@ -127,7 +127,7 @@ pub trait Buf {
+     /// This function should never panic. Once the end of the buffer is reached,
+     /// i.e., `Buf::remaining` returns 0, calls to `bytes` should return an
+     /// empty slice.
+-    fn bytes(&self) -> &[u8];
++    fn chunk(&self) -> &[u8];
+ 
+     /// Fills `dst` with potentially multiple slices starting at `self`'s
+     /// current position.
+@@ -163,7 +163,7 @@ pub trait Buf {
+         }
+ 
+         if self.has_remaining() {
+-            dst[0] = IoSlice::new(self.bytes());
++            dst[0] = IoSlice::new(self.chunk());
+             1
+         } else {
+             0
+@@ -253,7 +253,7 @@ pub trait Buf {
+             let cnt;
+ 
+             unsafe {
+-                let src = self.bytes();
++                let src = self.chunk();
+                 cnt = cmp::min(src.len(), dst.len() - off);
+ 
+                 ptr::copy_nonoverlapping(src.as_ptr(), dst[off..].as_mut_ptr(), cnt);
+@@ -283,7 +283,7 @@ pub trait Buf {
+     /// This function panics if there is no more remaining data in `self`.
+     fn get_u8(&mut self) -> u8 {
+         assert!(self.remaining() >= 1);
+-        let ret = self.bytes()[0];
++        let ret = self.chunk()[0];
+         self.advance(1);
+         ret
+     }
+@@ -306,7 +306,7 @@ pub trait Buf {
+     /// This function panics if there is no more remaining data in `self`.
+     fn get_i8(&mut self) -> i8 {
+         assert!(self.remaining() >= 1);
+-        let ret = self.bytes()[0] as i8;
++        let ret = self.chunk()[0] as i8;
+         self.advance(1);
+         ret
+     }
+@@ -908,8 +908,8 @@ macro_rules! deref_forward_buf {
+             (**self).remaining()
+         }
+ 
+-        fn bytes(&self) -> &[u8] {
+-            (**self).bytes()
++        fn chunk(&self) -> &[u8] {
++            (**self).chunk()
+         }
+ 
+         #[cfg(feature = "std")]
+@@ -1022,7 +1022,7 @@ impl Buf for &[u8] {
+     }
+ 
+     #[inline]
+-    fn bytes(&self) -> &[u8] {
++    fn chunk(&self) -> &[u8] {
+         self
+     }
+ 
+@@ -1045,7 +1045,7 @@ impl<T: AsRef<[u8]>> Buf for std::io::Cursor<T> {
+         len - pos as usize
+     }
+ 
+-    fn bytes(&self) -> &[u8] {
++    fn chunk(&self) -> &[u8] {
+         let len = self.get_ref().as_ref().len();
+         let pos = self.position();
+ 
+diff --git a/src/buf/buf_mut.rs b/src/buf/buf_mut.rs
+index fb3623d..1cbf8c9 100644
+--- a/src/buf/buf_mut.rs
++++ b/src/buf/buf_mut.rs
+@@ -158,7 +158,7 @@ pub unsafe trait BufMut {
+     /// `bytes_mut` returning an empty slice implies that `remaining_mut` will
+     /// return 0 and `remaining_mut` returning 0 implies that `bytes_mut` will
+     /// return an empty slice.
+-    fn bytes_mut(&mut self) -> &mut UninitSlice;
++    fn chunk_mut(&mut self) -> &mut UninitSlice;
+ 
+     /// Transfer bytes into `self` from `src` and advance the cursor by the
+     /// number of bytes written.
+@@ -190,8 +190,8 @@ pub unsafe trait BufMut {
+             let l;
+ 
+             unsafe {
+-                let s = src.bytes();
+-                let d = self.bytes_mut();
++                let s = src.chunk();
++                let d = self.chunk_mut();
+                 l = cmp::min(s.len(), d.len());
+ 
+                 ptr::copy_nonoverlapping(s.as_ptr(), d.as_mut_ptr() as *mut u8, l);
+@@ -237,7 +237,7 @@ pub unsafe trait BufMut {
+             let cnt;
+ 
+             unsafe {
+-                let dst = self.bytes_mut();
++                let dst = self.chunk_mut();
+                 cnt = cmp::min(dst.len(), src.len() - off);
+ 
+                 ptr::copy_nonoverlapping(src[off..].as_ptr(), dst.as_mut_ptr() as *mut u8, cnt);
+@@ -913,8 +913,8 @@ macro_rules! deref_forward_bufmut {
+             (**self).remaining_mut()
+         }
+ 
+-        fn bytes_mut(&mut self) -> &mut UninitSlice {
+-            (**self).bytes_mut()
++        fn chunk_mut(&mut self) -> &mut UninitSlice {
++            (**self).chunk_mut()
+         }
+ 
+         unsafe fn advance_mut(&mut self, cnt: usize) {
+@@ -998,7 +998,7 @@ unsafe impl BufMut for &mut [u8] {
+     }
+ 
+     #[inline]
+-    fn bytes_mut(&mut self) -> &mut UninitSlice {
++    fn chunk_mut(&mut self) -> &mut UninitSlice {
+         // UninitSlice is repr(transparent), so safe to transmute
+         unsafe { &mut *(*self as *mut [u8] as *mut _) }
+     }
+@@ -1033,7 +1033,7 @@ unsafe impl BufMut for Vec<u8> {
+     }
+ 
+     #[inline]
+-    fn bytes_mut(&mut self) -> &mut UninitSlice {
++    fn chunk_mut(&mut self) -> &mut UninitSlice {
+         if self.capacity() == self.len() {
+             self.reserve(64); // Grow the vec
+         }
+@@ -1060,7 +1060,7 @@ unsafe impl BufMut for Vec<u8> {
+ 
+             // a block to contain the src.bytes() borrow
+             {
+-                let s = src.bytes();
++                let s = src.chunk();
+                 l = s.len();
+                 self.extend_from_slice(s);
+             }
+diff --git a/src/buf/chain.rs b/src/buf/chain.rs
+index c21fd35..0a234ec 100644
+--- a/src/buf/chain.rs
++++ b/src/buf/chain.rs
+@@ -138,11 +138,11 @@ where
+         self.a.remaining() + self.b.remaining()
+     }
+ 
+-    fn bytes(&self) -> &[u8] {
++    fn chunk(&self) -> &[u8] {
+         if self.a.has_remaining() {
+-            self.a.bytes()
++            self.a.chunk()
+         } else {
+-            self.b.bytes()
++            self.b.chunk()
+         }
+     }
+ 
+@@ -181,11 +181,11 @@ where
+         self.a.remaining_mut() + self.b.remaining_mut()
+     }
+ 
+-    fn bytes_mut(&mut self) -> &mut UninitSlice {
++    fn chunk_mut(&mut self) -> &mut UninitSlice {
+         if self.a.has_remaining_mut() {
+-            self.a.bytes_mut()
++            self.a.chunk_mut()
+         } else {
+-            self.b.bytes_mut()
++            self.b.chunk_mut()
+         }
+     }
+ 
+diff --git a/src/buf/iter.rs b/src/buf/iter.rs
+index 16a2c55..8914a40 100644
+--- a/src/buf/iter.rs
++++ b/src/buf/iter.rs
+@@ -117,7 +117,7 @@ impl<T: Buf> Iterator for IntoIter<T> {
+             return None;
+         }
+ 
+-        let b = self.inner.bytes()[0];
++        let b = self.inner.chunk()[0];
+         self.inner.advance(1);
+ 
+         Some(b)
+diff --git a/src/buf/limit.rs b/src/buf/limit.rs
+index 5cbbbfe..b422be5 100644
+--- a/src/buf/limit.rs
++++ b/src/buf/limit.rs
+@@ -61,8 +61,8 @@ unsafe impl<T: BufMut> BufMut for Limit<T> {
+         cmp::min(self.inner.remaining_mut(), self.limit)
+     }
+ 
+-    fn bytes_mut(&mut self) -> &mut UninitSlice {
+-        let bytes = self.inner.bytes_mut();
++    fn chunk_mut(&mut self) -> &mut UninitSlice {
++        let bytes = self.inner.chunk_mut();
+         let end = cmp::min(bytes.len(), self.limit);
+         &mut bytes[..end]
+     }
+diff --git a/src/buf/reader.rs b/src/buf/reader.rs
+index 135db41..f2b4d98 100644
+--- a/src/buf/reader.rs
++++ b/src/buf/reader.rs
+@@ -73,7 +73,7 @@ impl<B: Buf + Sized> io::Read for Reader<B> {
+ 
+ impl<B: Buf + Sized> io::BufRead for Reader<B> {
+     fn fill_buf(&mut self) -> io::Result<&[u8]> {
+-        Ok(self.buf.bytes())
++        Ok(self.buf.chunk())
+     }
+     fn consume(&mut self, amt: usize) {
+         self.buf.advance(amt)
+diff --git a/src/buf/take.rs b/src/buf/take.rs
+index 57b9f45..1747f6e 100644
+--- a/src/buf/take.rs
++++ b/src/buf/take.rs
+@@ -134,8 +134,8 @@ impl<T: Buf> Buf for Take<T> {
+         cmp::min(self.inner.remaining(), self.limit)
+     }
+ 
+-    fn bytes(&self) -> &[u8] {
+-        let bytes = self.inner.bytes();
++    fn chunk(&self) -> &[u8] {
++        let bytes = self.inner.chunk();
+         &bytes[..cmp::min(bytes.len(), self.limit)]
+     }
+ 
+diff --git a/src/buf/vec_deque.rs b/src/buf/vec_deque.rs
+index 195e689..263167e 100644
+--- a/src/buf/vec_deque.rs
++++ b/src/buf/vec_deque.rs
+@@ -7,7 +7,7 @@ impl Buf for VecDeque<u8> {
+         self.len()
+     }
+ 
+-    fn bytes(&self) -> &[u8] {
++    fn chunk(&self) -> &[u8] {
+         let (s1, s2) = self.as_slices();
+         if s1.is_empty() {
+             s2
+diff --git a/src/bytes.rs b/src/bytes.rs
+index 867f86b..0e10a95 100644
+--- a/src/bytes.rs
++++ b/src/bytes.rs
+@@ -530,7 +530,7 @@ impl Buf for Bytes {
+     }
+ 
+     #[inline]
+-    fn bytes(&self) -> &[u8] {
++    fn chunk(&self) -> &[u8] {
+         self.as_slice()
+     }
+ 
+diff --git a/src/bytes_mut.rs b/src/bytes_mut.rs
+index c3abadf..61c0460 100644
+--- a/src/bytes_mut.rs
++++ b/src/bytes_mut.rs
+@@ -445,7 +445,7 @@ impl BytesMut {
+             let additional = new_len - len;
+             self.reserve(additional);
+             unsafe {
+-                let dst = self.bytes_mut().as_mut_ptr();
++                let dst = self.chunk_mut().as_mut_ptr();
+                 ptr::write_bytes(dst, value, additional);
+                 self.set_len(new_len);
+             }
+@@ -944,7 +944,7 @@ impl Buf for BytesMut {
+     }
+ 
+     #[inline]
+-    fn bytes(&self) -> &[u8] {
++    fn chunk(&self) -> &[u8] {
+         self.as_slice()
+     }
+ 
+@@ -985,7 +985,7 @@ unsafe impl BufMut for BytesMut {
+     }
+ 
+     #[inline]
+-    fn bytes_mut(&mut self) -> &mut UninitSlice {
++    fn chunk_mut(&mut self) -> &mut UninitSlice {
+         if self.capacity() == self.len() {
+             self.reserve(64);
+         }
+@@ -1000,7 +1000,7 @@ unsafe impl BufMut for BytesMut {
+         Self: Sized,
+     {
+         while src.has_remaining() {
+-            let s = src.bytes();
++            let s = src.chunk();
+             let l = s.len();
+             self.extend_from_slice(s);
+             src.advance(l);

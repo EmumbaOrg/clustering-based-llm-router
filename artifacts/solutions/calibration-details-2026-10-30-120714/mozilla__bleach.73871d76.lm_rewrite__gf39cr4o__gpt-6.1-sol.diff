@@ -1,0 +1,61 @@
+diff --git a/bleach/linkifier.py b/bleach/linkifier.py
+index 36b88e0..1ca0693 100644
+--- a/bleach/linkifier.py
++++ b/bleach/linkifier.py
+@@ -353,31 +353,34 @@ class LinkifyFilter(html5lib_shim.Filter):
+         This accounts for over-eager matching by the regex.
+ 
+         """
+-        prefix = suffix = ''
+-    
+-        # If the fragment starts with parentheses, remove them
+-        if fragment.startswith('('):
+-            prefix = '('
+-            fragment = fragment[1:]
+-    
+-        # Handle common punctuation at the end of the URL
+-        # that shouldn't be part of the URL
+-        for char in [')', ',', '.', ':', ';', '!', '?']:
+-            if fragment.endswith(char):
+-                suffix = char
++        prefix = suffix = ""
++
++        while fragment:
++            # Remove wrapping parentheses, keeping them outside the link.
++            if fragment.startswith("("):
++                prefix += "("
++                fragment = fragment[1:]
++                if fragment.endswith(")"):
++                    suffix = ")" + suffix
++                    fragment = fragment[:-1]
++                continue
++
++            # Strip punctuation before checking for closing parentheses again.
++            if fragment[-1] in ",.:;!?":
++                suffix = fragment[-1] + suffix
+                 fragment = fragment[:-1]
+-                break
+-    
+-        # Handle closing parentheses - need to ensure they're balanced
+-        if fragment.endswith(')'):
+-            open_count = fragment.count('(')
+-            close_count = fragment.count(')')
+-        
+-            if close_count > open_count:
+-                suffix = ')'
++                continue
++
++            # With no opening parentheses left, trailing ones aren't URL bits.
++            if "(" not in fragment and fragment.endswith(")"):
++                suffix = ")" + suffix
+                 fragment = fragment[:-1]
+-    
++                continue
++
++            break
++
+         return fragment, prefix, suffix
++
+     def handle_links(self, src_iter):
+         """Handle links in character tokens"""
+         in_a = False  # happens, if parse_email=True and if a mail was found

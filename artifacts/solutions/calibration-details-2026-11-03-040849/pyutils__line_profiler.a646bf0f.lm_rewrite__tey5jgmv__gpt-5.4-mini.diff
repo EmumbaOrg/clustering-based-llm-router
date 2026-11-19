@@ -1,0 +1,44 @@
+diff --git a/line_profiler/line_profiler.py b/line_profiler/line_profiler.py
+index 20ca5cd..6d8cd02 100755
+--- a/line_profiler/line_profiler.py
++++ b/line_profiler/line_profiler.py
+@@ -454,12 +454,6 @@ def show_text(stats, unit, output_unit=None, stream=None, stripzeros=False,
+     if stream is None:
+         stream = sys.stdout
+ 
+-    # Calculate total time spent in all functions
+-    total_time = 0
+-    for filename, funcs in stats.items():
+-        for (start_lineno, func_name), timings in funcs.items():
+-            total_time += sum(t[2] for t in timings)
+-    
+     # Create a list of functions with their total time for sorting
+     func_list = []
+     for filename, funcs in stats.items():
+@@ -467,19 +461,21 @@ def show_text(stats, unit, output_unit=None, stream=None, stripzeros=False,
+             func_time = sum(t[2] for t in timings)
+             if not (stripzeros and func_time == 0):
+                 func_list.append((filename, start_lineno, func_name, timings, func_time))
+-    
++
+     # Sort by total time if requested
+     if sort:
+-        func_list.sort(key=lambda x: x[4])
+-    
++        func_list.sort(key=lambda x: x[4], reverse=True)
++
++    summary_total = sum(func_time for _, _, _, _, func_time in func_list)
++
+     # Print summary if requested
+     if summarize:
+-        stream.write("Total time: %g s\n" % (total_time * unit))
++        stream.write("Total time: %g s\n" % (summary_total * unit))
+         stream.write("\n")
+         stream.write("Function: filename:lineno (time in ms)\n")
+         for filename, start_lineno, func_name, timings, func_time in func_list:
+             time_ms = func_time * unit * 1000  # Convert to milliseconds
+-            percent = (func_time / total_time) * 100 if total_time > 0 else 0
++            percent = (func_time / summary_total) * 100 if summary_total > 0 else 0
+             stream.write("  %s:%d (%g ms, %.1f%%)\n" % 
+                         (os.path.basename(filename), start_lineno, 
+                          time_ms, percent))

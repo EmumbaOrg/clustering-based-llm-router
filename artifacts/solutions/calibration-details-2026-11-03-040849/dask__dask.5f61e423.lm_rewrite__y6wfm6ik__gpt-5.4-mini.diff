@@ -1,0 +1,153 @@
+diff --git a/dask/array/creation.py b/dask/array/creation.py
+index a3c20fe..0aa68b3 100644
+--- a/dask/array/creation.py
++++ b/dask/array/creation.py
+@@ -1093,26 +1093,28 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+     the array. Namely by reflecting them or tiling them to create periodic
+     boundary constraints.
+     """
++    from dask.array.routines import flip
++
+     # Get reflect_type for reflect and symmetric modes
+     reflect_type = kwargs.get("reflect_type", "even")
+     if reflect_type not in ["even", "odd"]:
+         raise ValueError(f"reflect_type {reflect_type} not supported.")
+-    
++
+     # Start with the original array
+     result = array
+-    
++
+     # Pad each dimension
+     for d in range(array.ndim):
+         # Get the padding widths for this dimension
+         pad_left, pad_right = pad_width[d]
+-        
++
+         if pad_left == 0 and pad_right == 0:
+             continue
+-        
++
+         # Create slices for padding
+         left_slice = result.ndim * [slice(None)]
+         right_slice = result.ndim * [slice(None)]
+-        
++
+         if mode == "wrap":
+             # For wrap mode, take values from the opposite end
+             if pad_left > 0:
+@@ -1120,13 +1122,13 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+                 left_pad = result[tuple(left_slice)]
+             else:
+                 left_pad = None
+-                
++
+             if pad_right > 0:
+                 right_slice[d] = slice(0, pad_right)
+                 right_pad = result[tuple(right_slice)]
+             else:
+                 right_pad = None
+-                
++
+         elif mode in ["reflect", "symmetric"]:
+             # For reflect and symmetric modes
+             if mode == "reflect":
+@@ -1135,7 +1137,7 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+             else:  # symmetric
+                 # Reflect with duplicating edge
+                 offset = 0
+-                
++
+             # Create left padding
+             if pad_left > 0:
+                 if pad_left <= result.shape[d] - offset:
+@@ -1150,12 +1152,12 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+                     left_slice[d] = slice(offset, None)
+                     temp_pad = result[tuple(left_slice)]
+                     temp_pad = flip(temp_pad, axis=d)
+-                    
++
+                     # Calculate how many full reflections we need and remainder
+                     full_length = result.shape[d] - offset
+                     n_full = pad_left // full_length
+                     remainder = pad_left % full_length
+-                    
++
+                     # Create list of pads to concatenate
+                     pads = []
+                     for _ in range(n_full):
+@@ -1163,7 +1165,7 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+                             pads.append(temp_pad)
+                         else:
+                             pads.append(result)
+-                    
++
+                     # Add remainder if needed
+                     if remainder > 0:
+                         if n_full % 2 == 0:
+@@ -1173,12 +1175,12 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+                         else:
+                             right_slice[d] = slice(0, remainder)
+                             pads.append(result[tuple(right_slice)])
+-                    
++
+                     # Concatenate all pads
+                     left_pad = concatenate(pads, axis=d)
+             else:
+                 left_pad = None
+-                
++
+             # Create right padding
+             if pad_right > 0:
+                 if pad_right <= result.shape[d] - offset:
+@@ -1193,12 +1195,12 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+                     right_slice[d] = slice(0, -offset if offset else None)
+                     temp_pad = result[tuple(right_slice)]
+                     temp_pad = flip(temp_pad, axis=d)
+-                    
++
+                     # Calculate how many full reflections we need and remainder
+                     full_length = result.shape[d] - offset
+                     n_full = pad_right // full_length
+                     remainder = pad_right % full_length
+-                    
++
+                     # Create list of pads to concatenate
+                     pads = []
+                     for _ in range(n_full):
+@@ -1206,7 +1208,7 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+                             pads.append(temp_pad)
+                         else:
+                             pads.append(result)
+-                    
++
+                     # Add remainder if needed
+                     if remainder > 0:
+                         if n_full % 2 == 0:
+@@ -1216,12 +1218,12 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+                         else:
+                             left_slice[d] = slice(0, remainder)
+                             pads.append(result[tuple(left_slice)])
+-                    
++
+                     # Concatenate all pads
+                     right_pad = concatenate(pads, axis=d)
+             else:
+                 right_pad = None
+-        
++
+         # Concatenate the padded parts
+         parts = []
+         if left_pad is not None:
+@@ -1229,9 +1231,9 @@ def pad_reuse(array, pad_width, mode, **kwargs):
+         parts.append(result)
+         if right_pad is not None:
+             parts.append(right_pad)
+-        
++
+         result = concatenate(parts, axis=d)
+-    
++
+     return result
+ 
+ def pad_stats(array, pad_width, mode, stat_length):

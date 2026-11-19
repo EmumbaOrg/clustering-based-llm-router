@@ -1,0 +1,71 @@
+diff --git a/operator/pkg/manifest/shared.go b/operator/pkg/manifest/shared.go
+index 0cc06f2910..082c7f011d 100644
+--- a/operator/pkg/manifest/shared.go
++++ b/operator/pkg/manifest/shared.go
+@@ -488,13 +488,14 @@ func overlaySetFlagValues(iopYAML string, setFlags []string) (string, error) {
+ 	for _, sf := range setFlags {
+ 		p, v := getPV(sf)
+ 		p = strings.TrimPrefix(p, "spec.")
+-		inc, _, err := tpath.GetPathContext(iop, util.PathFromString("spec."+p), true)
++		path := util.PathFromString("spec." + p)
++		inc, _, err := tpath.GetPathContext(iop, path, true)
+ 		if err != nil {
+ 			return "", err
+ 		}
+ 		// input value type is always string, transform it to correct type before setting.
+ 		var val any = v
+-		if !alwaysString.Contains(p) {
++		if !alwaysString.Contains(p) && !shouldKeepAsString(iop, path) {
+ 			val = util.ParseValue(v)
+ 		}
+ 		if err := tpath.WritePathContext(inc, val, false); err != nil {
+@@ -519,7 +520,48 @@ func convertDefaultIOPMapValues(outYAML string, setFlags []string) (string, erro
+ 	return convertIOPMapValues(outYAML, setFlags, defaultSetFlagConvertPaths)
+ }
+ 
+-// convertIOPMapValues converts certain paths of map[string]string values into string.
++// shouldKeepAsString determines whether a set flag value should be preserved as a string.
++func shouldKeepAsString(iop map[string]any, path util.Path) bool {
++	if len(path) == 0 {
++		return false
++	}
++
++	if node, found, err := tpath.Find(iop, path); err == nil && found {
++		if _, ok := node.(string); ok {
++			return true
++		}
++	}
++
++	if len(path) >= 4 && path[len(path)-3] == "resources" &&
++		(path[len(path)-2] == "limits" || path[len(path)-2] == "requests") {
++		return true
++	}
++
++	if len(path) < 2 {
++		return false
++	}
++	parent, found, err := tpath.Find(iop, path[:len(path)-1])
++	if err != nil || !found {
++		return false
++	}
++
++	return mapHasOnlyStringValues(parent)
++}
++
++// mapHasOnlyStringValues reports whether every value in the map is a string.
++func mapHasOnlyStringValues(node any) bool {
++	v := reflect.ValueOf(node)
++	if !v.IsValid() || v.Kind() != reflect.Map || v.Len() == 0 {
++		return false
++	}
++	for _, key := range v.MapKeys() {
++		if _, ok := v.MapIndex(key).Interface().(string); !ok {
++			return false
++		}
++	}
++	return true
++}
++
+ func convertIOPMapValues(outYAML string, setFlags []string, convertPaths []string) (string, error) {
+ 	for _, setFlagConvertPath := range convertPaths {
+ 		if containParentPath(setFlags, setFlagConvertPath) {

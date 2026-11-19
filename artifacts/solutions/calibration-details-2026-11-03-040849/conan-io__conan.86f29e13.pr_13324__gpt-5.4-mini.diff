@@ -1,0 +1,49 @@
+diff --git a/conan/cli/commands/export_pkg.py b/conan/cli/commands/export_pkg.py
+index 4e93ba3..09cd23c 100644
+--- a/conan/cli/commands/export_pkg.py
++++ b/conan/cli/commands/export_pkg.py
+@@ -26,6 +26,11 @@ def export_pkg(conan_api, parser, *args):
+     add_reference_args(parser)
+     add_lockfile_args(parser)
+     add_profiles_args(parser)
++    group = parser.add_mutually_exclusive_group()
++    group.add_argument("-r", "--remote", action="append", default=None,
++                       help='Look in the specified remote or remotes server')
++    group.add_argument("-nr", "--no-remote", action="store_true",
++                       help='Do not use remote, resolve exclusively in the cache')
+     args = parser.parse_args(*args)
+ 
+     cwd = os.getcwd()
+@@ -35,6 +40,7 @@ def export_pkg(conan_api, parser, *args):
+     lockfile = conan_api.lockfile.get_lockfile(lockfile=args.lockfile, conanfile_path=path,
+                                                cwd=cwd, partial=args.lockfile_partial,
+                                                overrides=overrides)
++    remotes = conan_api.remotes.list(args.remote) if not args.no_remote else []
+     profile_host, profile_build = conan_api.profiles.get_profiles_from_args(args)
+     conanfile = conan_api.local.inspect(path, remotes, lockfile, name=args.name,
+                                         version=args.version, user=args.user, channel=args.channel)
+@@ -52,12 +58,13 @@ def export_pkg(conan_api, parser, *args):
+                                                      ref.name, ref.version, ref.user, ref.channel,
+                                                      profile_host=profile_host,
+                                                      profile_build=profile_build,
+-                                                     lockfile=lockfile, remotes=None, update=None,
++                                                     lockfile=lockfile, remotes=remotes, update=None,
+                                                      is_build_require=args.build_require)
+ 
+     print_graph_basic(deps_graph)
+     deps_graph.report_graph_error()
+-    conan_api.graph.analyze_binaries(deps_graph, build_mode=[ref.name], lockfile=lockfile)
++    conan_api.graph.analyze_binaries(deps_graph, build_mode=[ref.name], remotes=remotes,
++                                     lockfile=lockfile)
+     deps_graph.report_graph_error()
+ 
+     root_node = deps_graph.root
+@@ -65,7 +72,7 @@ def export_pkg(conan_api, parser, *args):
+ 
+     # It is necessary to install binaries, in case there are build_requires necessary to export
+     # But they should be local, if this was built here
+-    conan_api.install.install_binaries(deps_graph=deps_graph, remotes=None)
++    conan_api.install.install_binaries(deps_graph=deps_graph, remotes=remotes)
+     source_folder = os.path.dirname(path)
+     output_folder = make_abs_path(args.output_folder, cwd) if args.output_folder else None
+     conan_api.install.install_consumer(deps_graph=deps_graph, source_folder=source_folder,

@@ -1,0 +1,73 @@
+diff --git a/packages/runtime-dom/src/modules/style.ts b/packages/runtime-dom/src/modules/style.ts
+index c18fd8aa9..1648118e0 100644
+--- a/packages/runtime-dom/src/modules/style.ts
++++ b/packages/runtime-dom/src/modules/style.ts
+@@ -20,6 +20,10 @@ export function patchStyle(el: Element, prev: Style, next: Style) {
+     }
+   } else {
+     const currentDisplay = style.display
++    const currentCustomProps = getCustomProperties(style)
++    const prevCustomProps = getCustomPropertiesFromValue(prev)
++    const nextCustomProps = isCssString ? getCustomPropertiesFromValue(next) : null
++
+     if (isCssString) {
+       if (prev !== next) {
+         style.cssText = next as string
+@@ -27,6 +31,16 @@ export function patchStyle(el: Element, prev: Style, next: Style) {
+     } else if (prev) {
+       el.removeAttribute('style')
+     }
++
++    for (const name in currentCustomProps) {
++      if (
++        !prevCustomProps.has(name) &&
++        !(nextCustomProps && nextCustomProps.has(name))
++      ) {
++        style.setProperty(name, currentCustomProps[name])
++      }
++    }
++
+     // indicates that the `display` of the element is controlled by `v-show`,
+     // so we always keep the current `display` value regardless of the `style`
+     // value, thus handing over control to `v-show`.
+@@ -36,6 +50,40 @@ export function patchStyle(el: Element, prev: Style, next: Style) {
+   }
+ }
+ 
++function getCustomProperties(style: CSSStyleDeclaration) {
++  const res: Record<string, string> = {}
++  for (let i = 0; i < style.length; i++) {
++    const name = style[i]
++    if (name.startsWith('--')) {
++      res[name] = style.getPropertyValue(name)
++    }
++  }
++  return res
++}
++
++function getCustomPropertiesFromValue(style: Style) {
++  const res = new Set<string>()
++  if (!style) {
++    return res
++  }
++  if (isString(style)) {
++    customPropRE.lastIndex = 0
++    let match
++    while ((match = customPropRE.exec(style))) {
++      res.add(match[1])
++    }
++  } else {
++    for (const key in style) {
++      if (key.startsWith('--')) {
++        res.add(key)
++      }
++    }
++  }
++  return res
++}
++
++const customPropRE = /(?:^|;)\s*(--[^:\s;]+)\s*:/g
++
+ const semicolonRE = /[^\\];\s*$/
+ const importantRE = /\s*!important$/
+ 

@@ -1,0 +1,38 @@
+diff --git a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/UnnecessaryParenthesesCheck.java b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/UnnecessaryParenthesesCheck.java
+index c0ebea72c6..d7c243b86a 100644
+--- a/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/UnnecessaryParenthesesCheck.java
++++ b/src/main/java/com/puppycrawl/tools/checkstyle/checks/coding/UnnecessaryParenthesesCheck.java
+@@ -215,6 +215,7 @@ public class UnnecessaryParenthesesCheck extends AbstractCheck {
+         TokenTypes.NUM_INT,
+         TokenTypes.NUM_LONG,
+         TokenTypes.STRING_LITERAL,
++        TokenTypes.TEXT_BLOCK_LITERAL_BEGIN,
+         TokenTypes.LITERAL_NULL,
+         TokenTypes.LITERAL_FALSE,
+         TokenTypes.LITERAL_TRUE,
+@@ -254,6 +255,7 @@ public class UnnecessaryParenthesesCheck extends AbstractCheck {
+             TokenTypes.NUM_INT,
+             TokenTypes.NUM_LONG,
+             TokenTypes.STRING_LITERAL,
++            TokenTypes.TEXT_BLOCK_LITERAL_BEGIN,
+             TokenTypes.LITERAL_NULL,
+             TokenTypes.LITERAL_FALSE,
+             TokenTypes.LITERAL_TRUE,
+@@ -283,6 +285,7 @@ public class UnnecessaryParenthesesCheck extends AbstractCheck {
+             TokenTypes.NUM_INT,
+             TokenTypes.NUM_LONG,
+             TokenTypes.STRING_LITERAL,
++            TokenTypes.TEXT_BLOCK_LITERAL_BEGIN,
+             TokenTypes.LITERAL_NULL,
+             TokenTypes.LITERAL_FALSE,
+             TokenTypes.LITERAL_TRUE,
+@@ -328,7 +331,8 @@ public class UnnecessaryParenthesesCheck extends AbstractCheck {
+             // A literal (numeric or string) surrounded by parentheses.
+             else if (surrounded && isInTokenList(type, LITERALS)) {
+                 parentToSkip = ast.getParent();
+-                if (type == TokenTypes.STRING_LITERAL) {
++                if (type == TokenTypes.STRING_LITERAL
++                    || type == TokenTypes.TEXT_BLOCK_LITERAL_BEGIN) {
+                     log(ast, MSG_STRING,
+                         chopString(ast.getText()));
+                 }

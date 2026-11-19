@@ -1,0 +1,118 @@
+diff --git a/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py b/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py
+index df4c149..de623a7 100644
+--- a/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py
++++ b/oauthlib/oauth2/rfc6749/grant_types/authorization_code.py
+@@ -436,18 +436,40 @@ class AuthorizationCodeGrant(GrantTypeBase):
+         :param request: OAuthlib request.
+         :type request: oauthlib.common.Request
+         """
+-        # Ensure the required parameters are present
++        if request.grant_type not in ('authorization_code', 'openid'):
++            raise errors.UnsupportedGrantTypeError(request=request)
++
++        for validator in self.custom_validators.pre_token:
++            validator(request)
++
++        if not request.code:
++            raise errors.InvalidRequestError(
++                'Request is missing code parameter.', request=request)
++
+         for param in ('grant_type', 'code', 'client_id', 'redirect_uri'):
+-            if not getattr(request, param, None):
++            if param in request.duplicate_params:
+                 raise errors.InvalidRequestError(
+-                    'Request is missing %s parameter.' % param,
++                    description='Duplicate %s parameter.' % param,
+                     request=request)
+ 
+-        # Ensure the client is authenticated
+-        if not self.request_validator.authenticate_client(request):
++        # Confidential clients authenticate; public clients identify themselves.
++        if self.request_validator.client_authentication_required(request):
++            if not self.request_validator.authenticate_client(request):
++                log.debug('Client authentication failed, %r.', request)
++                raise errors.InvalidClientError(request=request)
++            elif not hasattr(request.client, 'client_id'):
++                raise NotImplementedError('Authenticate client must set the '
++                                          'request.client.client_id attribute '
++                                          'in authenticate_client.')
++        elif not self.request_validator.authenticate_client_id(request.client_id, request):
+             log.debug('Client authentication failed, %r.', request)
+             raise errors.InvalidClientError(request=request)
+ 
++        if request.client_id is None and request.client is not None:
++            request.client_id = request.client.client_id
++
++        self.validate_grant_type(request)
++
+         # Ensure the authorization code is valid
+         if not self.request_validator.validate_code(
+                 request.client_id, request.code, request.client, request):
+@@ -455,41 +477,43 @@ class AuthorizationCodeGrant(GrantTypeBase):
+                       request.client_id, request.code)
+             raise errors.InvalidGrantError(request=request)
+ 
+-        # Ensure that the authorization code and redirect_uri match
+-        if not self.request_validator.confirm_redirect_uri(
+-                request.client_id, request.code, request.redirect_uri, request.client, request):
+-            log.debug('Redirect_uri (%r) invalid for client %r (%r).',
+-                      request.redirect_uri, request.client_id, request.client)
+-            raise errors.AccessDeniedError(request=request)
++        # A stored challenge requires verification even when PKCE is optional.
++        if self.request_validator.is_pkce_required(request.client_id, request) is True and not request.code_verifier:
++            raise errors.MissingCodeVerifierError(request=request)
+ 
+-        # Validate PKCE parameters if code_verifier is present
+-        if request.code_verifier:
+-            code_challenge = self.request_validator.get_code_challenge(request.code, request)
++        code_challenge = self.request_validator.get_code_challenge(request.code, request)
++        if code_challenge:
++            if not request.code_verifier:
++                raise errors.MissingCodeVerifierError(request=request)
+             code_challenge_method = self.request_validator.get_code_challenge_method(request.code, request)
+-
+-            if not code_challenge:
+-                log.debug('Client %r (%r) did not provide code_challenge for PKCE.',
+-                          request.client_id, request.client)
+-                raise errors.InvalidRequestError(
+-                    'Code challenge was not provided in the authorization request.',
+-                    request=request)
+-
++            if not code_challenge_method:
++                raise errors.InvalidGrantError(request=request)
++            if code_challenge_method not in self._code_challenge_methods:
++                raise errors.ServerError(
++                    description='Unknown code challenge method.', request=request)
+             if not self.validate_code_challenge(code_challenge, code_challenge_method, request.code_verifier):
+                 log.debug('PKCE verification failed for client %r (%r).',
+                           request.client_id, request.client)
+                 raise errors.InvalidGrantError(request=request)
++        elif self.request_validator.is_pkce_required(request.client_id, request) is True:
++            raise errors.InvalidGrantError(request=request)
+ 
+-        for validator in self.custom_validators.pre_token:
+-            validator(request)
++        # Use the registered default when no redirect URI was supplied.
++        if request.redirect_uri is None:
++            request.redirect_uri = self.request_validator.get_default_redirect_uri(
++                request.client_id, request)
++            if not request.redirect_uri:
++                raise errors.MissingRedirectURIError(request=request)
+ 
+-        # Ensure proper grant_type
+-        if request.grant_type != 'authorization_code':
+-            log.debug('Client %r (%r) requested grant_type %r.',
+-                      request.client_id, request.client, request.grant_type)
+-            raise errors.UnsupportedGrantTypeError(request=request)
++        if not self.request_validator.confirm_redirect_uri(
++                request.client_id, request.code, request.redirect_uri, request.client, request):
++            log.debug('Redirect_uri (%r) invalid for client %r (%r).',
++                      request.redirect_uri, request.client_id, request.client)
++            raise errors.MismatchingRedirectURIError(request=request)
+ 
+         for validator in self.custom_validators.post_token:
+             validator(request)
++
+     def validate_code_challenge(self, challenge, challenge_method, verifier):
+         if challenge_method in self._code_challenge_methods:
+             return self._code_challenge_methods[challenge_method](verifier, challenge)
