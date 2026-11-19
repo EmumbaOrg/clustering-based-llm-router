@@ -10,6 +10,8 @@ from pathlib import Path
 import typer
 
 from ..common.artifacts import ARTIFACTS_DIR
+from ..common.config import load_models_config
+from . import ui as ui_mod
 from .context import load_routing_context
 from .decide import decide as run_decide
 
@@ -56,6 +58,52 @@ def decide(
         typer.echo("\nexcluded:")
         for model_id, reason in decision.excluded.items():
             typer.echo(f"  {model_id}: {reason}")
+
+
+# A module-level singleton so ruff's B008 doesn't flag the list-typed Option default (same pattern
+# as pipeline/cli.py's _SOURCE_OPTION); None means ui.DEFAULT_UI_MODELS.
+_UI_MODEL_OPTION = typer.Option(
+    None, "--model", help="Candidate to offer (repeatable). Defaults to the four GPT models calibrated "
+    "on the same pin: " + ", ".join(ui_mod.DEFAULT_UI_MODELS) + "."
+)
+
+
+@app.command()
+def ui(
+    model: list[str] | None = _UI_MODEL_OPTION,
+    host: str = typer.Option("127.0.0.1", help="Interface to bind. Keep it on localhost unless you mean to share it."),
+    port: int = typer.Option(8765, help="Port to serve on."),
+    cluster_map: str | None = typer.Option(None, help="Path to cluster-map.json. Defaults to artifacts/cluster-map.json."),
+    model_profiles: str | None = typer.Option(None, help="Path to model-profiles.json. Defaults to artifacts/model-profiles.json."),
+) -> None:
+    """Serve a local web UI: route prompts, move lambda, see the cluster and every candidate's score."""
+    model = model or list(ui_mod.DEFAULT_UI_MODELS)
+    roster = {m.model_id: m for m in load_models_config()}
+    unknown = [m for m in model if m not in roster]
+    if unknown:
+        raise typer.BadParameter(f"not in config/models.yaml: {unknown}", param_hint="--model")
+    cluster_map_path = Path(cluster_map) if cluster_map else DEFAULT_CLUSTER_MAP_PATH
+    model_profiles_path = Path(model_profiles) if model_profiles else DEFAULT_MODEL_PROFILES_PATH
+    ctx = load_routing_context(cluster_map_path, model_profiles_path, 0.0, candidates=[roster[m] for m in model])
+
+    raw_map = json_lib.loads(cluster_map_path.read_text(encoding="utf-8"))
+    sizes = {c["id"]: c["size"] for c in raw_map["clusters"]}
+    router_ui = ui_mod.RouterUI(ctx, sizes, ui_mod.load_cluster_sources(ui_mod.DEFAULT_TASK_CLUSTER_MAP_PATH))
+
+    # Bind before the slow encoder load so a busy port fails immediately.
+    try:
+        server = ui_mod.make_server(router_ui, host, port)
+    except OSError as e:
+        raise typer.BadParameter(f"can't listen on {host}:{port} ({e.strerror}) — pick another --port", param_hint="--port") from e
+    typer.echo(f"loading {ctx.embedding.model_id} (one-time)…")
+    router_ui.decide("warm up the encoder", 0.0)
+    typer.echo(f"router UI ready at http://{host}:{server.server_address[1]}  (Ctrl+C to stop)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
 
 
 @app.command()
